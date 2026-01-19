@@ -23,14 +23,27 @@ export interface GameMetadata {
 export class DataManager {
     private context: vscode.ExtensionContext;
     private assetsDir: string = '';
+    private cachedDbPath: string = '';
+    private dbMetaPath: string = '';  // Stores ETag/Last-Modified for version checking
+    private onUpdateAvailable?: (gameCount: number) => void;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.assetsDir = path.join(context.globalStorageUri.fsPath, 'assets');
+        this.cachedDbPath = path.join(context.globalStorageUri.fsPath, 'db.json');
+        this.dbMetaPath = path.join(context.globalStorageUri.fsPath, 'db_meta.json');
+    }
+
+    // Set callback for when update is available
+    public setUpdateCallback(callback: (gameCount: number) => void) {
+        this.onUpdateAvailable = callback;
     }
 
     // Initialize directories
     public async initialize(): Promise<void> {
+        if (!fs.existsSync(this.context.globalStorageUri.fsPath)) {
+            fs.mkdirSync(this.context.globalStorageUri.fsPath, { recursive: true });
+        }
         if (!fs.existsSync(this.assetsDir)) {
             fs.mkdirSync(this.assetsDir, { recursive: true });
         }
@@ -57,42 +70,160 @@ export class DataManager {
                  }
             }
             return [];
-        } else {
-             // Remote mode
-             const remoteUrl = config.get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/latest/download/db_pico8.json';
-             // Cache DB locally
-             if (!fs.existsSync(this.context.globalStorageUri.fsPath)) {
-                 fs.mkdirSync(this.context.globalStorageUri.fsPath, { recursive: true });
-             }
-             const cachedDbPath = path.join(this.context.globalStorageUri.fsPath, 'db.json');
-
-             try {
-                 // Always try to fetch latest DB
-                 // Use VSCode progress
-                 await vscode.window.withProgress({
-                    location: vscode.ProgressLocation.Notification,
-                    title: "Fetching PICO-8 Database...",
-                    cancellable: false
-                 }, async (progress) => {
-                    await this.downloadFile(remoteUrl, cachedDbPath);
-                 });
-             } catch (e) {
-                 console.warn('Failed to fetch remote DB, using cache if available', e);
-             }
-
-             if (fs.existsSync(cachedDbPath)) {
-                 try {
-                     const data = fs.readFileSync(cachedDbPath, 'utf8');
-                     const parsed = JSON.parse(data);
-                     return parsed;
-                 } catch (e) {
-                     console.error("Error reading cached DB", e);
-                     vscode.window.showErrorMessage("Error reading DB cache. Please restart or check logs.");
-                     return [];
-                 }
-             }
-             return [];
         }
+
+        // Remote mode: Load cached first, then check for updates
+        const remoteUrl = config.get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/latest/download/db_pico8.json';
+
+        // 1. Try to load cached database first
+        let cachedGames: GameMetadata[] = [];
+        if (fs.existsSync(this.cachedDbPath)) {
+            try {
+                const data = fs.readFileSync(this.cachedDbPath, 'utf8');
+                cachedGames = JSON.parse(data);
+                console.log(`[DataManager] Loaded ${cachedGames.length} games from cache`);
+            } catch (e) {
+                console.error("Error reading cached DB", e);
+            }
+        }
+
+        // 2. If we have cached data, check for updates in background
+        if (cachedGames.length > 0) {
+            this.checkForUpdates(remoteUrl);
+            return cachedGames;
+        }
+
+        // 3. No cache - need to download
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Downloading PICO-8 Database...",
+                cancellable: false
+            }, async () => {
+                await this.downloadDatabase(remoteUrl);
+            });
+
+            if (fs.existsSync(this.cachedDbPath)) {
+                const data = fs.readFileSync(this.cachedDbPath, 'utf8');
+                return JSON.parse(data);
+            }
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`Failed to download database: ${e.message}`);
+        }
+
+        return [];
+    }
+
+    // Check for database updates in background
+    private async checkForUpdates(remoteUrl: string): Promise<void> {
+        try {
+            // Get current metadata
+            let currentMeta: { etag?: string; lastModified?: string; gameCount?: number } = {};
+            if (fs.existsSync(this.dbMetaPath)) {
+                currentMeta = JSON.parse(fs.readFileSync(this.dbMetaPath, 'utf8'));
+            }
+
+            // Check remote headers
+            const headers = await this.getRemoteHeaders(remoteUrl);
+            const remoteEtag = headers['etag'];
+            const remoteLastModified = headers['last-modified'];
+
+            // Compare versions
+            const hasNewVersion = (remoteEtag && remoteEtag !== currentMeta.etag) ||
+                                  (remoteLastModified && remoteLastModified !== currentMeta.lastModified);
+
+            if (hasNewVersion) {
+                console.log('[DataManager] New database version available');
+
+                const choice = await vscode.window.showInformationMessage(
+                    'A new PICO-8 game database is available. Update now?',
+                    'Update',
+                    'Later'
+                );
+
+                if (choice === 'Update') {
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Updating PICO-8 Database...",
+                        cancellable: false
+                    }, async () => {
+                        await this.downloadDatabase(remoteUrl);
+                    });
+
+                    // Notify about update
+                    if (this.onUpdateAvailable) {
+                        const data = fs.readFileSync(this.cachedDbPath, 'utf8');
+                        const games = JSON.parse(data);
+                        this.onUpdateAvailable(games.length);
+                    }
+                }
+            } else {
+                console.log('[DataManager] Database is up to date');
+            }
+        } catch (e) {
+            console.warn('[DataManager] Failed to check for updates:', e);
+        }
+    }
+
+    // Download database and save metadata
+    private async downloadDatabase(remoteUrl: string): Promise<void> {
+        const tempPath = this.cachedDbPath + '.tmp';
+        await this.downloadFile(remoteUrl, tempPath);
+
+        // Validate JSON before replacing
+        try {
+            const data = fs.readFileSync(tempPath, 'utf8');
+            const games = JSON.parse(data);
+
+            // Save the validated database
+            fs.renameSync(tempPath, this.cachedDbPath);
+
+            // Save metadata
+            const headers = await this.getRemoteHeaders(remoteUrl);
+            const meta = {
+                etag: headers['etag'],
+                lastModified: headers['last-modified'],
+                gameCount: games.length,
+                downloadedAt: new Date().toISOString()
+            };
+            fs.writeFileSync(this.dbMetaPath, JSON.stringify(meta, null, 2));
+
+            console.log(`[DataManager] Downloaded database: ${games.length} games`);
+        } catch (e) {
+            // Remove invalid temp file
+            if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+            }
+            throw e;
+        }
+    }
+
+    // Get remote file headers (for version checking)
+    private getRemoteHeaders(url: string): Promise<Record<string, string>> {
+        return new Promise((resolve, reject) => {
+            const options = {
+                method: 'HEAD',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 PICO-8 IDE Extension'
+                }
+            };
+
+            const req = https.request(url, options, (res) => {
+                // Handle redirects
+                if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+                    this.getRemoteHeaders(res.headers.location).then(resolve).catch(reject);
+                    return;
+                }
+
+                const headers: Record<string, string> = {};
+                if (res.headers.etag) headers['etag'] = res.headers.etag as string;
+                if (res.headers['last-modified']) headers['last-modified'] = res.headers['last-modified'] as string;
+                resolve(headers);
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
     }
 
     public async getAssetPath(game: GameMetadata, type: 'cart' | 'thumb'): Promise<string> {
@@ -141,17 +272,6 @@ export class DataManager {
              const fallback = `https://www.lexaloffle.com/bbs/cposts/${game.id}.p8.png`;
 
              sourceUrl = computed || explicit || fallback;
-
-             // Override based on user feedback about ID structure if compute fails or we want to double check
-             if (!computed && !explicit) {
-                  // User said:
-                  // if picoXXXXX (number): cposts/x/xxxx.p8.png (where x is ? maybe not just x)
-                  // if pico8_xxxxxx: cposts/xx/xxxxxx.p8.png
-                  // This is complicated to guess without exact logic.
-                  // But thumbnail_path usually has the pattern.
-                  // Example thumb: /bbs/cposts/1/12345.p8.png (often thumb IS the cart image)
-                  // Or /bbs/thumbs/p12345.png
-             }
         } else {
              // Thumbnail
              if (thumbnailPath.startsWith('http')) {
@@ -161,18 +281,48 @@ export class DataManager {
             }
         }
 
-        vscode.window.showInformationMessage(`Attempting download for ${type} from: ${sourceUrl}`);
+        console.log(`[DataManager] Downloading ${type} from: ${sourceUrl}`);
 
         try {
-            console.log(`Downloading ${type} from: ${sourceUrl}`);
             await this.downloadFile(sourceUrl, filePath);
             return filePath;
         } catch (e: any) {
             console.error(`Failed to download ${type}: ${sourceUrl}, Error: ${e.message}`);
-            // If first attempt fails and we used a computed URL, maybe try fallback?
-            // For now, throw.
             throw new Error(`Failed to download ${type} from ${sourceUrl}. Reason: ${e.message}`);
         }
+    }
+
+    // Get path to cached extracted thumbnail (label from cart PNG)
+    public getExtractedThumbPath(game: GameMetadata): string {
+        const thumbDir = path.join(this.assetsDir, 'thumbs_extracted', game.source || 'bbs');
+        if (!fs.existsSync(thumbDir)) {
+            fs.mkdirSync(thumbDir, { recursive: true });
+        }
+        return path.join(thumbDir, `${game.id}.png`);
+    }
+
+    // Check if extracted thumbnail exists
+    public hasExtractedThumb(game: GameMetadata): boolean {
+        return fs.existsSync(this.getExtractedThumbPath(game));
+    }
+
+    // Save extracted thumbnail (base64 data URL to file)
+    public saveExtractedThumb(game: GameMetadata, base64DataUrl: string): void {
+        const thumbPath = this.getExtractedThumbPath(game);
+        // Remove data URL prefix: "data:image/png;base64,"
+        const base64Data = base64DataUrl.replace(/^data:image\/png;base64,/, '');
+        fs.writeFileSync(thumbPath, Buffer.from(base64Data, 'base64'));
+        console.log(`[DataManager] Saved extracted thumbnail: ${thumbPath}`);
+    }
+
+    // Load extracted thumbnail as data URL
+    public loadExtractedThumb(game: GameMetadata): string | null {
+        const thumbPath = this.getExtractedThumbPath(game);
+        if (fs.existsSync(thumbPath)) {
+            const data = fs.readFileSync(thumbPath);
+            return `data:image/png;base64,${data.toString('base64')}`;
+        }
+        return null;
     }
 
     private computeCartUrl(thumbnailPath: string): string | null {
@@ -228,15 +378,19 @@ export class DataManager {
 
     private downloadFile(url: string, destPath: string): Promise<void> {
         return new Promise((resolve, reject) => {
+            console.log(`[DataManager] Starting download: ${url} -> ${destPath}`);
             const file = fs.createWriteStream(destPath);
             const options = {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'Accept': '*/*'
-                }
+                },
+                timeout: 30000
             };
 
             const request = https.get(url, options, (response) => {
+                console.log(`[DataManager] Response status: ${response.statusCode} for ${url}`);
+
                 // Determine redirect URL properly
                 if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
                     if (response.headers.location) {
@@ -249,6 +403,7 @@ export class DataManager {
                              const u = new URL(url);
                              redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
                          }
+                         console.log(`[DataManager] Redirecting to: ${redirectUrl}`);
 
                          this.downloadFile(redirectUrl, destPath)
                             .then(resolve)
@@ -268,16 +423,25 @@ export class DataManager {
 
                 file.on('finish', () => {
                     file.close();
+                    console.log(`[DataManager] Download complete: ${destPath}`);
                     resolve();
                 });
             });
 
+            request.on('timeout', () => {
+                request.destroy();
+                fs.unlink(destPath, () => {});
+                reject(new Error(`Request timed out for ${url}`));
+            });
+
             request.on('error', (err) => {
+                console.error(`[DataManager] Request error: ${err.message}`);
                 fs.unlink(destPath, () => {});
                 reject(err);
             });
 
             file.on('error', (err) => {
+                 console.error(`[DataManager] File write error: ${err.message}`);
                  fs.unlink(destPath, () => {});
                  reject(err);
             });
