@@ -1,0 +1,115 @@
+{
+  "name": "pico8ide",
+  "displayName": "PICO-8 IDE",
+  "description": "PICO-8 Fantasy Console IDE Extension",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pico8-explorer",
+          "title": "PICO-8",
+          "icon": "resources/pico8-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pico8-explorer": [
+        {
+          "id": "pico8Games",
+          "name": "Games"
+        },
+        {
+          "id": "pico8GameDetail",
+          "name": "Details",
+          "type": "webview",
+          "visibility": "collapsed",
+          "when": "pico8ide.gameSelected"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pico8ide.search",
+        "title": "Search",
+        "icon": {
+          "light": "resources/light/search.svg",
+          "dark": "resources/dark/search.svg"
+        }
+      },
+      {
+        "command": "pico8ide.openCart",
+        "title": "Open Cartridge"
+      },
+      {
+        "command": "pico8ide.refreshEntry",
+        "title": "Refresh",
+        "icon": {
+          "light": "resources/light/refresh.svg",
+          "dark": "resources/dark/refresh.svg"
+        }
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pico8ide.search",
+          "when": "view == pico8Games",
+          "group": "navigation"
+        },
+        {
+          "command": "pico8ide.refreshEntry",
+          "when": "view == pico8Games",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PICO-8 IDE",
+      "properties": {
+        "pico8ide.dataMode": {
+          "type": "string",
+          "enum": [
+            "remote",
+            "local"
+          ],
+          "default": "remote",
+          "description": "Source of game data: 'remote' (download from URL) or 'local' (read from directory)."
+        },
+        "pico8ide.remoteUrl": {
+          "type": "string",
+          "default": "https://github.com/hp7hao/fcdb/releases/latest/download/db_pico8.json",
+          "description": "URL to the master database JSON file (used in remote mode)."
+        },
+        "pico8ide.localPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^16.x",
+    "@types/pngjs": "^6.0.5",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0"
+  }
+}
