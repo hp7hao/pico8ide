@@ -538,18 +538,25 @@ class Pico8CartPanel {
                     /* SFX Styles */
                     .sfx-container { display: flex; height: 100%; }
                     .sfx-list { width: 200px; border-right: 1px solid #333; overflow-y: auto; }
-                    .sfx-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #222; font-size: 12px; }
+                    .sfx-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #222; font-size: 12px; display: flex; align-items: center; }
                     .sfx-item:hover { background: #2a2a2a; }
                     .sfx-item.active { background: #3a3a5a; }
                     .sfx-item.empty { opacity: 0.4; }
+                    .sfx-item .play-btn { margin-right: 8px; background: #4a4; border: none; color: #fff; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+                    .sfx-item .play-btn:hover { background: #5b5; }
                     .sfx-detail { flex: 1; padding: 10px; overflow: auto; }
                     .sfx-header { font-weight: bold; margin-bottom: 10px; color: #fff; }
+                    .sfx-controls { margin-bottom: 15px; }
+                    .sfx-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 6px 12px; margin-right: 8px; border-radius: 3px; cursor: pointer; }
+                    .sfx-controls button:hover:not(:disabled) { background: #555; }
+                    .sfx-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
                     .sfx-info { margin-bottom: 15px; font-size: 12px; color: #888; }
                     .sfx-tracker { font-family: monospace; font-size: 11px; background: #1a1a1a; border: 1px solid #333; }
                     .sfx-tracker-header { display: flex; background: #252525; border-bottom: 1px solid #333; padding: 4px; }
                     .sfx-tracker-header span { flex: 1; text-align: center; font-weight: bold; font-size: 10px; color: #888; }
                     .sfx-note { display: flex; border-bottom: 1px solid #222; }
                     .sfx-note:hover { background: #252530; }
+                    .sfx-note.playing { background: #3a4a3a; }
                     .sfx-note span { flex: 1; text-align: center; padding: 2px 4px; }
                     .sfx-note .note-idx { color: #666; width: 30px; flex: none; }
                     .sfx-note .note-pitch { color: #6cf; }
@@ -559,8 +566,14 @@ class Pico8CartPanel {
 
                     /* Music Styles */
                     .music-container { padding: 10px; }
+                    .music-controls { margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px; }
+                    .music-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 8px 16px; margin-right: 10px; border-radius: 3px; cursor: pointer; }
+                    .music-controls button:hover { background: #555; }
+                    #music-status { color: #888; font-size: 12px; }
                     .music-patterns { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
-                    .music-pattern { background: #1a1a1a; border: 1px solid #333; padding: 8px; font-size: 11px; border-radius: 3px; }
+                    .music-pattern { background: #1a1a1a; border: 1px solid #333; padding: 8px; font-size: 11px; border-radius: 3px; cursor: pointer; }
+                    .music-pattern:hover { background: #252525; }
+                    .music-pattern.playing { background: #2a3a2a; border-color: #4a4; }
                     .music-pattern.empty { opacity: 0.3; }
                     .music-pattern.loop-start { border-left: 3px solid #6f6; }
                     .music-pattern.loop-end { border-right: 3px solid #f66; }
@@ -603,11 +616,20 @@ class Pico8CartPanel {
                         <div class="sfx-list" id="sfx-list"></div>
                         <div class="sfx-detail" id="sfx-detail">
                             <div class="sfx-header">Select an SFX to view details</div>
+                            <div class="sfx-controls">
+                                <button id="btn-play-sfx" disabled>▶ Play</button>
+                                <button id="btn-stop-sfx" disabled>⏹ Stop</button>
+                            </div>
                         </div>
                     </div>
                  </div>
                  <div id="tab-music" class="content">
                     <div class="music-container">
+                        <div class="music-controls">
+                            <button id="btn-play-music">▶ Play Music</button>
+                            <button id="btn-stop-music">⏹ Stop</button>
+                            <span id="music-status"></span>
+                        </div>
                         <div class="music-patterns" id="music-patterns"></div>
                     </div>
                  </div>
@@ -624,6 +646,288 @@ class Pico8CartPanel {
                     const NOTE_NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
                     const WAVEFORMS = ['sine', 'tri', 'saw', 'sqr', 'pulse', 'ring', 'noise', 'ring2'];
                     const EFFECTS = ['none', 'slide', 'vib', 'drop', 'fadein', 'fadeout', 'arpF', 'arpS'];
+
+                    // ============ AUDIO ENGINE ============
+                    let audioCtx = null;
+                    let currentSfxPlayer = null;
+                    let currentMusicPlayer = null;
+                    let selectedSfxId = null;
+
+                    // PICO-8 base frequency: C0 = 16.35 Hz (standard tuning)
+                    const BASE_FREQ = 16.35;
+
+                    // Convert PICO-8 pitch (0-63) to frequency in Hz
+                    function pitchToFreq(pitch) {
+                        return BASE_FREQ * Math.pow(2, pitch / 12);
+                    }
+
+                    // Map PICO-8 waveform to Web Audio type or custom
+                    function getOscillatorType(waveform) {
+                        switch (waveform) {
+                            case 0: return 'sine';
+                            case 1: return 'triangle';
+                            case 2: return 'sawtooth';
+                            case 3: return 'square';  // long square
+                            case 4: return 'square';  // short square (we'll handle duty cycle separately if needed)
+                            case 5: return 'triangle'; // ringing - approximate
+                            case 6: return 'sawtooth'; // noise - we'll use special handling
+                            case 7: return 'sine';     // ringing sine
+                            default: return 'sine';
+                        }
+                    }
+
+                    // Create noise source using AudioBuffer
+                    function createNoiseSource(ctx, duration) {
+                        const bufferSize = ctx.sampleRate * duration;
+                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const data = buffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        const source = ctx.createBufferSource();
+                        source.buffer = buffer;
+                        return source;
+                    }
+
+                    // Play a single SFX
+                    function playSfx(sfxId, onNoteChange) {
+                        if (!audioCtx) {
+                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+
+                        // Stop any currently playing SFX
+                        stopSfx();
+
+                        const sfx = parseSfx(sfxId);
+                        if (sfx.isEmpty) return null;
+
+                        // Calculate note duration: speed * (1/128) seconds approximately
+                        // PICO-8: 22050 ticks/sec, 183 ticks per speed unit
+                        // So duration = speed * 183 / 22050 ≈ speed * 0.0083 seconds
+                        const noteDuration = (sfx.speed || 1) * 183 / 22050;
+
+                        let noteIndex = 0;
+                        let isPlaying = true;
+                        let oscillator = null;
+                        let gainNode = null;
+
+                        function playNote() {
+                            if (!isPlaying || noteIndex >= 32) {
+                                // Check for loop
+                                if (sfx.loopStart < sfx.loopEnd && isPlaying) {
+                                    noteIndex = sfx.loopStart;
+                                } else {
+                                    stopSfx();
+                                    return;
+                                }
+                            }
+
+                            const note = sfx.notes[noteIndex];
+
+                            // Highlight current note
+                            if (onNoteChange) onNoteChange(noteIndex);
+
+                            // Skip silent notes
+                            if (note.volume === 0) {
+                                noteIndex++;
+                                setTimeout(playNote, noteDuration * 1000);
+                                return;
+                            }
+
+                            // Create oscillator for this note
+                            if (note.waveform === 6) {
+                                // Noise
+                                oscillator = createNoiseSource(audioCtx, noteDuration);
+                            } else {
+                                oscillator = audioCtx.createOscillator();
+                                oscillator.type = getOscillatorType(note.waveform);
+                                oscillator.frequency.setValueAtTime(pitchToFreq(note.pitch), audioCtx.currentTime);
+                            }
+
+                            // Create gain for volume
+                            gainNode = audioCtx.createGain();
+                            const vol = note.volume / 7; // Normalize to 0-1
+                            gainNode.gain.setValueAtTime(vol * 0.3, audioCtx.currentTime); // Scale down to avoid clipping
+
+                            // Apply effects
+                            const nextNote = sfx.notes[noteIndex + 1] || note;
+                            switch (note.effect) {
+                                case 1: // Slide
+                                    if (oscillator.frequency) {
+                                        oscillator.frequency.linearRampToValueAtTime(
+                                            pitchToFreq(nextNote.pitch),
+                                            audioCtx.currentTime + noteDuration
+                                        );
+                                    }
+                                    break;
+                                case 2: // Vibrato
+                                    if (oscillator.frequency) {
+                                        const vibratoOsc = audioCtx.createOscillator();
+                                        vibratoOsc.frequency.setValueAtTime(6, audioCtx.currentTime);
+                                        const vibratoGain = audioCtx.createGain();
+                                        vibratoGain.gain.setValueAtTime(pitchToFreq(note.pitch) * 0.02, audioCtx.currentTime);
+                                        vibratoOsc.connect(vibratoGain);
+                                        vibratoGain.connect(oscillator.frequency);
+                                        vibratoOsc.start();
+                                        setTimeout(() => vibratoOsc.stop(), noteDuration * 1000);
+                                    }
+                                    break;
+                                case 3: // Drop
+                                    if (oscillator.frequency) {
+                                        oscillator.frequency.exponentialRampToValueAtTime(
+                                            20,
+                                            audioCtx.currentTime + noteDuration
+                                        );
+                                    }
+                                    break;
+                                case 4: // Fade in
+                                    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                                    gainNode.gain.linearRampToValueAtTime(vol * 0.3, audioCtx.currentTime + noteDuration);
+                                    break;
+                                case 5: // Fade out
+                                    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + noteDuration);
+                                    break;
+                            }
+
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+
+                            oscillator.start();
+                            oscillator.stop(audioCtx.currentTime + noteDuration);
+
+                            noteIndex++;
+                            setTimeout(playNote, noteDuration * 1000);
+                        }
+
+                        playNote();
+
+                        return {
+                            stop: () => {
+                                isPlaying = false;
+                                if (oscillator) {
+                                    try { oscillator.stop(); } catch (e) {}
+                                }
+                            }
+                        };
+                    }
+
+                    function stopSfx() {
+                        if (currentSfxPlayer) {
+                            currentSfxPlayer.stop();
+                            currentSfxPlayer = null;
+                        }
+                        // Clear note highlighting
+                        document.querySelectorAll('.sfx-note.playing').forEach(el => el.classList.remove('playing'));
+                    }
+
+                    // Music player
+                    function playMusic(startPattern) {
+                        if (!audioCtx) {
+                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+
+                        stopMusic();
+
+                        let patternIndex = startPattern || 0;
+                        let isPlaying = true;
+                        let channelPlayers = [null, null, null, null];
+
+                        function updatePatternHighlight() {
+                            document.querySelectorAll('.music-pattern').forEach((el, idx) => {
+                                el.classList.toggle('playing', idx === patternIndex);
+                            });
+                            document.getElementById('music-status').textContent = 'Playing pattern ' + patternIndex;
+                        }
+
+                        function playPattern() {
+                            if (!isPlaying || patternIndex >= 64) {
+                                stopMusic();
+                                return;
+                            }
+
+                            updatePatternHighlight();
+
+                            const offset = patternIndex * 4;
+                            const channels = [
+                                MUSIC[offset] || 0,
+                                MUSIC[offset + 1] || 0,
+                                MUSIC[offset + 2] || 0,
+                                MUSIC[offset + 3] || 0
+                            ];
+
+                            // Check if all channels disabled (empty pattern)
+                            const allDisabled = channels.every(c => (c & 0x40) !== 0);
+
+                            // Parse flags
+                            const loopStart = (channels[0] & 0x80) !== 0;
+                            const loopEnd = (channels[1] & 0x80) !== 0;
+                            const stopAtEnd = (channels[2] & 0x80) !== 0;
+
+                            if (allDisabled) {
+                                stopMusic();
+                                return;
+                            }
+
+                            // Find longest SFX duration
+                            let maxDuration = 0;
+                            for (let c = 0; c < 4; c++) {
+                                const disabled = (channels[c] & 0x40) !== 0;
+                                if (!disabled) {
+                                    const sfxId = channels[c] & 0x3f;
+                                    const sfx = parseSfx(sfxId);
+                                    const noteDuration = (sfx.speed || 1) * 183 / 22050;
+                                    const sfxDuration = noteDuration * 32;
+                                    maxDuration = Math.max(maxDuration, sfxDuration);
+
+                                    // Play this channel's SFX
+                                    channelPlayers[c] = playSfx(sfxId, null);
+                                }
+                            }
+
+                            // Schedule next pattern
+                            setTimeout(() => {
+                                if (!isPlaying) return;
+
+                                if (stopAtEnd) {
+                                    stopMusic();
+                                } else if (loopEnd) {
+                                    // Find loop start
+                                    let loopStartIdx = 0;
+                                    for (let i = patternIndex; i >= 0; i--) {
+                                        if ((MUSIC[i * 4] & 0x80) !== 0) {
+                                            loopStartIdx = i;
+                                            break;
+                                        }
+                                    }
+                                    patternIndex = loopStartIdx;
+                                    playPattern();
+                                } else {
+                                    patternIndex++;
+                                    playPattern();
+                                }
+                            }, maxDuration * 1000);
+                        }
+
+                        playPattern();
+
+                        currentMusicPlayer = {
+                            stop: () => {
+                                isPlaying = false;
+                                channelPlayers.forEach(p => { if (p) p.stop(); });
+                            }
+                        };
+                    }
+
+                    function stopMusic() {
+                        if (currentMusicPlayer) {
+                            currentMusicPlayer.stop();
+                            currentMusicPlayer = null;
+                        }
+                        document.querySelectorAll('.music-pattern.playing').forEach(el => el.classList.remove('playing'));
+                        document.getElementById('music-status').textContent = '';
+                    }
+
+                    // ============ END AUDIO ENGINE ============
 
                     function pitchToNote(pitch) {
                         if (pitch === 0) return '...';
@@ -834,13 +1138,34 @@ class Pico8CartPanel {
                             const sfx = parseSfx(i);
                             const div = document.createElement('div');
                             div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '');
-                            div.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (empty)' : ' spd:' + sfx.speed);
-                            div.onclick = () => renderSfxDetail(i);
+
+                            // Play button
+                            if (!sfx.isEmpty) {
+                                const playBtn = document.createElement('button');
+                                playBtn.className = 'play-btn';
+                                playBtn.textContent = '▶';
+                                playBtn.onclick = (e) => {
+                                    e.stopPropagation();
+                                    currentSfxPlayer = playSfx(i, null);
+                                };
+                                div.appendChild(playBtn);
+                            }
+
+                            const label = document.createElement('span');
+                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (empty)' : ' spd:' + sfx.speed);
+                            div.appendChild(label);
+
+                            div.onclick = () => {
+                                selectedSfxId = i;
+                                renderSfxDetail(i);
+                            };
                             container.appendChild(div);
                         }
                     }
 
                     function renderSfxDetail(sfxId) {
+                        selectedSfxId = sfxId;
+
                         // Highlight active item
                         document.querySelectorAll('.sfx-item').forEach((el, idx) => {
                             el.classList.toggle('active', idx === sfxId);
@@ -850,12 +1175,16 @@ class Pico8CartPanel {
                         const container = document.getElementById('sfx-detail');
 
                         let html = '<div class="sfx-header">SFX ' + sfxId + '</div>';
+                        html += '<div class="sfx-controls">';
+                        html += '<button id="btn-play-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + '>▶ Play</button>';
+                        html += '<button id="btn-stop-sfx">⏹ Stop</button>';
+                        html += '</div>';
                         html += '<div class="sfx-info">';
                         html += 'Speed: ' + sfx.speed + ' | ';
                         html += 'Loop: ' + sfx.loopStart + ' → ' + sfx.loopEnd;
                         html += '</div>';
 
-                        html += '<div class="sfx-tracker">';
+                        html += '<div class="sfx-tracker" id="sfx-tracker">';
                         html += '<div class="sfx-tracker-header"><span>#</span><span>Note</span><span>Wave</span><span>Vol</span><span>FX</span></div>';
 
                         for (let i = 0; i < 32; i++) {
@@ -865,7 +1194,7 @@ class Pico8CartPanel {
                             const volStr = n.volume.toString();
                             const fxStr = EFFECTS[n.effect];
 
-                            html += '<div class="sfx-note">';
+                            html += '<div class="sfx-note" data-idx="' + i + '">';
                             html += '<span class="note-idx">' + i.toString().padStart(2, '0') + '</span>';
                             html += '<span class="note-pitch">' + noteStr + '</span>';
                             html += '<span class="note-wave">' + waveStr + '</span>';
@@ -876,11 +1205,26 @@ class Pico8CartPanel {
                         html += '</div>';
 
                         container.innerHTML = html;
+
+                        // Wire up buttons
+                        document.getElementById('btn-play-sfx').onclick = () => {
+                            currentSfxPlayer = playSfx(sfxId, (noteIdx) => {
+                                // Highlight playing note
+                                document.querySelectorAll('.sfx-note').forEach(el => el.classList.remove('playing'));
+                                const noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
+                                if (noteEl) noteEl.classList.add('playing');
+                            });
+                        };
+                        document.getElementById('btn-stop-sfx').onclick = stopSfx;
                     }
 
                     function renderMusic() {
                         const container = document.getElementById('music-patterns');
                         container.innerHTML = '';
+
+                        // Wire up music control buttons
+                        document.getElementById('btn-play-music').onclick = () => playMusic(0);
+                        document.getElementById('btn-stop-music').onclick = stopMusic;
 
                         for (let i = 0; i < 64; i++) {
                             const offset = i * 4;
@@ -909,6 +1253,13 @@ class Pico8CartPanel {
                             if (loopEnd) classes += ' loop-end';
                             if (stopAtEnd) classes += ' stop';
                             div.className = classes;
+                            div.dataset.pattern = i;
+
+                            // Click to play from this pattern
+                            if (!isEmpty) {
+                                div.onclick = () => playMusic(i);
+                                div.title = 'Click to play from pattern ' + i;
+                            }
 
                             let html = '<div class="music-pattern-id">' + i.toString().padStart(2, '0') + '</div>';
                             for (let c = 0; c < 4; c++) {
@@ -930,7 +1281,108 @@ class Pico8CartPanel {
 }
 
 
+// Show disclaimer/readme on activation
+function showDisclaimer(context: vscode.ExtensionContext) {
+    const panel = vscode.window.createWebviewPanel(
+        'pico8ideDisclaimer',
+        'PICO-8 IDE - Disclaimer',
+        vscode.ViewColumn.One,
+        { enableScripts: false }
+    );
+
+    panel.webview.html = `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PICO-8 IDE Disclaimer</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 700px;
+                margin: 40px auto;
+                padding: 20px;
+                line-height: 1.6;
+                color: #e0e0e0;
+                background: #1a1a2e;
+            }
+            h1 {
+                color: #ff77a8;
+                border-bottom: 2px solid #ff77a8;
+                padding-bottom: 10px;
+            }
+            h2 {
+                color: #29adff;
+                margin-top: 30px;
+            }
+            .disclaimer-box {
+                background: #2a2a4a;
+                border-left: 4px solid #ffec27;
+                padding: 15px 20px;
+                margin: 20px 0;
+                border-radius: 0 8px 8px 0;
+            }
+            a {
+                color: #29adff;
+            }
+            ul {
+                padding-left: 20px;
+            }
+            li {
+                margin: 8px 0;
+            }
+            .footer {
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #333;
+                font-size: 0.9em;
+                color: #888;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>PICO-8 IDE Browser</h1>
+
+        <div class="disclaimer-box">
+            <strong>Important Disclaimer</strong>
+            <p>This is a <strong>hobby project</strong> created for <strong>learning purposes only</strong>.</p>
+            <p>This extension is <strong>NOT for sale</strong> and is <strong>NOT affiliated with Lexaloffle Games</strong>.</p>
+        </div>
+
+        <h2>About PICO-8</h2>
+        <p>
+            PICO-8 is a fantasy console created by <strong>Lexaloffle Games</strong>.
+            It's a wonderful platform for learning game development and creating retro-style games.
+        </p>
+        <p>
+            <strong>PICO-8 is paid software.</strong> If you're interested in creating games or
+            exploring the full PICO-8 experience, please support the developer by visiting the official website:
+        </p>
+        <p>
+            <a href="https://www.lexaloffle.com/pico-8.php">https://www.lexaloffle.com/pico-8.php</a>
+        </p>
+
+        <h2>What This Extension Does</h2>
+        <ul>
+            <li>Browse PICO-8 games from the BBS (Bulletin Board System)</li>
+            <li>View game metadata, sprites, maps, and code</li>
+            <li>Preview SFX and music patterns</li>
+            <li>Learn how PICO-8 cartridges are structured</li>
+        </ul>
+
+        <div class="footer">
+            <p>Close this tab to continue using the extension.</p>
+            <p>This message appears each time the extension is activated.</p>
+        </div>
+    </body>
+    </html>`;
+}
+
+
 export function activate(context: vscode.ExtensionContext) {
+    // Show disclaimer on every activation
+    showDisclaimer(context);
+
     const dataManager = new DataManager(context);
     dataManager.initialize();
 
@@ -938,8 +1390,8 @@ export function activate(context: vscode.ExtensionContext) {
     const detailProvider = new GameDetailViewProvider(context.extensionUri, dataManager);
 
     // Set callback to refresh game list when database is updated
-    dataManager.setUpdateCallback((gameCount: number) => {
-        vscode.window.showInformationMessage(`Database updated! Now showing ${gameCount} games.`);
+    dataManager.setUpdateCallback(() => {
+        vscode.window.showInformationMessage('Database updated successfully!');
         gamesProvider.load();
     });
 
