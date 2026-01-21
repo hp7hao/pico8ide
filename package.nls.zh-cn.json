@@ -1,0 +1,13 @@
+{
+  "extension.description": "PICO-8 梦幻游戏机 IDE 扩展 - 仅供学习的业余项目",
+  "viewsContainer.title": "PICO-8",
+  "view.games.name": "游戏列表",
+  "view.details.name": "详情",
+  "command.search.title": "搜索",
+  "command.openCart.title": "打开卡带",
+  "command.refresh.title": "刷新",
+  "config.title": "PICO-8 IDE",
+  "config.dataMode.description": "游戏数据来源：'remote'（从网络下载）或 'local'（从本地读取）。",
+  "config.remoteUrl.description": "主数据库 JSON 文件的 URL（远程模式使用）。",
+  "config.localPath.description": "本地 FCDB 分发目录的绝对路径，例如 /path/to/fcdb/dist/pico8（本地模式使用）。"
+}

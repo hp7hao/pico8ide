@@ -1,0 +1,13 @@
+{
+  "extension.description": "PICO-8 Fantasy Console IDE Extension - A hobby project for learning purposes",
+  "viewsContainer.title": "PICO-8",
+  "view.games.name": "Games",
+  "view.details.name": "Details",
+  "command.search.title": "Search",
+  "command.openCart.title": "Open Cartridge",
+  "command.refresh.title": "Refresh",
+  "config.title": "PICO-8 IDE",
+  "config.dataMode.description": "Source of game data: 'remote' (download from URL) or 'local' (read from directory).",
+  "config.remoteUrl.description": "URL to the master database JSON file (used in remote mode).",
+  "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode)."
+}

@@ -5,6 +5,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const pngjs_1 = require("pngjs");
 const dataManager_1 = require("./dataManager");
+const i18n_1 = require("./i18n");
 // PICO-8 16-color palette
 const PICO8_PALETTE = [
     '#000000', // 0 black
@@ -94,10 +95,11 @@ class GameDetailViewProvider {
             </html>`;
     }
     _getGenericHtml(game, loading, error) {
+        const locale = (0, i18n_1.t)();
         // Thumbnail with floating metadata overlay on bottom half
         let thumbContent;
         if (loading) {
-            thumbContent = `<div class="thumb-placeholder">Loading...</div>`;
+            thumbContent = `<div class="thumb-placeholder">${locale.loading}</div>`;
         }
         else if (error) {
             thumbContent = `<div class="thumb-placeholder thumb-error">${error}</div>`;
@@ -106,7 +108,7 @@ class GameDetailViewProvider {
             thumbContent = `<img src="${this._thumbnailDataUrl}" class="thumb-img">`;
         }
         else {
-            thumbContent = `<div class="thumb-placeholder">No Image</div>`;
+            thumbContent = `<div class="thumb-placeholder">${locale.noImage}</div>`;
         }
         const tags = (game.extension.tags || []).slice(0, 3).map((t) => `<span class="tag">${t}</span>`).join('');
         const codeSizeHtml = this._cartInfo ?
@@ -349,6 +351,7 @@ class Pico8CartPanel {
         }
     }
     _getLoadingHtml(game, message) {
+        const locale = (0, i18n_1.t)();
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
@@ -372,6 +375,7 @@ class Pico8CartPanel {
             </html>`;
     }
     _getErrorHtml(game, error) {
+        const locale = (0, i18n_1.t)();
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
@@ -385,13 +389,14 @@ class Pico8CartPanel {
             </head>
             <body>
                 <div class="error">
-                    <h2>Failed to load ${game.name}</h2>
+                    <h2>${locale.error}: ${game.name}</h2>
                     <p>${error}</p>
                 </div>
             </body>
             </html>`;
     }
     _getCartHtml(game, cartData) {
+        const locale = (0, i18n_1.t)();
         // We will render the sprite sheet using canvas
         // Convert gfx array to JS array string
         const gfxJson = JSON.stringify(cartData.gfx);
@@ -481,11 +486,11 @@ class Pico8CartPanel {
             </head>
             <body>
                 <div class="tab-header">
-                    <div class="tab active" onclick="showTab('code')">LUA Code</div>
-                    <div class="tab" onclick="showTab('gfx')">Sprites</div>
-                    <div class="tab" onclick="showTab('map')">Map</div>
-                    <div class="tab" onclick="showTab('sfx')">SFX</div>
-                    <div class="tab" onclick="showTab('music')">Music</div>
+                    <div class="tab active" onclick="showTab('code')">${locale.tabCode}</div>
+                    <div class="tab" onclick="showTab('gfx')">${locale.tabSprites}</div>
+                    <div class="tab" onclick="showTab('map')">${locale.tabMap}</div>
+                    <div class="tab" onclick="showTab('sfx')">${locale.tabSfx}</div>
+                    <div class="tab" onclick="showTab('music')">${locale.tabMusic}</div>
                 </div>
 
                 <div id="tab-code" class="content active">
@@ -496,24 +501,24 @@ class Pico8CartPanel {
                      <div class="sprite-sheet-container">
                          <canvas id="cvs-gfx" width="128" height="128"></canvas>
                      </div>
-                     <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">128x128 Sprite Sheet</div>
+                     <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">${locale.spriteSheetLabel}</div>
                 </div>
 
                 <div id="tab-map" class="content">
                     <div class="sprite-sheet-container">
                         <canvas id="cvs-map" width="1024" height="512"></canvas>
                     </div>
-                    <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">128x64 Map (1024x512 pixels) - Lower 32 rows share memory with sprite sheet</div>
+                    <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">${locale.mapLabel}</div>
                 </div>
 
                  <div id="tab-sfx" class="content">
                     <div class="sfx-container">
                         <div class="sfx-list" id="sfx-list"></div>
                         <div class="sfx-detail" id="sfx-detail">
-                            <div class="sfx-header">Select an SFX to view details</div>
+                            <div class="sfx-header">${locale.selectSfx}</div>
                             <div class="sfx-controls">
-                                <button id="btn-play-sfx" disabled>▶ Play</button>
-                                <button id="btn-stop-sfx" disabled>⏹ Stop</button>
+                                <button id="btn-play-sfx" disabled>▶ ${locale.play}</button>
+                                <button id="btn-stop-sfx" disabled>⏹ ${locale.stop}</button>
                             </div>
                         </div>
                     </div>
@@ -521,8 +526,8 @@ class Pico8CartPanel {
                  <div id="tab-music" class="content">
                     <div class="music-container">
                         <div class="music-controls">
-                            <button id="btn-play-music">▶ Play Music</button>
-                            <button id="btn-stop-music">⏹ Stop</button>
+                            <button id="btn-play-music">▶ ${locale.playMusic}</button>
+                            <button id="btn-stop-music">⏹ ${locale.stop}</button>
                             <span id="music-status"></span>
                         </div>
                         <div class="music-patterns" id="music-patterns"></div>
@@ -536,6 +541,16 @@ class Pico8CartPanel {
                     const SFX = ${sfxJson};
                     const MUSIC = ${musicJson};
                     const PAL = ${palJson};
+
+                    // Localization
+                    const LOCALE = {
+                        play: "${locale.play}",
+                        stop: "${locale.stop}",
+                        speed: "${locale.speed}",
+                        loop: "${locale.loop}",
+                        playingPattern: "${locale.playingPattern}",
+                        empty: "${locale.empty}"
+                    };
 
                     // Note names for pitch display
                     const NOTE_NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
@@ -731,7 +746,7 @@ class Pico8CartPanel {
                             document.querySelectorAll('.music-pattern').forEach((el, idx) => {
                                 el.classList.toggle('playing', idx === patternIndex);
                             });
-                            document.getElementById('music-status').textContent = 'Playing pattern ' + patternIndex;
+                            document.getElementById('music-status').textContent = LOCALE.playingPattern + ' ' + patternIndex;
                         }
 
                         function playPattern() {
@@ -1047,7 +1062,7 @@ class Pico8CartPanel {
                             }
 
                             const label = document.createElement('span');
-                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (empty)' : ' spd:' + sfx.speed);
+                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (' + LOCALE.empty + ')' : ' ' + LOCALE.speed + ':' + sfx.speed);
                             div.appendChild(label);
 
                             div.onclick = () => {
@@ -1071,12 +1086,12 @@ class Pico8CartPanel {
 
                         let html = '<div class="sfx-header">SFX ' + sfxId + '</div>';
                         html += '<div class="sfx-controls">';
-                        html += '<button id="btn-play-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + '>▶ Play</button>';
-                        html += '<button id="btn-stop-sfx">⏹ Stop</button>';
+                        html += '<button id="btn-play-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + '>▶ ' + LOCALE.play + '</button>';
+                        html += '<button id="btn-stop-sfx">⏹ ' + LOCALE.stop + '</button>';
                         html += '</div>';
                         html += '<div class="sfx-info">';
-                        html += 'Speed: ' + sfx.speed + ' | ';
-                        html += 'Loop: ' + sfx.loopStart + ' → ' + sfx.loopEnd;
+                        html += LOCALE.speed + ': ' + sfx.speed + ' | ';
+                        html += LOCALE.loop + ': ' + sfx.loopStart + ' → ' + sfx.loopEnd;
                         html += '</div>';
 
                         html += '<div class="sfx-tracker" id="sfx-tracker">';
@@ -1177,6 +1192,7 @@ class Pico8CartPanel {
 Pico8CartPanel.viewType = 'pico8Cart';
 // Show disclaimer/readme on activation
 function showDisclaimer(context) {
+    const locale = (0, i18n_1.t)();
     const panel = vscode.window.createWebviewPanel('pico8ideDisclaimer', 'PICO-8 IDE - Disclaimer', vscode.ViewColumn.One, { enableScripts: false });
     panel.webview.html = `<!DOCTYPE html>
     <html lang="en">
@@ -1229,38 +1245,32 @@ function showDisclaimer(context) {
         </style>
     </head>
     <body>
-        <h1>PICO-8 IDE Browser</h1>
+        <h1>${locale.disclaimerTitle}</h1>
 
         <div class="disclaimer-box">
-            <strong>Important Disclaimer</strong>
-            <p>This is a <strong>hobby project</strong> created for <strong>learning purposes only</strong>.</p>
-            <p>This extension is <strong>NOT for sale</strong> and is <strong>NOT affiliated with Lexaloffle Games</strong>.</p>
+            <strong>${locale.disclaimerImportant}</strong>
+            <p>${locale.disclaimerHobbyProject}</p>
+            <p>${locale.disclaimerNotForSale}</p>
         </div>
 
-        <h2>About PICO-8</h2>
+        <h2>${locale.disclaimerAboutTitle}</h2>
+        <p>${locale.disclaimerAboutText}</p>
+        <p>${locale.disclaimerPaidSoftware}</p>
         <p>
-            PICO-8 is a fantasy console created by <strong>Lexaloffle Games</strong>.
-            It's a wonderful platform for learning game development and creating retro-style games.
-        </p>
-        <p>
-            <strong>PICO-8 is paid software.</strong> If you're interested in creating games or
-            exploring the full PICO-8 experience, please support the developer by visiting the official website:
-        </p>
-        <p>
-            <a href="https://www.lexaloffle.com/pico-8.php">https://www.lexaloffle.com/pico-8.php</a>
+            <a href="${locale.disclaimerVisitWebsite}">${locale.disclaimerVisitWebsite}</a>
         </p>
 
-        <h2>What This Extension Does</h2>
+        <h2>${locale.disclaimerFeaturesTitle}</h2>
         <ul>
-            <li>Browse PICO-8 games from the BBS (Bulletin Board System)</li>
-            <li>View game metadata, sprites, maps, and code</li>
-            <li>Preview SFX and music patterns</li>
-            <li>Learn how PICO-8 cartridges are structured</li>
+            <li>${locale.disclaimerFeature1}</li>
+            <li>${locale.disclaimerFeature2}</li>
+            <li>${locale.disclaimerFeature3}</li>
+            <li>${locale.disclaimerFeature4}</li>
         </ul>
 
         <div class="footer">
-            <p>Close this tab to continue using the extension.</p>
-            <p>This message appears each time the extension is activated.</p>
+            <p>${locale.disclaimerFooter1}</p>
+            <p>${locale.disclaimerFooter2}</p>
         </div>
     </body>
     </html>`;
@@ -1268,13 +1278,14 @@ function showDisclaimer(context) {
 function activate(context) {
     // Show disclaimer on every activation
     showDisclaimer(context);
+    const locale = (0, i18n_1.t)();
     const dataManager = new dataManager_1.DataManager(context);
     dataManager.initialize();
     const gamesProvider = new Pico8GamesProvider(dataManager);
     const detailProvider = new GameDetailViewProvider(context.extensionUri, dataManager);
     // Set callback to refresh game list when database is updated
     dataManager.setUpdateCallback(() => {
-        vscode.window.showInformationMessage('Database updated successfully!');
+        vscode.window.showInformationMessage(locale.databaseUpdated);
         gamesProvider.load();
     });
     vscode.window.registerTreeDataProvider('pico8Games', gamesProvider);
@@ -1285,8 +1296,8 @@ function activate(context) {
     // Filter Command
     vscode.commands.registerCommand('pico8ide.search', async () => {
         const query = await vscode.window.showInputBox({
-            placeHolder: 'Search games...',
-            prompt: 'Filter by name or author'
+            placeHolder: locale.searchPlaceholder,
+            prompt: locale.searchPrompt
         });
         if (query !== undefined) {
             gamesProvider.setFilter(query);
@@ -1315,15 +1326,15 @@ function activate(context) {
             game = gameOrId;
         }
         if (!game) {
-            vscode.window.showErrorMessage("Game not found.");
+            vscode.window.showErrorMessage(locale.gameNotFound);
             return;
         }
         // Create panel immediately with loading state
         const panel = Pico8CartPanel.createWithLoading(context.extensionUri, game);
         try {
-            panel.updateProgress("Downloading cartridge...");
+            panel.updateProgress(locale.downloading);
             const cartPath = await dataManager.getAssetPath(game, 'cart');
-            panel.updateProgress("Extracting data...");
+            panel.updateProgress(locale.extracting);
             const cartData = await Pico8Decoder.decode(cartPath);
             // Update detail panel with cart info and label
             detailProvider.updateCartInfo(game, cartData.code.length, cartData.label);

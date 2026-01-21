@@ -1,0 +1,97 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Package Extension
+        run: vsce package
+
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "vsix_file=pico8ide-$VERSION.vsix" >> $GITHUB_OUTPUT
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico8ide-vsix
+          path: "*.vsix"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pico8ide-vsix
+
+      - name: Get tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: PICO-8 IDE ${{ steps.tag.outputs.tag }}
+          body: |
+            ## PICO-8 IDE Extension
+
+            **Disclaimer:** This is a hobby project for learning purposes only.
+            Not for sale and not affiliated with Lexaloffle Games.
+
+            If you're interested in PICO-8, please visit the official website:
+            https://www.lexaloffle.com/pico-8.php
+
+            ### Installation
+            1. Download the `.vsix` file below
+            2. In VS Code, open Command Palette (Ctrl+Shift+P)
+            3. Run "Extensions: Install from VSIX..."
+            4. Select the downloaded file
+          files: "*.vsix"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
