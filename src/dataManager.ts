@@ -29,6 +29,8 @@ export interface GameMetadata {
 
 export interface ListInfo {
     name: string;
+    description?: string;
+    order: number;
     filename: string;
     games: GameMetadata[];
 }
@@ -207,19 +209,38 @@ export class DataManager {
         const files = fs.readdirSync(listsDir).filter(f =>
             f.endsWith('.json') &&
             !f.startsWith('source_') &&
-            f !== 'all.json'
+            f !== 'all.json' &&
+            path.basename(f, '.json').split('.').length === 1
         );
 
         for (const file of files) {
             try {
                 const content = fs.readFileSync(path.join(listsDir, file), 'utf8');
-                const games = JSON.parse(content) as GameMetadata[];
-                const name = path.basename(file, '.json');
-                results.push({ name, filename: file, games });
+                const parsed = JSON.parse(content);
+                const basename = path.basename(file, '.json');
+
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.games)) {
+                    // Wrapped format: { meta, games }
+                    results.push({
+                        name: parsed.meta?.name || basename,
+                        description: parsed.meta?.description,
+                        order: typeof parsed.meta?.order === 'number' ? parsed.meta.order : 0,
+                        filename: file,
+                        games: parsed.games as GameMetadata[]
+                    });
+                } else if (Array.isArray(parsed)) {
+                    // Legacy bare array
+                    results.push({ name: basename, order: 0, filename: file, games: parsed as GameMetadata[] });
+                }
             } catch (e) {
                 console.error(`Error reading list ${file}`, e);
             }
         }
+
+        results.sort((a, b) => {
+            if (a.order !== b.order) return a.order - b.order;
+            return a.name.localeCompare(b.name);
+        });
 
         return results;
     }

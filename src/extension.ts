@@ -131,6 +131,15 @@ class GameDetailViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    public showListInfo(listInfo: ListInfo) {
+        this._currentGame = undefined;
+        this._thumbnailDataUrl = undefined;
+        this._cartInfo = undefined;
+
+        if (!this._view) return;
+        this._view.webview.html = this._getListInfoHtml(listInfo);
+    }
+
     // Called after cart is decoded to show code size and label
     public updateCartInfo(game: GameMetadata, codeSize: number, label: string) {
         if (this._currentGame?.id === game.id) {
@@ -143,6 +152,34 @@ class GameDetailViewProvider implements vscode.WebviewViewProvider {
                 this._view.webview.html = this._getGenericHtml(game, false);
             }
         }
+    }
+
+    private _getListInfoHtml(listInfo: ListInfo) {
+        const desc = listInfo.description
+            ? `<p style="opacity:0.75; line-height:1.5;">${listInfo.description}</p>`
+            : '';
+        return `<!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {
+                        font-family: var(--vscode-font-family);
+                        color: var(--vscode-foreground);
+                        padding: 16px;
+                        margin: 0;
+                        font-size: 13px;
+                    }
+                    h2 { margin: 0 0 8px 0; }
+                    .count { opacity: 0.6; font-size: 0.9em; }
+                </style>
+            </head>
+            <body>
+                <h2>${listInfo.name}</h2>
+                ${desc}
+                <div class="count">${listInfo.games.length} games</div>
+            </body>
+            </html>`;
     }
 
     private _getEmptyHtml() {
@@ -346,6 +383,7 @@ class Pico8ListsProvider implements vscode.TreeDataProvider<ListTreeItem> {
             if (this.allGames.length > 0) {
                 groups.push(new ListGroupItem({
                     name: 'BBS Released',
+                    order: 999,
                     filename: '__all__',
                     games: this.allGames
                 }));
@@ -370,9 +408,16 @@ class Pico8ListsProvider implements vscode.TreeDataProvider<ListTreeItem> {
 class ListGroupItem extends vscode.TreeItem {
     constructor(public readonly listInfo: ListInfo) {
         super(listInfo.name, vscode.TreeItemCollapsibleState.Collapsed);
-        this.tooltip = `${listInfo.name} (${listInfo.games.length} games)`;
+        this.tooltip = listInfo.description
+            ? `${listInfo.name} - ${listInfo.description} (${listInfo.games.length} games)`
+            : `${listInfo.name} (${listInfo.games.length} games)`;
         this.description = `${listInfo.games.length}`;
         this.contextValue = 'listGroup';
+        this.command = {
+            command: 'pico8ide.selectList',
+            title: 'Select List',
+            arguments: [this.listInfo]
+        };
     }
 }
 
@@ -1568,6 +1613,11 @@ export function activate(context: vscode.ExtensionContext) {
         if (query !== undefined) {
              listsProvider.setFilter(query);
         }
+    });
+
+    // Select List - updates detail panel with list info
+    vscode.commands.registerCommand('pico8ide.selectList', (listInfo: ListInfo) => {
+        detailProvider.showListInfo(listInfo);
     });
 
     // Select Game - updates detail panel AND opens cart view

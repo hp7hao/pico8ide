@@ -2,7 +2,7 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "hp7hao",
   "license": "MIT",
   "icon": "resources/logo.png",
