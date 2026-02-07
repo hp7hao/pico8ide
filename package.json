@@ -23,22 +23,21 @@
         {
           "id": "pico8-explorer",
           "title": "%viewsContainer.title%",
-          "icon": "resources/pico8-icon.svg"
+          "icon": "resources/extension.svg"
         }
       ]
     },
     "views": {
       "pico8-explorer": [
         {
-          "id": "pico8Games",
+          "id": "pico8Lists",
           "name": "%view.games.name%"
         },
         {
           "id": "pico8GameDetail",
           "name": "%view.details.name%",
           "type": "webview",
-          "visibility": "collapsed",
-          "when": "pico8ide.gameSelected"
+          "visibility": "visible"
         }
       ]
     },
@@ -68,12 +67,12 @@
       "view/title": [
         {
           "command": "pico8ide.search",
-          "when": "view == pico8Games",
+          "when": "view == pico8Lists",
           "group": "navigation"
         },
         {
           "command": "pico8ide.refreshEntry",
-          "when": "view == pico8Games",
+          "when": "view == pico8Lists",
           "group": "navigation"
         }
       ]
@@ -92,7 +91,7 @@
         },
         "pico8ide.remoteUrl": {
           "type": "string",
-          "default": "https://github.com/hp7hao/fcdb/releases/latest/download/db_pico8.json",
+          "default": "https://github.com/hp7hao/fcdb/releases/latest/download/fcdb_pico8.zip",
           "description": "%config.remoteUrl.description%"
         },
         "pico8ide.localPath": {
@@ -110,6 +109,7 @@
     "package": "vsce package"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
     "@types/node": "^16.x",
     "@types/pngjs": "^6.0.5",
     "@types/vscode": "^1.80.0",
@@ -117,6 +117,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "adm-zip": "^0.5.10",
     "pngjs": "^7.0.0"
   }
 }

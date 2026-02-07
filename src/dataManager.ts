@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
+import AdmZip = require('adm-zip');
 
 export interface GameMetadata {
     id: string;
@@ -12,31 +13,96 @@ export interface GameMetadata {
         url?: string;
     };
     source: string;
+    ref_id?: string;
+    license?: {
+        type: string;
+        url?: string;
+    };
     extension: {
         cart_url?: string;
+        cart_file?: string;
         thumbnail_path?: string;
         [key: string]: any;
     };
     [key: string]: any;
 }
 
+export interface ListInfo {
+    name: string;
+    filename: string;
+    games: GameMetadata[];
+}
+
 export class DataManager {
     private context: vscode.ExtensionContext;
     private assetsDir: string = '';
+    private extractDir: string = '';   // Extracted ZIP bundle contents
     private cachedDbPath: string = '';
-    private dbMetaPath: string = '';  // Stores ETag/Last-Modified for version checking
+    private dbMetaPath: string = '';   // Stores ETag/Last-Modified for version checking
     private onUpdateAvailable?: (gameCount: number) => void;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.assetsDir = path.join(context.globalStorageUri.fsPath, 'assets');
-        this.cachedDbPath = path.join(context.globalStorageUri.fsPath, 'db.json');
+        this.extractDir = path.join(context.globalStorageUri.fsPath, 'bundle');
+        this.cachedDbPath = path.join(this.extractDir, 'db.json');
         this.dbMetaPath = path.join(context.globalStorageUri.fsPath, 'db_meta.json');
     }
 
     // Set callback for when update is available
     public setUpdateCallback(callback: (gameCount: number) => void) {
         this.onUpdateAvailable = callback;
+    }
+
+    /**
+     * Resolve the local data path.
+     * In dev mode (extensionDevelopmentPath), auto-detect ../fcdb/dist/pico8 relative to extension.
+     * Otherwise use the configured localPath setting.
+     */
+    private getLocalDataPath(): string | undefined {
+        const config = vscode.workspace.getConfiguration('pico8ide');
+        const configured = config.get<string>('localPath');
+        if (configured) {
+            return configured;
+        }
+
+        // Auto-detect: extension is at .../hp7hao/pico8ide, fcdb is at .../hp7hao/fcdb
+        const extPath = this.context.extensionPath;
+        const siblingFcdb = path.join(extPath, '..', 'fcdb', 'dist', 'pico8');
+        if (fs.existsSync(path.join(siblingFcdb, 'db.json'))) {
+            return siblingFcdb;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Resolve the local platforms path (for carts/thumbs).
+     * In local mode, assets are under fcdb/platforms/pico8/ (sibling to dist).
+     */
+    private getLocalPlatformsPath(): string | undefined {
+        const dataPath = this.getLocalDataPath();
+        if (!dataPath) return undefined;
+
+        // dataPath = .../fcdb/dist/pico8, platforms = .../fcdb/platforms/pico8
+        const platformsPath = path.join(dataPath, '..', '..', 'platforms', 'pico8');
+        if (fs.existsSync(platformsPath)) {
+            return platformsPath;
+        }
+        return undefined;
+    }
+
+    private getDataMode(): string {
+        // Auto-detect development mode: if running via F5, use local if sibling fcdb exists
+        if (this.context.extensionMode === vscode.ExtensionMode.Development) {
+            const extPath = this.context.extensionPath;
+            const siblingDb = path.join(extPath, '..', 'fcdb', 'dist', 'pico8', 'db.json');
+            if (fs.existsSync(siblingDb)) {
+                return 'local';
+            }
+        }
+        const config = vscode.workspace.getConfiguration('pico8ide');
+        return config.get<string>('dataMode') || 'remote';
     }
 
     // Initialize directories
@@ -47,16 +113,18 @@ export class DataManager {
         if (!fs.existsSync(this.assetsDir)) {
             fs.mkdirSync(this.assetsDir, { recursive: true });
         }
+        if (!fs.existsSync(this.extractDir)) {
+            fs.mkdirSync(this.extractDir, { recursive: true });
+        }
     }
 
     public async getGames(): Promise<GameMetadata[]> {
-        const config = vscode.workspace.getConfiguration('pico8ide');
-        const mode = config.get<string>('dataMode') || 'remote';
+        const mode = this.getDataMode();
 
         if (mode === 'local') {
-            const localPath = config.get<string>('localPath');
+            const localPath = this.getLocalDataPath();
             if (!localPath) {
-                vscode.window.showErrorMessage('PICO-8 IDE: Local path not configured.');
+                vscode.window.showErrorMessage('PICO-8 IDE: Local path not configured and no sibling fcdb found.');
                 return [];
             }
             const dbPath = path.join(localPath, 'db.json');
@@ -73,7 +141,7 @@ export class DataManager {
         }
 
         // Remote mode: Load cached first, then check for updates
-        const remoteUrl = config.get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/latest/download/db_pico8.json';
+        const remoteUrl = vscode.workspace.getConfiguration('pico8ide').get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/latest/download/fcdb_pico8.zip';
 
         // 1. Try to load cached database first
         let cachedGames: GameMetadata[] = [];
@@ -112,6 +180,48 @@ export class DataManager {
         }
 
         return [];
+    }
+
+    /**
+     * Load curated lists from dist/pico8/lists/.
+     * Returns list info objects with name derived from filename and resolved game array.
+     * Excludes source_*.json and all.json (auto-generated views).
+     */
+    public async getLists(): Promise<ListInfo[]> {
+        const mode = this.getDataMode();
+
+        let listsDir: string;
+
+        if (mode === 'local') {
+            const localPath = this.getLocalDataPath();
+            if (!localPath) return [];
+            listsDir = path.join(localPath, 'lists');
+        } else {
+            // Remote mode: use extracted bundle dir
+            listsDir = path.join(this.extractDir, 'lists');
+        }
+
+        if (!fs.existsSync(listsDir)) return [];
+
+        const results: ListInfo[] = [];
+        const files = fs.readdirSync(listsDir).filter(f =>
+            f.endsWith('.json') &&
+            !f.startsWith('source_') &&
+            f !== 'all.json'
+        );
+
+        for (const file of files) {
+            try {
+                const content = fs.readFileSync(path.join(listsDir, file), 'utf8');
+                const games = JSON.parse(content) as GameMetadata[];
+                const name = path.basename(file, '.json');
+                results.push({ name, filename: file, games });
+            } catch (e) {
+                console.error(`Error reading list ${file}`, e);
+            }
+        }
+
+        return results;
     }
 
     // Check for database updates in background
@@ -165,22 +275,37 @@ export class DataManager {
         }
     }
 
-    // Download database and save metadata
+    // Download ZIP bundle and extract to extractDir
     private async downloadDatabase(remoteUrl: string): Promise<void> {
-        const tempPath = this.cachedDbPath + '.tmp';
+        const tempPath = path.join(this.context.globalStorageUri.fsPath, 'bundle.zip.tmp');
         await this.downloadFile(remoteUrl, tempPath);
 
-        // Validate JSON before replacing
         try {
-            const data = fs.readFileSync(tempPath, 'utf8');
-            const games = JSON.parse(data);
+            // Validate ZIP
+            const zip = new AdmZip(tempPath);
+            const dbEntry = zip.getEntry('db.json');
+            if (!dbEntry) {
+                throw new Error('Invalid bundle: db.json not found in ZIP');
+            }
 
-            // Save the validated database
-            fs.renameSync(tempPath, this.cachedDbPath);
+            // Validate db.json content
+            const dbContent = dbEntry.getData().toString('utf8');
+            const games = JSON.parse(dbContent);
+            if (!Array.isArray(games)) {
+                throw new Error('Invalid bundle: db.json is not an array');
+            }
+
+            // Clear and re-extract
+            if (fs.existsSync(this.extractDir)) {
+                fs.rmSync(this.extractDir, { recursive: true, force: true });
+            }
+            fs.mkdirSync(this.extractDir, { recursive: true });
+            zip.extractAllTo(this.extractDir, true);
 
             // Save metadata
             const headers = await this.getRemoteHeaders(remoteUrl);
             const meta = {
+                platform: 'pico8',
                 etag: headers['etag'],
                 lastModified: headers['last-modified'],
                 gameCount: games.length,
@@ -188,13 +313,12 @@ export class DataManager {
             };
             fs.writeFileSync(this.dbMetaPath, JSON.stringify(meta, null, 2));
 
-            console.log(`[DataManager] Downloaded database: ${games.length} games`);
-        } catch (e) {
-            // Remove invalid temp file
+            console.log(`[DataManager] Extracted bundle: ${games.length} games`);
+        } finally {
+            // Remove temp file
             if (fs.existsSync(tempPath)) {
                 fs.unlinkSync(tempPath);
             }
-            throw e;
         }
     }
 
@@ -227,68 +351,111 @@ export class DataManager {
     }
 
     public async getAssetPath(game: GameMetadata, type: 'cart' | 'thumb'): Promise<string> {
-        const config = vscode.workspace.getConfiguration('pico8ide');
-        const mode = config.get<string>('dataMode') || 'remote';
+        const mode = this.getDataMode();
 
-        // Local mode: direct mapping
+        // Local mode: try local file first, fall through to download if not found
         if (mode === 'local') {
-             const localPath = config.get<string>('localPath');
-             if (!localPath) throw new Error('Local path for assets not configured');
+             const platformsPath = this.getLocalPlatformsPath();
+             if (platformsPath) {
+                 const subDir = type === 'cart' ? 'carts' : 'thumbs';
+                 const source = game.source || 'bbs';
 
-             // Layout in fcdb/dist/pico8:
-             // carts/bbs/{id}.p8.png
-             // thumbs/bbs/{id}.png
-             const subDir = type === 'cart' ? 'carts' : 'thumbs';
-             const ext = type === 'cart' ? '.p8.png' : '.png';
-             // source is usually 'bbs'
-             return path.join(localPath, subDir, game.source || 'bbs', `${game.id}${ext}`);
+                 if (type === 'cart') {
+                     const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
+                     const localPath = path.join(platformsPath, subDir, source, cartFile);
+                     if (fs.existsSync(localPath)) {
+                         return localPath;
+                     }
+                 } else {
+                     const localPath = path.join(platformsPath, subDir, source, `${game.id}.png`);
+                     if (fs.existsSync(localPath)) {
+                         return localPath;
+                     }
+                 }
+             }
+             // Local file not found — fall through to download
         }
 
-        // Remote mode: check cache first, then download from Lexaloffle
-        const cacheDir = path.join(this.assetsDir, type === 'cart' ? 'carts' : 'thumbs', game.source || 'bbs');
+        // Check extracted bundle for custom source assets (from ZIP)
+        const source = game.source || 'bbs';
+        if (source === 'custom') {
+            const subDir = type === 'cart' ? 'carts' : 'thumbs';
+            if (type === 'cart') {
+                const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
+                const bundlePath = path.join(this.extractDir, subDir, 'custom', cartFile);
+                if (fs.existsSync(bundlePath)) {
+                    return bundlePath;
+                }
+            } else {
+                const bundlePath = path.join(this.extractDir, subDir, 'custom', `${game.id}.png`);
+                if (fs.existsSync(bundlePath)) {
+                    return bundlePath;
+                }
+            }
+        }
+
+        // Remote mode (or local fallback): check cache first, then download
+        const cacheDir = path.join(this.assetsDir, type === 'cart' ? 'carts' : 'thumbs', source);
         if (!fs.existsSync(cacheDir)) {
             fs.mkdirSync(cacheDir, { recursive: true });
         }
 
-        const ext = type === 'cart' ? '.p8.png' : '.png';
-        const fileName = `${game.id}${ext}`;
-        const filePath = path.join(cacheDir, fileName);
-
-        if (fs.existsSync(filePath)) {
-            return filePath;
-        }
-
-        // Download logic
-        let sourceUrl = '';
-        const thumbnailPath = game.extension.thumbnail_path || '';
-
         if (type === 'cart') {
-             // 1. Try computed from thumbnail path (most reliable for BBS)
-             const computed = this.computeCartUrl(thumbnailPath);
-             // 2. Try explicit URL
-             const explicit = game.extension.cart_url;
-             // 3. Fallback to ID-based (often fails for recent carts if path logic not perfect)
-             // Default fallback (though computeCartUrl usually covers it)
-             const fallback = `https://www.lexaloffle.com/bbs/cposts/${game.id}.p8.png`;
+            const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
+            const filePath = path.join(cacheDir, cartFile);
 
-             sourceUrl = computed || explicit || fallback;
+            if (fs.existsSync(filePath)) {
+                return filePath;
+            }
+
+            // Download logic for carts
+            let sourceUrl = '';
+            const thumbnailPath = game.extension.thumbnail_path || '';
+
+            // For custom source: use cart_url directly
+            if (source === 'custom' && game.extension.cart_url) {
+                sourceUrl = game.extension.cart_url;
+            } else {
+                // BBS logic
+                const computed = this.computeCartUrl(thumbnailPath);
+                const explicit = game.extension.cart_url;
+                const fallback = `https://www.lexaloffle.com/bbs/cposts/${game.id}.p8.png`;
+                sourceUrl = computed || explicit || fallback;
+            }
+
+            try {
+                console.log(`[DataManager] Downloading cart from: ${sourceUrl}`);
+                await this.downloadFile(sourceUrl, filePath);
+                return filePath;
+            } catch (e: any) {
+                console.error(`Failed to download cart: ${sourceUrl}, Error: ${e.message}`);
+                throw new Error(`Failed to download cart from ${sourceUrl}. Reason: ${e.message}`);
+            }
         } else {
-             // Thumbnail
-             if (thumbnailPath.startsWith('http')) {
+            // Thumbnail
+            const fileName = `${game.id}.png`;
+            const filePath = path.join(cacheDir, fileName);
+
+            if (fs.existsSync(filePath)) {
+                return filePath;
+            }
+
+            const thumbnailPath = game.extension.thumbnail_path || '';
+            let sourceUrl = '';
+            if (thumbnailPath.startsWith('http')) {
                 sourceUrl = thumbnailPath;
             } else {
                 sourceUrl = `https://www.lexaloffle.com${thumbnailPath}`;
             }
-        }
 
-        console.log(`[DataManager] Downloading ${type} from: ${sourceUrl}`);
-
-        try {
-            await this.downloadFile(sourceUrl, filePath);
-            return filePath;
-        } catch (e: any) {
-            console.error(`Failed to download ${type}: ${sourceUrl}, Error: ${e.message}`);
-            throw new Error(`Failed to download ${type} from ${sourceUrl}. Reason: ${e.message}`);
+            try {
+                console.log(`[DataManager] Downloading thumb from: ${sourceUrl}`);
+                await this.downloadFile(sourceUrl, filePath);
+                return filePath;
+            } catch (e: any) {
+                console.error(`Failed to download thumb: ${sourceUrl}, Error: ${e.message}`);
+                throw new Error(`Failed to download thumb from ${sourceUrl}. Reason: ${e.message}`);
+            }
         }
     }
 

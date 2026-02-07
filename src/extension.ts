@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PNG } from 'pngjs';
-import { DataManager, GameMetadata } from './dataManager';
+import { DataManager, GameMetadata, ListInfo } from './dataManager';
 import { t } from './i18n';
 
 // Cart data extracted from PNG
@@ -303,13 +303,15 @@ class GameDetailViewProvider implements vscode.WebviewViewProvider {
     }
 }
 
-// Tree Data Provider
-class Pico8GamesProvider implements vscode.TreeDataProvider<GameItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<GameItem | undefined | null | void> = new vscode.EventEmitter<GameItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<GameItem | undefined | null | void> = this._onDidChangeTreeData.event;
+// Hierarchical Tree Data Provider: Lists as folders, Games as children
+type ListTreeItem = ListGroupItem | ListGameItem;
 
-    private games: GameMetadata[] = [];
-    private filteredGames: GameMetadata[] = [];
+class Pico8ListsProvider implements vscode.TreeDataProvider<ListTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<ListTreeItem | undefined | null | void> = new vscode.EventEmitter<ListTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<ListTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private lists: ListInfo[] = [];
+    private allGames: GameMetadata[] = [];
     private filter: string = '';
 
     constructor(private dataManager: DataManager) {}
@@ -319,53 +321,66 @@ class Pico8GamesProvider implements vscode.TreeDataProvider<GameItem> {
     }
 
     async load() {
-        this.games = await this.dataManager.getGames();
-        this.filterData();
+        this.allGames = await this.dataManager.getGames();
+        this.lists = await this.dataManager.getLists();
+        this.filter = '';
         this.refresh();
     }
 
     setFilter(query: string) {
         this.filter = query.toLowerCase();
-        this.filterData();
         this.refresh();
     }
 
-    private filterData() {
-        if (!this.filter) {
-            this.filteredGames = this.games;
-        } else {
-            this.filteredGames = this.games.filter(g =>
-                g.name.toLowerCase().includes(this.filter) ||
-                g.author.name.toLowerCase().includes(this.filter) ||
-                g.id.includes(this.filter)
-            );
-        }
-    }
-
-    getTreeItem(element: GameItem): vscode.TreeItem {
+    getTreeItem(element: ListTreeItem): vscode.TreeItem {
         return element;
     }
 
-    getChildren(element?: GameItem): vscode.ProviderResult<GameItem[]> {
-        if (element) {
-            return [];
+    getChildren(element?: ListTreeItem): vscode.ProviderResult<ListTreeItem[]> {
+        if (!element) {
+            // Root level: show list groups + "BBS Released" for all games
+            const groups: ListGroupItem[] = [];
+            for (const list of this.lists) {
+                groups.push(new ListGroupItem(list));
+            }
+            if (this.allGames.length > 0) {
+                groups.push(new ListGroupItem({
+                    name: 'BBS Released',
+                    filename: '__all__',
+                    games: this.allGames
+                }));
+            }
+            return groups;
         }
-
-        return this.filteredGames.map(game => new GameItem(game));
+        if (element instanceof ListGroupItem) {
+            let games = element.listInfo.games;
+            if (this.filter) {
+                games = games.filter(g =>
+                    g.name.toLowerCase().includes(this.filter) ||
+                    g.author.name.toLowerCase().includes(this.filter) ||
+                    g.id.toLowerCase().includes(this.filter)
+                );
+            }
+            return games.map(game => new ListGameItem(game));
+        }
+        return [];
     }
 }
 
-class GameItem extends vscode.TreeItem {
-    constructor(
-        public readonly game: GameMetadata
-    ) {
+class ListGroupItem extends vscode.TreeItem {
+    constructor(public readonly listInfo: ListInfo) {
+        super(listInfo.name, vscode.TreeItemCollapsibleState.Collapsed);
+        this.tooltip = `${listInfo.name} (${listInfo.games.length} games)`;
+        this.description = `${listInfo.games.length}`;
+        this.contextValue = 'listGroup';
+    }
+}
+
+class ListGameItem extends vscode.TreeItem {
+    constructor(public readonly game: GameMetadata) {
         super(game.name, vscode.TreeItemCollapsibleState.None);
         this.tooltip = `${game.name} by ${game.author.name}`;
         this.description = game.author.name;
-
-        // Custom icon? Or generic
-        // this.iconPath = ...
-
         this.command = {
             command: 'pico8ide.selectGame',
             title: 'Select Game',
@@ -622,8 +637,7 @@ class Pico8CartPanel {
                         <div class="sfx-detail" id="sfx-detail">
                             <div class="sfx-header">${locale.selectSfx}</div>
                             <div class="sfx-controls">
-                                <button id="btn-play-sfx" disabled>▶ ${locale.play}</button>
-                                <button id="btn-stop-sfx" disabled>⏹ ${locale.stop}</button>
+                                <button id="btn-toggle-sfx" disabled>▶ ${locale.play}</button>
                             </div>
                         </div>
                     </div>
@@ -631,8 +645,7 @@ class Pico8CartPanel {
                  <div id="tab-music" class="content">
                     <div class="music-container">
                         <div class="music-controls">
-                            <button id="btn-play-music">▶ ${locale.playMusic}</button>
-                            <button id="btn-stop-music">⏹ ${locale.stop}</button>
+                            <button id="btn-toggle-music" data-playing="">▶ ${locale.playMusic}</button>
                             <span id="music-status"></span>
                         </div>
                         <div class="music-patterns" id="music-patterns"></div>
@@ -651,6 +664,7 @@ class Pico8CartPanel {
                     const LOCALE = {
                         play: "${locale.play}",
                         stop: "${locale.stop}",
+                        playMusic: "${locale.playMusic}",
                         speed: "${locale.speed}",
                         loop: "${locale.loop}",
                         playingPattern: "${locale.playingPattern}",
@@ -833,6 +847,13 @@ class Pico8CartPanel {
                         }
                         // Clear note highlighting
                         document.querySelectorAll('.sfx-note.playing').forEach(el => el.classList.remove('playing'));
+                        // Reset toggle buttons to play state
+                        const btn = document.getElementById('btn-toggle-sfx');
+                        if (btn) { btn.textContent = '▶ ' + LOCALE.play; btn.dataset.playing = ''; }
+                        document.querySelectorAll('.play-btn.is-playing').forEach(el => {
+                            el.textContent = '▶';
+                            el.classList.remove('is-playing');
+                        });
                     }
 
                     // Music player
@@ -940,6 +961,9 @@ class Pico8CartPanel {
                         }
                         document.querySelectorAll('.music-pattern.playing').forEach(el => el.classList.remove('playing'));
                         document.getElementById('music-status').textContent = '';
+                        // Reset toggle button to play state
+                        const btn = document.getElementById('btn-toggle-music');
+                        if (btn) { btn.textContent = '▶ ' + LOCALE.playMusic; btn.dataset.playing = ''; }
                     }
 
                     // ============ END AUDIO ENGINE ============
@@ -1014,8 +1038,8 @@ class Pico8CartPanel {
                         ctx.putImageData(imgData, 0, 0);
 
                         // Let's scale the canvas element via CSS only, keep internal resolution 128
-                        cvs.style.width = '256px';
-                        cvs.style.height = '256px';
+                        cvs.style.width = '512px';
+                        cvs.style.height = '512px';
                     }
 
                     function setPixel(imgData, x, y, c) {
@@ -1061,25 +1085,25 @@ class Pico8CartPanel {
                         const imgData = ctx.createImageData(1024, 512);
 
                         // Upper 32 rows: from MAP array (0x2000-0x2FFF = 4096 bytes = 128x32)
-                        // Lower 32 rows: from GFX array lower half (0x1000-0x1FFF = 4096 bytes = 128x32)
+                        // Lower 32 rows: shared with upper sprite sheet (0x1000-0x1FFF = GFX[4096..8191])
 
                         for (let ty = 0; ty < 64; ty++) {
                             for (let tx = 0; tx < 128; tx++) {
                                 let spriteIdx;
                                 if (ty < 32) {
-                                    // Upper map: from MAP array
+                                    // Upper map rows 0-31: from MAP array
                                     const mapIdx = ty * 128 + tx;
                                     spriteIdx = MAP[mapIdx] || 0;
                                 } else {
-                                    // Lower map: shares memory with lower half of sprite sheet
-                                    // GFX 0x1000-0x1FFF = bytes 4096-8191 = sprite rows 8-15
-                                    // Map rows 32-63 -> GFX bytes at offset based on tile position
-                                    // Each map row (128 tiles) = 128 bytes in shared region
+                                    // Lower map rows 32-63: shared with sprite sheet upper half
+                                    // Address 0x1000 + (ty-32)*128 + tx = GFX[4096 + offset]
                                     const sharedRow = ty - 32;
                                     const sharedIdx = sharedRow * 128 + tx;
-                                    // This maps to GFX[0x1000 + sharedIdx] = GFX[4096 + sharedIdx]
                                     spriteIdx = GFX[4096 + sharedIdx] || 0;
                                 }
+
+                                // In PICO-8, sprite 0 is treated as empty/transparent in map rendering
+                                if (spriteIdx === 0) continue;
 
                                 // Get sprite pixels
                                 const spritePixels = getSprite(spriteIdx);
@@ -1110,6 +1134,11 @@ class Pico8CartPanel {
                         }
 
                         ctx.putImageData(imgData, 0, 0);
+
+                        // Scale for visibility, maintain 2:1 aspect ratio
+                        cvs.style.width = '100%';
+                        cvs.style.maxWidth = '1024px';
+                        cvs.style.height = 'auto';
                     }
 
                     // Parse a single SFX from the SFX array
@@ -1154,14 +1183,22 @@ class Pico8CartPanel {
                             const div = document.createElement('div');
                             div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '');
 
-                            // Play button
+                            // Play/stop toggle button
                             if (!sfx.isEmpty) {
                                 const playBtn = document.createElement('button');
                                 playBtn.className = 'play-btn';
                                 playBtn.textContent = '▶';
                                 playBtn.onclick = (e) => {
                                     e.stopPropagation();
-                                    currentSfxPlayer = playSfx(i, null);
+                                    if (playBtn.classList.contains('is-playing')) {
+                                        stopSfx();
+                                    } else {
+                                        currentSfxPlayer = playSfx(i, null);
+                                        if (currentSfxPlayer) {
+                                            playBtn.textContent = '⏹';
+                                            playBtn.classList.add('is-playing');
+                                        }
+                                    }
                                 };
                                 div.appendChild(playBtn);
                             }
@@ -1191,8 +1228,7 @@ class Pico8CartPanel {
 
                         let html = '<div class="sfx-header">SFX ' + sfxId + '</div>';
                         html += '<div class="sfx-controls">';
-                        html += '<button id="btn-play-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + '>▶ ' + LOCALE.play + '</button>';
-                        html += '<button id="btn-stop-sfx">⏹ ' + LOCALE.stop + '</button>';
+                        html += '<button id="btn-toggle-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + ' data-playing="">▶ ' + LOCALE.play + '</button>';
                         html += '</div>';
                         html += '<div class="sfx-info">';
                         html += LOCALE.speed + ': ' + sfx.speed + ' | ';
@@ -1221,25 +1257,42 @@ class Pico8CartPanel {
 
                         container.innerHTML = html;
 
-                        // Wire up buttons
-                        document.getElementById('btn-play-sfx').onclick = () => {
-                            currentSfxPlayer = playSfx(sfxId, (noteIdx) => {
-                                // Highlight playing note
-                                document.querySelectorAll('.sfx-note').forEach(el => el.classList.remove('playing'));
-                                const noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
-                                if (noteEl) noteEl.classList.add('playing');
-                            });
+                        // Wire up toggle button
+                        document.getElementById('btn-toggle-sfx').onclick = () => {
+                            const btn = document.getElementById('btn-toggle-sfx');
+                            if (btn.dataset.playing) {
+                                stopSfx();
+                            } else {
+                                currentSfxPlayer = playSfx(sfxId, (noteIdx) => {
+                                    document.querySelectorAll('.sfx-note').forEach(el => el.classList.remove('playing'));
+                                    const noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
+                                    if (noteEl) noteEl.classList.add('playing');
+                                });
+                                if (currentSfxPlayer) {
+                                    btn.textContent = '⏹ ' + LOCALE.stop;
+                                    btn.dataset.playing = '1';
+                                }
+                            }
                         };
-                        document.getElementById('btn-stop-sfx').onclick = stopSfx;
                     }
 
                     function renderMusic() {
                         const container = document.getElementById('music-patterns');
                         container.innerHTML = '';
 
-                        // Wire up music control buttons
-                        document.getElementById('btn-play-music').onclick = () => playMusic(0);
-                        document.getElementById('btn-stop-music').onclick = stopMusic;
+                        // Wire up music toggle button
+                        document.getElementById('btn-toggle-music').onclick = () => {
+                            const btn = document.getElementById('btn-toggle-music');
+                            if (btn.dataset.playing) {
+                                stopMusic();
+                            } else {
+                                playMusic(0);
+                                if (currentMusicPlayer) {
+                                    btn.textContent = '⏹ ' + LOCALE.stop;
+                                    btn.dataset.playing = '1';
+                                }
+                            }
+                        };
 
                         for (let i = 0; i < 64; i++) {
                             const offset = i * 4;
@@ -1272,7 +1325,14 @@ class Pico8CartPanel {
 
                             // Click to play from this pattern
                             if (!isEmpty) {
-                                div.onclick = () => playMusic(i);
+                                div.onclick = () => {
+                                    playMusic(i);
+                                    if (currentMusicPlayer) {
+                                        const btn = document.getElementById('btn-toggle-music');
+                                        btn.textContent = '⏹ ' + LOCALE.stop;
+                                        btn.dataset.playing = '1';
+                                    }
+                                };
                                 div.title = 'Click to play from pattern ' + i;
                             }
 
@@ -1397,16 +1457,16 @@ export function activate(context: vscode.ExtensionContext) {
     const dataManager = new DataManager(context);
     dataManager.initialize();
 
-    const gamesProvider = new Pico8GamesProvider(dataManager);
+    const listsProvider = new Pico8ListsProvider(dataManager);
     const detailProvider = new GameDetailViewProvider(context.extensionUri, dataManager);
 
     // Set callback to refresh game list when database is updated
     dataManager.setUpdateCallback(() => {
         vscode.window.showInformationMessage(locale.databaseUpdated);
-        gamesProvider.load();
+        listsProvider.load();
     });
 
-    vscode.window.registerTreeDataProvider('pico8Games', gamesProvider);
+    vscode.window.registerTreeDataProvider('pico8Lists', listsProvider);
 
     // Webview View for Details
     context.subscriptions.push(
@@ -1414,7 +1474,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Refresh Command
-    vscode.commands.registerCommand('pico8ide.refreshEntry', () => gamesProvider.load());
+    vscode.commands.registerCommand('pico8ide.refreshEntry', () => listsProvider.load());
 
     // Filter Command
     vscode.commands.registerCommand('pico8ide.search', async () => {
@@ -1423,7 +1483,7 @@ export function activate(context: vscode.ExtensionContext) {
             prompt: locale.searchPrompt
         });
         if (query !== undefined) {
-             gamesProvider.setFilter(query);
+             listsProvider.setFilter(query);
         }
     });
 
@@ -1431,10 +1491,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('pico8ide.selectGame', async (game: GameMetadata) => {
         // Update detail panel (this will download thumbnail in background)
         detailProvider.updateGame(game);
-        // Enable visibility context
-        vscode.commands.executeCommand('setContext', 'pico8ide.gameSelected', true);
-        // Focus webview
-        vscode.commands.executeCommand('pico8GameDetail.focus');
 
         // Also open the cart view
         vscode.commands.executeCommand('pico8ide.openCart', game);
@@ -1477,7 +1533,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // Initial Load
-    gamesProvider.load();
+    listsProvider.load();
 }
 
 /**
