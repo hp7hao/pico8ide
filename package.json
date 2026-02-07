@@ -2,9 +2,10 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "hp7hao",
   "license": "MIT",
+  "icon": "resources/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/hp7hao/fcdb"

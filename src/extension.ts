@@ -532,6 +532,10 @@ class Pico8CartPanel {
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 
+        const codeLines = safeCode.split('\n');
+        const lineNumbersHtml = codeLines.map((_, i) => `<span>${i + 1}</span>`).join('');
+        const codeHtml = codeLines.join('\n');
+
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
@@ -548,8 +552,19 @@ class Pico8CartPanel {
                     .content { flex: 1; overflow: auto; display: none; padding: 10px;}
                     .content.active { display: block; }
 
-                    /* Code Highlighting (basic) */
-                    pre { margin: 0; font-size: 13px; line-height: 1.5; color: #e0e0e0; tab-size: 2; }
+                    /* Code */
+                    .code-container { display: flex; font-size: 13px; line-height: 1.5; tab-size: 2; }
+                    .line-numbers { padding: 0 8px 0 4px; text-align: right; color: #555; user-select: none; border-right: 1px solid #333; min-width: 32px; background: #1a1a1a; }
+                    .line-numbers span { display: block; }
+                    .code-body { flex: 1; padding-left: 10px; overflow-x: auto; }
+                    pre { margin: 0; font-size: 13px; line-height: 1.5; color: #c2c3c7; tab-size: 2; }
+                    /* PICO-8 Lua syntax */
+                    .kw { color: #ff77a8; }
+                    .bi { color: #29adff; }
+                    .st { color: #00e436; }
+                    .cm { color: #5f574f; font-style: italic; }
+                    .nm { color: #ffec27; }
+                    .op { color: #ff77a8; }
 
                     /* Sprites */
                     .sprite-sheet-container { display: flex; justify-content: center; padding: 20px; background: #202020; }
@@ -614,7 +629,10 @@ class Pico8CartPanel {
                 </div>
 
                 <div id="tab-code" class="content active">
-                    <pre>${safeCode}</pre>
+                    <div class="code-container">
+                        <div class="line-numbers">${lineNumbersHtml}</div>
+                        <div class="code-body"><pre id="code-pre">${codeHtml}</pre></div>
+                    </div>
                 </div>
 
                 <div id="tab-gfx" class="content">
@@ -675,6 +693,71 @@ class Pico8CartPanel {
                     const NOTE_NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
                     const WAVEFORMS = ['sine', 'tri', 'saw', 'sqr', 'pulse', 'ring', 'noise', 'ring2'];
                     const EFFECTS = ['none', 'slide', 'vib', 'drop', 'fadein', 'fadeout', 'arpF', 'arpS'];
+
+                    // ============ SYNTAX HIGHLIGHTING ============
+                    (function highlightCode() {
+                        const el = document.getElementById('code-pre');
+                        if (!el) return;
+                        const src = el.textContent || '';
+                        const keywords = /^(and|break|do|else|elseif|end|for|function|goto|if|in|local|not|or|repeat|return|then|until|while)$/;
+                        const builtins = /^(print|printh|cls|spr|sspr|map|mget|mset|pset|pget|sget|sset|fget|fset|line|rect|rectfill|circ|circfill|oval|ovalfill|pal|palt|color|clip|camera|cursor|fillp|flip|btn|btnp|sfx|music|mstat|stat|peek|peek2|peek4|poke|poke2|poke4|memcpy|memset|reload|cstore|cartdata|dget|dset|rnd|srand|flr|ceil|abs|sgn|sqrt|sin|cos|atan2|band|bor|bxor|bnot|shl|shr|lshr|rotl|rotr|max|min|mid|chr|ord|sub|tostr|tonum|type|add|del|deli|all|pairs|foreach|count|cocreate|coresume|costatus|yield|time|t|menuitem|extcmd|assert|stop|trace|_init|_update|_update60|_draw)$/;
+                        const out = [];
+                        let i = 0;
+                        function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+                        while (i < src.length) {
+                            // multi-line comment --[[ ... ]]
+                            if (src[i] === '-' && src[i+1] === '-' && src[i+2] === '[' && src[i+3] === '[') {
+                                let end = src.indexOf(']]', i + 4);
+                                if (end === -1) end = src.length - 2;
+                                out.push('<span class="cm">' + esc(src.slice(i, end + 2)) + '</span>');
+                                i = end + 2; continue;
+                            }
+                            // single-line comment
+                            if (src[i] === '-' && src[i+1] === '-') {
+                                let end = src.indexOf('\\n', i);
+                                if (end === -1) end = src.length;
+                                out.push('<span class="cm">' + esc(src.slice(i, end)) + '</span>');
+                                i = end; continue;
+                            }
+                            // strings
+                            if (src[i] === '"' || src[i] === "'") {
+                                const q = src[i]; let j = i + 1;
+                                while (j < src.length && src[j] !== q && src[j] !== '\\n') { if (src[j] === '\\\\') j++; j++; }
+                                if (j < src.length && src[j] === q) j++;
+                                out.push('<span class="st">' + esc(src.slice(i, j)) + '</span>');
+                                i = j; continue;
+                            }
+                            // numbers
+                            if (/[0-9]/.test(src[i]) && (i === 0 || !/[a-zA-Z_]/.test(src[i-1]))) {
+                                let j = i;
+                                if (src[j] === '0' && (src[j+1] === 'x' || src[j+1] === 'X')) { j += 2; while (j < src.length && /[0-9a-fA-F_.]/.test(src[j])) j++; }
+                                else if (src[j] === '0' && (src[j+1] === 'b' || src[j+1] === 'B')) { j += 2; while (j < src.length && /[01_]/.test(src[j])) j++; }
+                                else { while (j < src.length && /[0-9.]/.test(src[j])) j++; }
+                                out.push('<span class="nm">' + esc(src.slice(i, j)) + '</span>');
+                                i = j; continue;
+                            }
+                            // identifiers / keywords
+                            if (/[a-zA-Z_]/.test(src[i])) {
+                                let j = i; while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
+                                const w = src.slice(i, j);
+                                if (keywords.test(w)) out.push('<span class="kw">' + esc(w) + '</span>');
+                                else if (builtins.test(w)) out.push('<span class="bi">' + esc(w) + '</span>');
+                                else out.push(esc(w));
+                                i = j; continue;
+                            }
+                            // operators
+                            if ('+-*/%^#=<>~'.includes(src[i]) || (src[i] === '.' && src[i+1] === '.')) {
+                                let j = i + 1;
+                                if (src[i] === '.' && src[i+1] === '.') { j = i + 2; if (src[j] === '.') j++; }
+                                else if ((src[i] === '<' || src[i] === '>' || src[i] === '~' || src[i] === '=') && src[j] === '=') j++;
+                                out.push('<span class="op">' + esc(src.slice(i, j)) + '</span>');
+                                i = j; continue;
+                            }
+                            out.push(esc(src[i]));
+                            i++;
+                        }
+                        el.innerHTML = out.join('');
+                    })();
 
                     // ============ AUDIO ENGINE ============
                     let audioCtx = null;
