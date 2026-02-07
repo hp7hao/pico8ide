@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="12" fill="#1d2b53"/>
+  <rect x="4" y="4" width="120" height="120" rx="8" fill="none" stroke="#c2c3c7" stroke-width="4"/>
+  <text x="64" y="56" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="26" fill="#c2c3c7">PICO-8</text>
+  <text x="64" y="82" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="26" fill="#c2c3c7">IDE</text>
+</svg>
