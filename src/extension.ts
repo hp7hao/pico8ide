@@ -327,7 +327,6 @@ class GameDetailViewProvider implements vscode.WebviewViewProvider {
                         <div class="game-author">by <a href="${game.author?.url || '#'}">${game.author?.name || 'Unknown'}</a></div>
                         <div class="stats">
                             <span>❤️ ${game.extension?.likes || 0}</span>
-                            <span>👁️ ${game.extension?.views || 0}</span>
                         </div>
                         ${tags ? `<div class="tags">${tags}</div>` : ''}
                     </div>
@@ -411,7 +410,7 @@ class ListGroupItem extends vscode.TreeItem {
         this.tooltip = listInfo.description
             ? `${listInfo.name} - ${listInfo.description} (${listInfo.games.length} games)`
             : `${listInfo.name} (${listInfo.games.length} games)`;
-        this.description = `${listInfo.games.length}`;
+        this.description = listInfo.filename === '__all__' ? '' : `${listInfo.games.length}`;
         this.contextValue = 'listGroup';
         this.command = {
             command: 'pico8ide.selectList',
@@ -808,6 +807,7 @@ class Pico8CartPanel {
                     let audioCtx = null;
                     let currentSfxPlayer = null;
                     let currentMusicPlayer = null;
+                    let allActiveSfxPlayers = [];
                     let selectedSfxId = null;
 
                     // PICO-8 base frequency: C0 = 16.35 Hz (standard tuning)
@@ -847,13 +847,13 @@ class Pico8CartPanel {
                     }
 
                     // Play a single SFX
-                    function playSfx(sfxId, onNoteChange) {
+                    function playSfx(sfxId, onNoteChange, skipStop) {
                         if (!audioCtx) {
                             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                         }
 
-                        // Stop any currently playing SFX
-                        stopSfx();
+                        // Stop any currently playing SFX (unless called from music player)
+                        if (!skipStop) stopSfx();
 
                         const sfx = parseSfx(sfxId);
                         if (sfx.isEmpty) return null;
@@ -874,7 +874,10 @@ class Pico8CartPanel {
                                 if (sfx.loopStart < sfx.loopEnd && isPlaying) {
                                     noteIndex = sfx.loopStart;
                                 } else {
-                                    stopSfx();
+                                    // When called from music, just stop self quietly
+                                    isPlaying = false;
+                                    if (oscillator) { try { oscillator.stop(); } catch(e) {} }
+                                    if (!skipStop) stopSfx();
                                     return;
                                 }
                             }
@@ -958,7 +961,7 @@ class Pico8CartPanel {
 
                         playNote();
 
-                        return {
+                        const player = {
                             stop: () => {
                                 isPlaying = false;
                                 if (oscillator) {
@@ -966,6 +969,8 @@ class Pico8CartPanel {
                                 }
                             }
                         };
+                        allActiveSfxPlayers.push(player);
+                        return player;
                     }
 
                     function stopSfx() {
@@ -973,6 +978,8 @@ class Pico8CartPanel {
                             currentSfxPlayer.stop();
                             currentSfxPlayer = null;
                         }
+                        allActiveSfxPlayers.forEach(p => { try { p.stop(); } catch(e) {} });
+                        allActiveSfxPlayers = [];
                         // Clear note highlighting
                         document.querySelectorAll('.sfx-note.playing').forEach(el => el.classList.remove('playing'));
                         // Reset toggle buttons to play state
@@ -1007,6 +1014,14 @@ class Pico8CartPanel {
                             if (!isPlaying || patternIndex >= 64) {
                                 stopMusic();
                                 return;
+                            }
+
+                            // Stop previous pattern's channel players before starting new ones
+                            for (let c = 0; c < 4; c++) {
+                                if (channelPlayers[c]) {
+                                    try { channelPlayers[c].stop(); } catch(e) {}
+                                    channelPlayers[c] = null;
+                                }
                             }
 
                             updatePatternHighlight();
@@ -1044,7 +1059,7 @@ class Pico8CartPanel {
                                     maxDuration = Math.max(maxDuration, sfxDuration);
 
                                     // Play this channel's SFX
-                                    channelPlayers[c] = playSfx(sfxId, null);
+                                    channelPlayers[c] = playSfx(sfxId, null, true);
                                 }
                             }
 
@@ -1087,6 +1102,9 @@ class Pico8CartPanel {
                             currentMusicPlayer.stop();
                             currentMusicPlayer = null;
                         }
+                        // Stop all active sfx players (from all patterns, not just current)
+                        allActiveSfxPlayers.forEach(p => { try { p.stop(); } catch(e) {} });
+                        allActiveSfxPlayers = [];
                         document.querySelectorAll('.music-pattern.playing').forEach(el => el.classList.remove('playing'));
                         document.getElementById('music-status').textContent = '';
                         // Reset toggle button to play state
@@ -1489,7 +1507,7 @@ function showDisclaimer(context: vscode.ExtensionContext) {
     const locale = t();
     const panel = vscode.window.createWebviewPanel(
         'pico8ideDisclaimer',
-        'PICO-8 IDE - Disclaimer',
+        'PICO-8 IDE - ' + locale.disclaimerImportant,
         vscode.ViewColumn.One,
         { enableScripts: false }
     );
@@ -1594,7 +1612,17 @@ export function activate(context: vscode.ExtensionContext) {
         listsProvider.load();
     });
 
-    vscode.window.registerTreeDataProvider('pico8Lists', listsProvider);
+    const listsTreeView = vscode.window.createTreeView('pico8Lists', { treeDataProvider: listsProvider });
+    listsTreeView.onDidExpandElement(e => {
+        if (e.element instanceof ListGroupItem) {
+            detailProvider.showListInfo(e.element.listInfo);
+        }
+    });
+    listsTreeView.onDidCollapseElement(e => {
+        if (e.element instanceof ListGroupItem) {
+            detailProvider.showListInfo(e.element.listInfo);
+        }
+    });
 
     // Webview View for Details
     context.subscriptions.push(

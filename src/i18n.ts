@@ -157,36 +157,28 @@ const zhCN: LocaleStrings = {
 // Locale map
 const locales: { [key: string]: LocaleStrings } = {
     'en': en,
-    'zh-cn': zhCN,
-    'zh-tw': zhCN,  // Fallback to simplified Chinese
+    'zh_cn': zhCN,
+    'zh_tw': zhCN,  // Fallback to simplified Chinese
 };
 
 // Get current VS Code language
 import * as vscode from 'vscode';
 
-let currentLocale: LocaleStrings | null = null;
-
 export function getLocale(): LocaleStrings {
-    if (currentLocale) {
-        return currentLocale;
-    }
-
-    const lang = vscode.env.language.toLowerCase();
+    const override = vscode.workspace.getConfiguration('pico8ide').get<string>('language');
+    const lang = (override || vscode.env.language).toLowerCase().replace(/-/g, '_');
 
     // Try exact match first
     if (locales[lang]) {
-        currentLocale = locales[lang];
+        return locales[lang];
     }
-    // Try language prefix (e.g., 'zh' for 'zh-cn')
-    else if (locales[lang.split('-')[0]]) {
-        currentLocale = locales[lang.split('-')[0]];
+    // Try language prefix (e.g., 'zh' for 'zh_cn')
+    const prefix = lang.split(/[-_]/)[0];
+    if (locales[prefix]) {
+        return locales[prefix];
     }
     // Default to English
-    else {
-        currentLocale = en;
-    }
-
-    return currentLocale;
+    return en;
 }
 
 // Shorthand function

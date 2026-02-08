@@ -9,5 +9,7 @@
   "config.title": "PICO-8 IDE",
   "config.dataMode.description": "Source of game data: 'remote' (download from URL) or 'local' (read from directory).",
   "config.remoteUrl.description": "URL to the master database JSON file (used in remote mode).",
-  "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode)."
+  "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode).",
+  "config.language.description": "Override display language. Leave empty to use VS Code's language setting.",
+  "config.language.auto": "Auto (use VS Code language)"
 }

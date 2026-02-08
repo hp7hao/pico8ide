@@ -1,6 +1,6 @@
 # PICO-8 IDE
 
-[English](README.md) | [中文](README.zh-CN.md)
+[English](README.md) | [中文](README.zh_CN.md)
 
 一个用于浏览和体验 PICO-8 游戏的 VS Code 扩展。
 
@@ -25,12 +25,11 @@
 
 本扩展支持由 [fcdb](https://github.com/hp7hao/fcdb) 项目驱动的精选游戏列表。你可以创建自己的列表并贡献到数据库中。
 
-### 1. 创建列表文件
+在 `fcdb/curated/pico8/lists/` 目录下添加一个 JSON 文件，文件名任意（例如 `mylist.json`）。支持四种格式：
 
-在 `fcdb/curated/pico8/lists/` 目录下添加一个 JSON 文件，文件名任意（例如 `mylist.json`）。文件内容是一个数组，每个条目可以是：
+### 格式 1 — 简单数组
 
-- **游戏 ID 字符串** — 引用数据库中已有的游戏
-- **完整的游戏元数据对象** — 定义一个新的自定义游戏
+游戏 ID 字符串和/或内联游戏对象的数组：
 
 ```json
 [
@@ -51,7 +50,40 @@
 ]
 ```
 
-### 2. 内联游戏的必填字段
+### 格式 2 — 结构化游戏列表
+
+带有元数据的命名列表，包含游戏 ID 或内联对象的数组：
+
+```json
+{
+  "meta": { "name": "我的列表", "description": "精心挑选的合集。", "order": 1 },
+  "games": ["131736", "54321"]
+}
+```
+
+### 格式 3 — 关键词过滤
+
+按名称或标签自动匹配游戏：
+
+```json
+{
+  "meta": { "name": "益智游戏", "description": "名称或标签中包含 puzzle 的游戏。" },
+  "filter": { "keyword": "puzzle" }
+}
+```
+
+### 格式 4 — 排行榜
+
+按数值字段排序，取前 N 名：
+
+```json
+{
+  "meta": { "name": "BBS 玩家最爱", "description": "BBS 上最受欢迎的 100 款游戏。", "order": 5 },
+  "rank": { "field": "likes", "order": "desc", "limit": 100 }
+}
+```
+
+### 内联游戏的必填字段
 
 | 字段 | 说明 |
 |------|------|
@@ -63,7 +95,17 @@
 
 可选字段：`source`（默认为 `"custom"`）、`description`、`license`、`ref_id`、`extension`（用于 `cart_url`、`tags` 等）
 
-### 3. 构建数据库
+### 翻译
+
+添加一个名为 `{listname}.{lang}.json` 的伴随文件（例如 `mylist.zh_CN.json`）提供翻译元数据：
+
+```json
+{
+  "meta": { "name": "我的列表", "description": "..." }
+}
+```
+
+### 构建数据库
 
 ```bash
 cd fcdbtool

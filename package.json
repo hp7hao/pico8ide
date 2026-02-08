@@ -2,13 +2,13 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "hp7hao",
   "license": "MIT",
   "icon": "resources/logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hp7hao/fcdb"
+    "url": "https://github.com/hp7hao/pico8ide"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -99,12 +99,20 @@
           "type": "string",
           "default": "",
           "description": "%config.localPath.description%"
+        },
+        "pico8ide.language": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "en_US", "zh_CN"],
+          "enumDescriptions": ["%config.language.auto%", "English", "中文(简体)"],
+          "description": "%config.language.description%"
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "cp README.md README.dev.md && cp README.marketplace.md README.md && npm run compile",
+    "postpublish": "mv README.dev.md README.md",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package"
