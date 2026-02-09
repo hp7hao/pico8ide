@@ -6,10 +6,18 @@
   "command.search.title": "搜索",
   "command.openCart.title": "打开卡带",
   "command.refresh.title": "刷新",
+  "command.setPico8Path.title": "设置 PICO-8 路径",
+  "command.runGame.title": "在 PICO-8 中运行",
+  "command.stopGame.title": "停止 PICO-8",
+  "command.forkGame.title": "复制到工作区",
+  "command.previewP8Cart.title": "预览 PICO-8 卡带",
+  "customEditor.pngViewer.displayName": "PICO-8 卡带查看器",
+  "customEditor.p8Editor.displayName": "PICO-8 卡带编辑器",
   "config.title": "PICO-8 IDE",
   "config.dataMode.description": "游戏数据来源：'remote'（从网络下载）或 'local'（从本地读取）。",
   "config.remoteUrl.description": "主数据库 JSON 文件的 URL（远程模式使用）。",
   "config.localPath.description": "本地 FCDB 分发目录的绝对路径，例如 /path/to/fcdb/dist/pico8（本地模式使用）。",
   "config.language.description": "覆盖显示语言。留空则使用 VS Code 的语言设置。",
-  "config.language.auto": "自动（使用 VS Code 语言）"
+  "config.language.auto": "自动（使用 VS Code 语言）",
+  "config.pico8Path.description": "PICO-8 可执行文件的绝对路径。macOS 上可以指向 .app 程序包。"
 }

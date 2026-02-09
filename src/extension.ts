@@ -1,68 +1,14 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PNG } from 'pngjs';
+import { spawn, ChildProcess } from 'child_process';
 import { DataManager, GameMetadata, ListInfo } from './dataManager';
 import { t } from './i18n';
-
-// Cart data extracted from PNG
-interface CartData {
-    code: string;
-    gfx: number[];      // 0x0000-0x1FFF (8192 bytes) - sprite sheet
-    map: number[];      // 0x2000-0x2FFF (4096 bytes) - upper map (lower 32 rows in gfx)
-    gfxFlags: number[]; // 0x3000-0x30FF (256 bytes)
-    music: number[];    // 0x3100-0x31FF (256 bytes) - 64 music patterns × 4 bytes
-    sfx: number[];      // 0x3200-0x42FF (4352 bytes) - 64 SFX × 68 bytes
-    label: string;      // Base64 data URL of the 128x128 label image
-}
-
-// SFX note structure for display
-interface SfxNote {
-    pitch: number;      // 0-63
-    waveform: number;   // 0-7 (or 8-15 for custom)
-    volume: number;     // 0-7
-    effect: number;     // 0-7
-    customWave: boolean; // bit 7 of waveform byte
-}
-
-// SFX structure for display
-interface SfxData {
-    notes: SfxNote[];   // 32 notes
-    editorMode: number;
-    speed: number;
-    loopStart: number;
-    loopEnd: number;
-    isCustomWaveform: boolean;
-}
-
-// Music pattern structure
-interface MusicPattern {
-    channels: number[]; // 4 channel SFX ids (0-63, or 64+ if disabled)
-    channelEnabled: boolean[];
-    loopStart: boolean;
-    loopEnd: boolean;
-    stopAtEnd: boolean;
-}
-
-// PICO-8 16-color palette
-const PICO8_PALETTE = [
-    '#000000', // 0 black
-    '#1D2B53', // 1 dark-blue
-    '#7E2553', // 2 dark-purple
-    '#008751', // 3 dark-green
-    '#AB5236', // 4 brown
-    '#5F574F', // 5 dark-grey
-    '#C2C3C7', // 6 light-grey
-    '#FFF1E8', // 7 white
-    '#FF004D', // 8 red
-    '#FFA300', // 9 orange
-    '#FFEC27', // 10 yellow
-    '#00E436', // 11 green
-    '#29ADFF', // 12 blue
-    '#83769C', // 13 lavender
-    '#FF77A8', // 14 pink
-    '#FFCCAA', // 15 light-peach
-];
+import { CartData } from './cartData';
+import { Pico8Decoder } from './pngDecoder';
+import { cartDataToP8 } from './p8format';
+import { Pico8PngEditorProvider, Pico8P8EditorProvider } from './cartEditorProvider';
+import { generateCartViewerHtml } from './cartViewerHtml';
 
 // Webview provider for game detail panel in sidebar
 class GameDetailViewProvider implements vscode.WebviewViewProvider {
@@ -425,6 +371,7 @@ class ListGameItem extends vscode.TreeItem {
         super(game.name, vscode.TreeItemCollapsibleState.None);
         this.tooltip = `${game.name} by ${game.author.name}`;
         this.description = game.author.name;
+        this.contextValue = 'gameItem';
         this.command = {
             command: 'pico8ide.selectGame',
             title: 'Select Game',
@@ -436,10 +383,75 @@ class ListGameItem extends vscode.TreeItem {
 // Custom Editor / Webview Panel for Cart
 class Pico8CartPanel {
     public static readonly viewType = 'pico8Cart';
-    private static currentPanel: Pico8CartPanel | undefined;
+    private static _previewPanel: Pico8CartPanel | undefined;
+    private static _pinnedPanels: Map<string, Pico8CartPanel> = new Map();
+    private static _lastActivePanel: Pico8CartPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private _disposables: vscode.Disposable[] = [];
     private _game: GameMetadata;
+    private _pinned = false;
+    private _lastTabActivateTime = 0;
+    private static _runningProcess: ChildProcess | undefined;
+    private static _onRunRequest: ((game: GameMetadata) => void) | undefined;
+    private static _onStopRequest: (() => void) | undefined;
+    private static _onPanelActivated: ((game: GameMetadata) => void) | undefined;
+
+    public static get currentGame(): GameMetadata | undefined {
+        return Pico8CartPanel._lastActivePanel?._game;
+    }
+
+    public static setOnPanelActivated(handler: (game: GameMetadata) => void) {
+        Pico8CartPanel._onPanelActivated = handler;
+    }
+
+    /** Check if a panel (preview or pinned) already has this game loaded */
+    public static hasGame(gameId: string): boolean {
+        if (Pico8CartPanel._previewPanel?._game.id === gameId) {
+            return true;
+        }
+        return Pico8CartPanel._pinnedPanels.has(gameId);
+    }
+
+    /** Reveal an already-open panel for this game */
+    public static revealGame(gameId: string): void {
+        const pinned = Pico8CartPanel._pinnedPanels.get(gameId);
+        if (pinned) {
+            pinned._panel.reveal();
+            return;
+        }
+        if (Pico8CartPanel._previewPanel?._game.id === gameId) {
+            Pico8CartPanel._previewPanel._panel.reveal();
+        }
+    }
+
+    /** Pin the current preview panel (or a pinned panel that's already pinned is a no-op) */
+    public static pinCurrent(): void {
+        const preview = Pico8CartPanel._previewPanel;
+        if (!preview || preview._pinned) {
+            return;
+        }
+        preview._pinned = true;
+        preview._panel.title = `Cart: ${preview._game.name}`;
+        Pico8CartPanel._pinnedPanels.set(preview._game.id, preview);
+        Pico8CartPanel._previewPanel = undefined;
+    }
+
+    public static setRunHandler(handler: (game: GameMetadata) => void) {
+        Pico8CartPanel._onRunRequest = handler;
+    }
+
+    public static setStopHandler(handler: () => void) {
+        Pico8CartPanel._onStopRequest = handler;
+    }
+
+    public static setRunningProcess(proc: ChildProcess | undefined) {
+        Pico8CartPanel._runningProcess = proc;
+        Pico8CartPanel._lastActivePanel?.postRunState(!!proc);
+    }
+
+    public static getRunningProcess(): ChildProcess | undefined {
+        return Pico8CartPanel._runningProcess;
+    }
 
     // Create or reuse panel, show loading state initially
     public static createWithLoading(extensionUri: vscode.Uri, game: GameMetadata): Pico8CartPanel {
@@ -447,29 +459,38 @@ class Pico8CartPanel {
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
-        // Reuse existing panel if same game, otherwise create new
-        if (Pico8CartPanel.currentPanel && Pico8CartPanel.currentPanel._game.id === game.id) {
-            Pico8CartPanel.currentPanel._panel.reveal(column);
-            return Pico8CartPanel.currentPanel;
+        // If a pinned panel for this game exists, just reveal it
+        const pinned = Pico8CartPanel._pinnedPanels.get(game.id);
+        if (pinned) {
+            pinned._panel.reveal(column);
+            return pinned;
         }
 
-        // Close old panel if different game
-        if (Pico8CartPanel.currentPanel) {
-            Pico8CartPanel.currentPanel.dispose();
+        // If the preview panel already has this game, reveal it
+        if (Pico8CartPanel._previewPanel && Pico8CartPanel._previewPanel._game.id === game.id) {
+            Pico8CartPanel._previewPanel._panel.reveal(column);
+            return Pico8CartPanel._previewPanel;
+        }
+
+        // Close old preview panel (pinned panels stay)
+        if (Pico8CartPanel._previewPanel) {
+            Pico8CartPanel._previewPanel.dispose();
         }
 
         const panel = vscode.window.createWebviewPanel(
             Pico8CartPanel.viewType,
-            `Cart: ${game.name}`,
+            `*Cart: ${game.name}`,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [extensionUri]
+                localResourceRoots: [extensionUri, vscode.Uri.joinPath(extensionUri, 'resources', 'monaco')]
             }
         );
 
-        Pico8CartPanel.currentPanel = new Pico8CartPanel(panel, extensionUri, game);
-        return Pico8CartPanel.currentPanel;
+        const cartPanel = new Pico8CartPanel(panel, extensionUri, game);
+        Pico8CartPanel._previewPanel = cartPanel;
+        Pico8CartPanel._lastActivePanel = cartPanel;
+        return cartPanel;
     }
 
     private constructor(
@@ -484,6 +505,40 @@ class Pico8CartPanel {
         this._panel.webview.html = this._getLoadingHtml(game, "Downloading cartridge...");
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+
+        // Track which panel is active and notify extension
+        // Also detect double-click on tab to pin the panel
+        this._panel.onDidChangeViewState(() => {
+            if (this._panel.active) {
+                Pico8CartPanel._lastActivePanel = this;
+                if (Pico8CartPanel._onPanelActivated) {
+                    Pico8CartPanel._onPanelActivated(this._game);
+                }
+                // Double-click detection: if tab activated again within 300ms, pin
+                const now = Date.now();
+                if (!this._pinned && now - this._lastTabActivateTime < 300) {
+                    Pico8CartPanel.pinCurrent();
+                }
+                this._lastTabActivateTime = now;
+            }
+        }, null, this._disposables);
+
+        // Handle messages from the webview
+        this._panel.webview.onDidReceiveMessage(
+            (message: { type: string }) => {
+                if (message.type === 'run' && Pico8CartPanel._onRunRequest) {
+                    Pico8CartPanel._onRunRequest(this._game);
+                } else if (message.type === 'stop' && Pico8CartPanel._onStopRequest) {
+                    Pico8CartPanel._onStopRequest();
+                }
+            },
+            null,
+            this._disposables
+        );
+    }
+
+    public postRunState(running: boolean) {
+        this._panel.webview.postMessage({ type: 'runState', running });
     }
 
     public updateProgress(message: string) {
@@ -499,7 +554,16 @@ class Pico8CartPanel {
     }
 
     public dispose() {
-        Pico8CartPanel.currentPanel = undefined;
+        // Remove from tracking
+        if (Pico8CartPanel._previewPanel === this) {
+            Pico8CartPanel._previewPanel = undefined;
+        }
+        if (this._pinned) {
+            Pico8CartPanel._pinnedPanels.delete(this._game.id);
+        }
+        if (Pico8CartPanel._lastActivePanel === this) {
+            Pico8CartPanel._lastActivePanel = undefined;
+        }
         this._panel.dispose();
         while (this._disposables.length) {
             const x = this._disposables.pop();
@@ -558,951 +622,19 @@ class Pico8CartPanel {
 
     private _getCartHtml(game: GameMetadata, cartData: CartData) {
         const locale = t();
-        // We will render the sprite sheet using canvas
-
-        // Convert gfx array to JS array string
-        const gfxJson = JSON.stringify(cartData.gfx);
-        const mapJson = JSON.stringify(cartData.map);
-        const flagsJson = JSON.stringify(cartData.gfxFlags);
-        const sfxJson = JSON.stringify(cartData.sfx);
-        const musicJson = JSON.stringify(cartData.music);
-        // Palette
-        const palJson = JSON.stringify(PICO8_PALETTE);
-
-        // Escape code for html
-        const safeCode = cartData.code.replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
-
-        const codeLines = safeCode.split('\n');
-        const lineNumbersHtml = codeLines.map((_, i) => `<span>${i + 1}</span>`).join('');
-        const codeHtml = codeLines.join('\n');
-
-        return `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>PICO-8 Cart: ${game.name}</title>
-                <style>
-                    body { background: #111; color: #ccc; font-family: 'Courier New', monospace; display: flex; flex-direction: column; height: 100vh; margin: 0; overflow: hidden; }
-
-                    .tab-header { display: flex; background: #252525; border-bottom: 1px solid #333; }
-                    .tab { padding: 8px 16px; cursor: pointer; border-right: 1px solid #333; background: #222; }
-                    .tab.active { background: #1a1a1a; color: #fff; font-weight: bold; }
-
-                    .content { flex: 1; overflow: auto; display: none; padding: 10px;}
-                    .content.active { display: block; }
-
-                    /* Code */
-                    .code-container { display: flex; font-size: 13px; line-height: 1.5; tab-size: 2; }
-                    .line-numbers { padding: 0 8px 0 4px; text-align: right; color: #555; user-select: none; border-right: 1px solid #333; min-width: 32px; background: #1a1a1a; }
-                    .line-numbers span { display: block; }
-                    .code-body { flex: 1; padding-left: 10px; overflow-x: auto; }
-                    pre { margin: 0; font-size: 13px; line-height: 1.5; color: #c2c3c7; tab-size: 2; }
-                    /* PICO-8 Lua syntax */
-                    .kw { color: #ff77a8; }
-                    .bi { color: #29adff; }
-                    .st { color: #00e436; }
-                    .cm { color: #5f574f; font-style: italic; }
-                    .nm { color: #ffec27; }
-                    .op { color: #ff77a8; }
-
-                    /* Sprites */
-                    .sprite-sheet-container { display: flex; justify-content: center; padding: 20px; background: #202020; }
-                    canvas { image-rendering: pixelated; border: 1px solid #444; background: #000; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-
-                    /* SFX Styles */
-                    .sfx-container { display: flex; height: 100%; }
-                    .sfx-list { width: 200px; border-right: 1px solid #333; overflow-y: auto; }
-                    .sfx-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #222; font-size: 12px; display: flex; align-items: center; }
-                    .sfx-item:hover { background: #2a2a2a; }
-                    .sfx-item.active { background: #3a3a5a; }
-                    .sfx-item.empty { opacity: 0.4; }
-                    .sfx-item .play-btn { margin-right: 8px; background: #4a4; border: none; color: #fff; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 10px; }
-                    .sfx-item .play-btn:hover { background: #5b5; }
-                    .sfx-detail { flex: 1; padding: 10px; overflow: auto; }
-                    .sfx-header { font-weight: bold; margin-bottom: 10px; color: #fff; }
-                    .sfx-controls { margin-bottom: 15px; }
-                    .sfx-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 6px 12px; margin-right: 8px; border-radius: 3px; cursor: pointer; }
-                    .sfx-controls button:hover:not(:disabled) { background: #555; }
-                    .sfx-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
-                    .sfx-info { margin-bottom: 15px; font-size: 12px; color: #888; }
-                    .sfx-tracker { font-family: monospace; font-size: 11px; background: #1a1a1a; border: 1px solid #333; }
-                    .sfx-tracker-header { display: flex; background: #252525; border-bottom: 1px solid #333; padding: 4px; }
-                    .sfx-tracker-header span { flex: 1; text-align: center; font-weight: bold; font-size: 10px; color: #888; }
-                    .sfx-note { display: flex; border-bottom: 1px solid #222; }
-                    .sfx-note:hover { background: #252530; }
-                    .sfx-note.playing { background: #3a4a3a; }
-                    .sfx-note span { flex: 1; text-align: center; padding: 2px 4px; }
-                    .sfx-note .note-idx { color: #666; width: 30px; flex: none; }
-                    .sfx-note .note-pitch { color: #6cf; }
-                    .sfx-note .note-wave { color: #fc6; }
-                    .sfx-note .note-vol { color: #6f6; }
-                    .sfx-note .note-fx { color: #f6c; }
-
-                    /* Music Styles */
-                    .music-container { padding: 10px; }
-                    .music-controls { margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px; }
-                    .music-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 8px 16px; margin-right: 10px; border-radius: 3px; cursor: pointer; }
-                    .music-controls button:hover { background: #555; }
-                    #music-status { color: #888; font-size: 12px; }
-                    .music-patterns { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
-                    .music-pattern { background: #1a1a1a; border: 1px solid #333; padding: 8px; font-size: 11px; border-radius: 3px; cursor: pointer; }
-                    .music-pattern:hover { background: #252525; }
-                    .music-pattern.playing { background: #2a3a2a; border-color: #4a4; }
-                    .music-pattern.empty { opacity: 0.3; }
-                    .music-pattern.loop-start { border-left: 3px solid #6f6; }
-                    .music-pattern.loop-end { border-right: 3px solid #f66; }
-                    .music-pattern.stop { border-bottom: 3px solid #ff6; }
-                    .music-pattern-id { font-weight: bold; color: #fff; margin-bottom: 5px; }
-                    .music-channel { font-size: 10px; color: #888; }
-                    .music-channel.disabled { color: #444; text-decoration: line-through; }
-                    .music-channel.enabled { color: #6cf; }
-                </style>
-            </head>
-            <body>
-                <div class="tab-header">
-                    <div class="tab active" onclick="showTab('code')">${locale.tabCode}</div>
-                    <div class="tab" onclick="showTab('gfx')">${locale.tabSprites}</div>
-                    <div class="tab" onclick="showTab('map')">${locale.tabMap}</div>
-                    <div class="tab" onclick="showTab('sfx')">${locale.tabSfx}</div>
-                    <div class="tab" onclick="showTab('music')">${locale.tabMusic}</div>
-                </div>
-
-                <div id="tab-code" class="content active">
-                    <div class="code-container">
-                        <div class="line-numbers">${lineNumbersHtml}</div>
-                        <div class="code-body"><pre id="code-pre">${codeHtml}</pre></div>
-                    </div>
-                </div>
-
-                <div id="tab-gfx" class="content">
-                     <div class="sprite-sheet-container">
-                         <canvas id="cvs-gfx" width="128" height="128"></canvas>
-                     </div>
-                     <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">${locale.spriteSheetLabel}</div>
-                </div>
-
-                <div id="tab-map" class="content">
-                    <div class="sprite-sheet-container">
-                        <canvas id="cvs-map" width="1024" height="512"></canvas>
-                    </div>
-                    <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 5px;">${locale.mapLabel}</div>
-                </div>
-
-                 <div id="tab-sfx" class="content">
-                    <div class="sfx-container">
-                        <div class="sfx-list" id="sfx-list"></div>
-                        <div class="sfx-detail" id="sfx-detail">
-                            <div class="sfx-header">${locale.selectSfx}</div>
-                            <div class="sfx-controls">
-                                <button id="btn-toggle-sfx" disabled>▶ ${locale.play}</button>
-                            </div>
-                        </div>
-                    </div>
-                 </div>
-                 <div id="tab-music" class="content">
-                    <div class="music-container">
-                        <div class="music-controls">
-                            <button id="btn-toggle-music" data-playing="">▶ ${locale.playMusic}</button>
-                            <span id="music-status"></span>
-                        </div>
-                        <div class="music-patterns" id="music-patterns"></div>
-                    </div>
-                 </div>
-
-                <script>
-                    const GFX = ${gfxJson};
-                    const MAP = ${mapJson};
-                    const FLAGS = ${flagsJson};
-                    const SFX = ${sfxJson};
-                    const MUSIC = ${musicJson};
-                    const PAL = ${palJson};
-
-                    // Localization
-                    const LOCALE = {
-                        play: "${locale.play}",
-                        stop: "${locale.stop}",
-                        playMusic: "${locale.playMusic}",
-                        speed: "${locale.speed}",
-                        loop: "${locale.loop}",
-                        playingPattern: "${locale.playingPattern}",
-                        empty: "${locale.empty}"
-                    };
-
-                    // Note names for pitch display
-                    const NOTE_NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
-                    const WAVEFORMS = ['sine', 'tri', 'saw', 'sqr', 'pulse', 'ring', 'noise', 'ring2'];
-                    const EFFECTS = ['none', 'slide', 'vib', 'drop', 'fadein', 'fadeout', 'arpF', 'arpS'];
-
-                    // ============ SYNTAX HIGHLIGHTING ============
-                    (function highlightCode() {
-                        const el = document.getElementById('code-pre');
-                        if (!el) return;
-                        const src = el.textContent || '';
-                        const keywords = /^(and|break|do|else|elseif|end|for|function|goto|if|in|local|not|or|repeat|return|then|until|while)$/;
-                        const builtins = /^(print|printh|cls|spr|sspr|map|mget|mset|pset|pget|sget|sset|fget|fset|line|rect|rectfill|circ|circfill|oval|ovalfill|pal|palt|color|clip|camera|cursor|fillp|flip|btn|btnp|sfx|music|mstat|stat|peek|peek2|peek4|poke|poke2|poke4|memcpy|memset|reload|cstore|cartdata|dget|dset|rnd|srand|flr|ceil|abs|sgn|sqrt|sin|cos|atan2|band|bor|bxor|bnot|shl|shr|lshr|rotl|rotr|max|min|mid|chr|ord|sub|tostr|tonum|type|add|del|deli|all|pairs|foreach|count|cocreate|coresume|costatus|yield|time|t|menuitem|extcmd|assert|stop|trace|_init|_update|_update60|_draw)$/;
-                        const out = [];
-                        let i = 0;
-                        function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-                        while (i < src.length) {
-                            // multi-line comment --[[ ... ]]
-                            if (src[i] === '-' && src[i+1] === '-' && src[i+2] === '[' && src[i+3] === '[') {
-                                let end = src.indexOf(']]', i + 4);
-                                if (end === -1) end = src.length - 2;
-                                out.push('<span class="cm">' + esc(src.slice(i, end + 2)) + '</span>');
-                                i = end + 2; continue;
-                            }
-                            // single-line comment
-                            if (src[i] === '-' && src[i+1] === '-') {
-                                let end = src.indexOf('\\n', i);
-                                if (end === -1) end = src.length;
-                                out.push('<span class="cm">' + esc(src.slice(i, end)) + '</span>');
-                                i = end; continue;
-                            }
-                            // strings
-                            if (src[i] === '"' || src[i] === "'") {
-                                const q = src[i]; let j = i + 1;
-                                while (j < src.length && src[j] !== q && src[j] !== '\\n') { if (src[j] === '\\\\') j++; j++; }
-                                if (j < src.length && src[j] === q) j++;
-                                out.push('<span class="st">' + esc(src.slice(i, j)) + '</span>');
-                                i = j; continue;
-                            }
-                            // numbers
-                            if (/[0-9]/.test(src[i]) && (i === 0 || !/[a-zA-Z_]/.test(src[i-1]))) {
-                                let j = i;
-                                if (src[j] === '0' && (src[j+1] === 'x' || src[j+1] === 'X')) { j += 2; while (j < src.length && /[0-9a-fA-F_.]/.test(src[j])) j++; }
-                                else if (src[j] === '0' && (src[j+1] === 'b' || src[j+1] === 'B')) { j += 2; while (j < src.length && /[01_]/.test(src[j])) j++; }
-                                else { while (j < src.length && /[0-9.]/.test(src[j])) j++; }
-                                out.push('<span class="nm">' + esc(src.slice(i, j)) + '</span>');
-                                i = j; continue;
-                            }
-                            // identifiers / keywords
-                            if (/[a-zA-Z_]/.test(src[i])) {
-                                let j = i; while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
-                                const w = src.slice(i, j);
-                                if (keywords.test(w)) out.push('<span class="kw">' + esc(w) + '</span>');
-                                else if (builtins.test(w)) out.push('<span class="bi">' + esc(w) + '</span>');
-                                else out.push(esc(w));
-                                i = j; continue;
-                            }
-                            // operators
-                            if ('+-*/%^#=<>~'.includes(src[i]) || (src[i] === '.' && src[i+1] === '.')) {
-                                let j = i + 1;
-                                if (src[i] === '.' && src[i+1] === '.') { j = i + 2; if (src[j] === '.') j++; }
-                                else if ((src[i] === '<' || src[i] === '>' || src[i] === '~' || src[i] === '=') && src[j] === '=') j++;
-                                out.push('<span class="op">' + esc(src.slice(i, j)) + '</span>');
-                                i = j; continue;
-                            }
-                            out.push(esc(src[i]));
-                            i++;
-                        }
-                        el.innerHTML = out.join('');
-                    })();
-
-                    // ============ AUDIO ENGINE ============
-                    let audioCtx = null;
-                    let currentSfxPlayer = null;
-                    let currentMusicPlayer = null;
-                    let allActiveSfxPlayers = [];
-                    let selectedSfxId = null;
-
-                    // PICO-8 base frequency: C0 = 16.35 Hz (standard tuning)
-                    const BASE_FREQ = 16.35;
-
-                    // Convert PICO-8 pitch (0-63) to frequency in Hz
-                    function pitchToFreq(pitch) {
-                        return BASE_FREQ * Math.pow(2, pitch / 12);
-                    }
-
-                    // Map PICO-8 waveform to Web Audio type or custom
-                    function getOscillatorType(waveform) {
-                        switch (waveform) {
-                            case 0: return 'sine';
-                            case 1: return 'triangle';
-                            case 2: return 'sawtooth';
-                            case 3: return 'square';  // long square
-                            case 4: return 'square';  // short square (we'll handle duty cycle separately if needed)
-                            case 5: return 'triangle'; // ringing - approximate
-                            case 6: return 'sawtooth'; // noise - we'll use special handling
-                            case 7: return 'sine';     // ringing sine
-                            default: return 'sine';
-                        }
-                    }
-
-                    // Create noise source using AudioBuffer
-                    function createNoiseSource(ctx, duration) {
-                        const bufferSize = ctx.sampleRate * duration;
-                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                        const data = buffer.getChannelData(0);
-                        for (let i = 0; i < bufferSize; i++) {
-                            data[i] = Math.random() * 2 - 1;
-                        }
-                        const source = ctx.createBufferSource();
-                        source.buffer = buffer;
-                        return source;
-                    }
-
-                    // Play a single SFX
-                    function playSfx(sfxId, onNoteChange, skipStop) {
-                        if (!audioCtx) {
-                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        }
-
-                        // Stop any currently playing SFX (unless called from music player)
-                        if (!skipStop) stopSfx();
-
-                        const sfx = parseSfx(sfxId);
-                        if (sfx.isEmpty) return null;
-
-                        // Calculate note duration: speed * (1/128) seconds approximately
-                        // PICO-8: 22050 ticks/sec, 183 ticks per speed unit
-                        // So duration = speed * 183 / 22050 ≈ speed * 0.0083 seconds
-                        const noteDuration = (sfx.speed || 1) * 183 / 22050;
-
-                        let noteIndex = 0;
-                        let isPlaying = true;
-                        let oscillator = null;
-                        let gainNode = null;
-
-                        function playNote() {
-                            if (!isPlaying || noteIndex >= 32) {
-                                // Check for loop
-                                if (sfx.loopStart < sfx.loopEnd && isPlaying) {
-                                    noteIndex = sfx.loopStart;
-                                } else {
-                                    // When called from music, just stop self quietly
-                                    isPlaying = false;
-                                    if (oscillator) { try { oscillator.stop(); } catch(e) {} }
-                                    if (!skipStop) stopSfx();
-                                    return;
-                                }
-                            }
-
-                            const note = sfx.notes[noteIndex];
-
-                            // Highlight current note
-                            if (onNoteChange) onNoteChange(noteIndex);
-
-                            // Skip silent notes
-                            if (note.volume === 0) {
-                                noteIndex++;
-                                setTimeout(playNote, noteDuration * 1000);
-                                return;
-                            }
-
-                            // Create oscillator for this note
-                            if (note.waveform === 6) {
-                                // Noise
-                                oscillator = createNoiseSource(audioCtx, noteDuration);
-                            } else {
-                                oscillator = audioCtx.createOscillator();
-                                oscillator.type = getOscillatorType(note.waveform);
-                                oscillator.frequency.setValueAtTime(pitchToFreq(note.pitch), audioCtx.currentTime);
-                            }
-
-                            // Create gain for volume
-                            gainNode = audioCtx.createGain();
-                            const vol = note.volume / 7; // Normalize to 0-1
-                            gainNode.gain.setValueAtTime(vol * 0.3, audioCtx.currentTime); // Scale down to avoid clipping
-
-                            // Apply effects
-                            const nextNote = sfx.notes[noteIndex + 1] || note;
-                            switch (note.effect) {
-                                case 1: // Slide
-                                    if (oscillator.frequency) {
-                                        oscillator.frequency.linearRampToValueAtTime(
-                                            pitchToFreq(nextNote.pitch),
-                                            audioCtx.currentTime + noteDuration
-                                        );
-                                    }
-                                    break;
-                                case 2: // Vibrato
-                                    if (oscillator.frequency) {
-                                        const vibratoOsc = audioCtx.createOscillator();
-                                        vibratoOsc.frequency.setValueAtTime(6, audioCtx.currentTime);
-                                        const vibratoGain = audioCtx.createGain();
-                                        vibratoGain.gain.setValueAtTime(pitchToFreq(note.pitch) * 0.02, audioCtx.currentTime);
-                                        vibratoOsc.connect(vibratoGain);
-                                        vibratoGain.connect(oscillator.frequency);
-                                        vibratoOsc.start();
-                                        setTimeout(() => vibratoOsc.stop(), noteDuration * 1000);
-                                    }
-                                    break;
-                                case 3: // Drop
-                                    if (oscillator.frequency) {
-                                        oscillator.frequency.exponentialRampToValueAtTime(
-                                            20,
-                                            audioCtx.currentTime + noteDuration
-                                        );
-                                    }
-                                    break;
-                                case 4: // Fade in
-                                    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-                                    gainNode.gain.linearRampToValueAtTime(vol * 0.3, audioCtx.currentTime + noteDuration);
-                                    break;
-                                case 5: // Fade out
-                                    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + noteDuration);
-                                    break;
-                            }
-
-                            oscillator.connect(gainNode);
-                            gainNode.connect(audioCtx.destination);
-
-                            oscillator.start();
-                            oscillator.stop(audioCtx.currentTime + noteDuration);
-
-                            noteIndex++;
-                            setTimeout(playNote, noteDuration * 1000);
-                        }
-
-                        playNote();
-
-                        const player = {
-                            stop: () => {
-                                isPlaying = false;
-                                if (oscillator) {
-                                    try { oscillator.stop(); } catch (e) {}
-                                }
-                            }
-                        };
-                        allActiveSfxPlayers.push(player);
-                        return player;
-                    }
-
-                    function stopSfx() {
-                        if (currentSfxPlayer) {
-                            currentSfxPlayer.stop();
-                            currentSfxPlayer = null;
-                        }
-                        allActiveSfxPlayers.forEach(p => { try { p.stop(); } catch(e) {} });
-                        allActiveSfxPlayers = [];
-                        // Clear note highlighting
-                        document.querySelectorAll('.sfx-note.playing').forEach(el => el.classList.remove('playing'));
-                        // Reset toggle buttons to play state
-                        const btn = document.getElementById('btn-toggle-sfx');
-                        if (btn) { btn.textContent = '▶ ' + LOCALE.play; btn.dataset.playing = ''; }
-                        document.querySelectorAll('.play-btn.is-playing').forEach(el => {
-                            el.textContent = '▶';
-                            el.classList.remove('is-playing');
-                        });
-                    }
-
-                    // Music player
-                    function playMusic(startPattern) {
-                        if (!audioCtx) {
-                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        }
-
-                        stopMusic();
-
-                        let patternIndex = startPattern || 0;
-                        let isPlaying = true;
-                        let channelPlayers = [null, null, null, null];
-
-                        function updatePatternHighlight() {
-                            document.querySelectorAll('.music-pattern').forEach((el, idx) => {
-                                el.classList.toggle('playing', idx === patternIndex);
-                            });
-                            document.getElementById('music-status').textContent = LOCALE.playingPattern + ' ' + patternIndex;
-                        }
-
-                        function playPattern() {
-                            if (!isPlaying || patternIndex >= 64) {
-                                stopMusic();
-                                return;
-                            }
-
-                            // Stop previous pattern's channel players before starting new ones
-                            for (let c = 0; c < 4; c++) {
-                                if (channelPlayers[c]) {
-                                    try { channelPlayers[c].stop(); } catch(e) {}
-                                    channelPlayers[c] = null;
-                                }
-                            }
-
-                            updatePatternHighlight();
-
-                            const offset = patternIndex * 4;
-                            const channels = [
-                                MUSIC[offset] || 0,
-                                MUSIC[offset + 1] || 0,
-                                MUSIC[offset + 2] || 0,
-                                MUSIC[offset + 3] || 0
-                            ];
-
-                            // Check if all channels disabled (empty pattern)
-                            const allDisabled = channels.every(c => (c & 0x40) !== 0);
-
-                            // Parse flags
-                            const loopStart = (channels[0] & 0x80) !== 0;
-                            const loopEnd = (channels[1] & 0x80) !== 0;
-                            const stopAtEnd = (channels[2] & 0x80) !== 0;
-
-                            if (allDisabled) {
-                                stopMusic();
-                                return;
-                            }
-
-                            // Find longest SFX duration
-                            let maxDuration = 0;
-                            for (let c = 0; c < 4; c++) {
-                                const disabled = (channels[c] & 0x40) !== 0;
-                                if (!disabled) {
-                                    const sfxId = channels[c] & 0x3f;
-                                    const sfx = parseSfx(sfxId);
-                                    const noteDuration = (sfx.speed || 1) * 183 / 22050;
-                                    const sfxDuration = noteDuration * 32;
-                                    maxDuration = Math.max(maxDuration, sfxDuration);
-
-                                    // Play this channel's SFX
-                                    channelPlayers[c] = playSfx(sfxId, null, true);
-                                }
-                            }
-
-                            // Schedule next pattern
-                            setTimeout(() => {
-                                if (!isPlaying) return;
-
-                                if (stopAtEnd) {
-                                    stopMusic();
-                                } else if (loopEnd) {
-                                    // Find loop start
-                                    let loopStartIdx = 0;
-                                    for (let i = patternIndex; i >= 0; i--) {
-                                        if ((MUSIC[i * 4] & 0x80) !== 0) {
-                                            loopStartIdx = i;
-                                            break;
-                                        }
-                                    }
-                                    patternIndex = loopStartIdx;
-                                    playPattern();
-                                } else {
-                                    patternIndex++;
-                                    playPattern();
-                                }
-                            }, maxDuration * 1000);
-                        }
-
-                        playPattern();
-
-                        currentMusicPlayer = {
-                            stop: () => {
-                                isPlaying = false;
-                                channelPlayers.forEach(p => { if (p) p.stop(); });
-                            }
-                        };
-                    }
-
-                    function stopMusic() {
-                        if (currentMusicPlayer) {
-                            currentMusicPlayer.stop();
-                            currentMusicPlayer = null;
-                        }
-                        // Stop all active sfx players (from all patterns, not just current)
-                        allActiveSfxPlayers.forEach(p => { try { p.stop(); } catch(e) {} });
-                        allActiveSfxPlayers = [];
-                        document.querySelectorAll('.music-pattern.playing').forEach(el => el.classList.remove('playing'));
-                        document.getElementById('music-status').textContent = '';
-                        // Reset toggle button to play state
-                        const btn = document.getElementById('btn-toggle-music');
-                        if (btn) { btn.textContent = '▶ ' + LOCALE.playMusic; btn.dataset.playing = ''; }
-                    }
-
-                    // ============ END AUDIO ENGINE ============
-
-                    function pitchToNote(pitch) {
-                        if (pitch === 0) return '...';
-                        const octave = Math.floor(pitch / 12);
-                        const note = pitch % 12;
-                        return NOTE_NAMES[note] + octave;
-                    }
-
-                    function showTab(id) {
-                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
-
-                        // find tab element by text roughly or index? hacky event.target check is better in real app
-                        // abusing the onclick directly:
-                        event.target.classList.add('active');
-                        document.getElementById('tab-' + id).classList.add('active');
-
-                        if (id === 'gfx') {
-                            renderGfx();
-                        } else if (id === 'map') {
-                            renderMap();
-                        } else if (id === 'sfx') {
-                            renderSfxList();
-                        } else if (id === 'music') {
-                            renderMusic();
-                        }
-                    }
-
-                    function renderGfx() {
-                        const cvs = document.getElementById('cvs-gfx');
-                        const ctx = cvs.getContext('2d');
-                        const imgData = ctx.createImageData(128, 128);
-
-                        // Fill with black (0) usually, but key is we want transparency for color 0 maybe?
-                        // In IDE spritesheet view, 0 is black.
-
-                        for (let i = 0; i < 8192; i++) { // 128x128 / 2 bytes = 8192 bytes. Wait.
-                            // PICO-8 gfx: 128x128 pixels.
-                            // Each pixel is 4 bits (1 nibble).
-                            // Size = 128 * 128 / 2 = 8192 bytes.
-                            // My decode logic returned byte array of 0x2000 size?
-                            // Yes 0x2000 is 8192.
-                            // Wait, GFX region is 0x0000-0x1FFF = 8192 bytes.
-                            // This holds 128x128 pixels.
-
-                            const byte = GFX[i];
-                            // Low nibble = even pixel (x), High nibble = odd pixel (x+1)?
-                            // PICO-8 memory: "Pixel at (x,y) is stored in byte 0x6000 + y*64 + x/2" (Screen)
-                            // Sprite sheet is same format.
-                            // Low nibble is left pixel? No.
-                            // Spec: "low 4 bits are the left pixel (x), high 4 bits are the right pixel (x+1)"
-
-                            const p1 = byte & 0x0f;
-                            const p2 = (byte >> 4) & 0x0f;
-
-                            // Pixel indices:
-                            // Row = Math.floor(i / 64);
-                            // ColBase = (i % 64) * 2;
-
-                            const row = Math.floor(i / 64);
-                            const col = (i % 64) * 2;
-
-                            setPixel(imgData, col, row, p1);
-                            setPixel(imgData, col+1, row, p2);
-                        }
-
-                        // Scale up for visibility? Canvas CSS handles it with image-rendering: pixelated
-                        // But canvas intrinsic size is 128x128.
-                        ctx.putImageData(imgData, 0, 0);
-
-                        // Let's scale the canvas element via CSS only, keep internal resolution 128
-                        cvs.style.width = '512px';
-                        cvs.style.height = '512px';
-                    }
-
-                    function setPixel(imgData, x, y, c) {
-                        const idx = (y * 128 + x) * 4;
-                        const hex = PAL[c & 15]; // Safety mask
-                        // parse hex
-                        const r = parseInt(hex.substr(1,2), 16);
-                        const g = parseInt(hex.substr(3,2), 16);
-                        const b = parseInt(hex.substr(5,2), 16);
-
-                        imgData.data[idx] = r;
-                        imgData.data[idx+1] = g;
-                        imgData.data[idx+2] = b;
-                        imgData.data[idx+3] = 255; // Alpha
-                    }
-
-                    // Get a sprite's pixel data (8x8 pixels) from GFX memory
-                    function getSprite(spriteIdx) {
-                        // Sprite sheet is 16x16 sprites (128x128 pixels / 8x8 per sprite)
-                        const sx = (spriteIdx % 16) * 8;  // x in pixels
-                        const sy = Math.floor(spriteIdx / 16) * 8;  // y in pixels
-                        const pixels = [];
-
-                        for (let py = 0; py < 8; py++) {
-                            for (let px = 0; px < 8; px++) {
-                                const x = sx + px;
-                                const y = sy + py;
-                                // GFX layout: 64 bytes per row, 2 pixels per byte
-                                const byteIdx = y * 64 + Math.floor(x / 2);
-                                const byte = GFX[byteIdx] || 0;
-                                // Low nibble = even x, high nibble = odd x
-                                const color = (x % 2 === 0) ? (byte & 0x0f) : ((byte >> 4) & 0x0f);
-                                pixels.push(color);
-                            }
-                        }
-                        return pixels; // 64 color indices
-                    }
-
-                    function renderMap() {
-                        const cvs = document.getElementById('cvs-map');
-                        const ctx = cvs.getContext('2d');
-                        // Map is 128x64 tiles, each 8x8 pixels = 1024x512 pixels
-                        const imgData = ctx.createImageData(1024, 512);
-
-                        // Upper 32 rows: from MAP array (0x2000-0x2FFF = 4096 bytes = 128x32)
-                        // Lower 32 rows: shared with upper sprite sheet (0x1000-0x1FFF = GFX[4096..8191])
-
-                        for (let ty = 0; ty < 64; ty++) {
-                            for (let tx = 0; tx < 128; tx++) {
-                                let spriteIdx;
-                                if (ty < 32) {
-                                    // Upper map rows 0-31: from MAP array
-                                    const mapIdx = ty * 128 + tx;
-                                    spriteIdx = MAP[mapIdx] || 0;
-                                } else {
-                                    // Lower map rows 32-63: shared with sprite sheet upper half
-                                    // Address 0x1000 + (ty-32)*128 + tx = GFX[4096 + offset]
-                                    const sharedRow = ty - 32;
-                                    const sharedIdx = sharedRow * 128 + tx;
-                                    spriteIdx = GFX[4096 + sharedIdx] || 0;
-                                }
-
-                                // In PICO-8, sprite 0 is treated as empty/transparent in map rendering
-                                if (spriteIdx === 0) continue;
-
-                                // Get sprite pixels
-                                const spritePixels = getSprite(spriteIdx);
-
-                                // Draw 8x8 sprite at tile position
-                                const baseX = tx * 8;
-                                const baseY = ty * 8;
-
-                                for (let py = 0; py < 8; py++) {
-                                    for (let px = 0; px < 8; px++) {
-                                        const color = spritePixels[py * 8 + px];
-                                        const hex = PAL[color & 15];
-                                        const r = parseInt(hex.substr(1,2), 16);
-                                        const g = parseInt(hex.substr(3,2), 16);
-                                        const b = parseInt(hex.substr(5,2), 16);
-
-                                        const imgX = baseX + px;
-                                        const imgY = baseY + py;
-                                        const idx = (imgY * 1024 + imgX) * 4;
-
-                                        imgData.data[idx] = r;
-                                        imgData.data[idx+1] = g;
-                                        imgData.data[idx+2] = b;
-                                        imgData.data[idx+3] = 255;
-                                    }
-                                }
-                            }
-                        }
-
-                        ctx.putImageData(imgData, 0, 0);
-
-                        // Scale for visibility, maintain 2:1 aspect ratio
-                        cvs.style.width = '100%';
-                        cvs.style.maxWidth = '1024px';
-                        cvs.style.height = 'auto';
-                    }
-
-                    // Parse a single SFX from the SFX array
-                    function parseSfx(sfxId) {
-                        const offset = sfxId * 68;
-                        const notes = [];
-
-                        // Parse 32 notes (2 bytes each = 64 bytes)
-                        for (let i = 0; i < 32; i++) {
-                            const lo = SFX[offset + i * 2] || 0;
-                            const hi = SFX[offset + i * 2 + 1] || 0;
-
-                            // Decode note: pppppp www vvv eee c
-                            // lo: ww pppppp (low 6 bits = pitch, bits 6-7 = low 2 bits of waveform)
-                            // hi: c eee vvv w (bit 0 = high bit of waveform, bits 1-3 = volume, bits 4-6 = effect, bit 7 = custom)
-                            const pitch = lo & 0x3f;
-                            const waveform = ((lo >> 6) & 0x03) | ((hi & 0x01) << 2);
-                            const volume = (hi >> 1) & 0x07;
-                            const effect = (hi >> 4) & 0x07;
-                            const customWave = (hi >> 7) & 0x01;
-
-                            notes.push({ pitch, waveform, volume, effect, customWave });
-                        }
-
-                        const editorByte = SFX[offset + 64] || 0;
-                        const speed = SFX[offset + 65] || 0;
-                        const loopStart = SFX[offset + 66] || 0;
-                        const loopEnd = SFX[offset + 67] || 0;
-
-                        // Check if SFX is empty (all notes have 0 volume)
-                        const isEmpty = notes.every(n => n.volume === 0);
-
-                        return { notes, speed, loopStart, loopEnd, isEmpty };
-                    }
-
-                    function renderSfxList() {
-                        const container = document.getElementById('sfx-list');
-                        container.innerHTML = '';
-
-                        for (let i = 0; i < 64; i++) {
-                            const sfx = parseSfx(i);
-                            const div = document.createElement('div');
-                            div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '');
-
-                            // Play/stop toggle button
-                            if (!sfx.isEmpty) {
-                                const playBtn = document.createElement('button');
-                                playBtn.className = 'play-btn';
-                                playBtn.textContent = '▶';
-                                playBtn.onclick = (e) => {
-                                    e.stopPropagation();
-                                    if (playBtn.classList.contains('is-playing')) {
-                                        stopSfx();
-                                    } else {
-                                        currentSfxPlayer = playSfx(i, null);
-                                        if (currentSfxPlayer) {
-                                            playBtn.textContent = '⏹';
-                                            playBtn.classList.add('is-playing');
-                                        }
-                                    }
-                                };
-                                div.appendChild(playBtn);
-                            }
-
-                            const label = document.createElement('span');
-                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (' + LOCALE.empty + ')' : ' ' + LOCALE.speed + ':' + sfx.speed);
-                            div.appendChild(label);
-
-                            div.onclick = () => {
-                                selectedSfxId = i;
-                                renderSfxDetail(i);
-                            };
-                            container.appendChild(div);
-                        }
-                    }
-
-                    function renderSfxDetail(sfxId) {
-                        selectedSfxId = sfxId;
-
-                        // Highlight active item
-                        document.querySelectorAll('.sfx-item').forEach((el, idx) => {
-                            el.classList.toggle('active', idx === sfxId);
-                        });
-
-                        const sfx = parseSfx(sfxId);
-                        const container = document.getElementById('sfx-detail');
-
-                        let html = '<div class="sfx-header">SFX ' + sfxId + '</div>';
-                        html += '<div class="sfx-controls">';
-                        html += '<button id="btn-toggle-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + ' data-playing="">▶ ' + LOCALE.play + '</button>';
-                        html += '</div>';
-                        html += '<div class="sfx-info">';
-                        html += LOCALE.speed + ': ' + sfx.speed + ' | ';
-                        html += LOCALE.loop + ': ' + sfx.loopStart + ' → ' + sfx.loopEnd;
-                        html += '</div>';
-
-                        html += '<div class="sfx-tracker" id="sfx-tracker">';
-                        html += '<div class="sfx-tracker-header"><span>#</span><span>Note</span><span>Wave</span><span>Vol</span><span>FX</span></div>';
-
-                        for (let i = 0; i < 32; i++) {
-                            const n = sfx.notes[i];
-                            const noteStr = pitchToNote(n.pitch);
-                            const waveStr = n.customWave ? 'C' + n.waveform : WAVEFORMS[n.waveform];
-                            const volStr = n.volume.toString();
-                            const fxStr = EFFECTS[n.effect];
-
-                            html += '<div class="sfx-note" data-idx="' + i + '">';
-                            html += '<span class="note-idx">' + i.toString().padStart(2, '0') + '</span>';
-                            html += '<span class="note-pitch">' + noteStr + '</span>';
-                            html += '<span class="note-wave">' + waveStr + '</span>';
-                            html += '<span class="note-vol">' + volStr + '</span>';
-                            html += '<span class="note-fx">' + fxStr + '</span>';
-                            html += '</div>';
-                        }
-                        html += '</div>';
-
-                        container.innerHTML = html;
-
-                        // Wire up toggle button
-                        document.getElementById('btn-toggle-sfx').onclick = () => {
-                            const btn = document.getElementById('btn-toggle-sfx');
-                            if (btn.dataset.playing) {
-                                stopSfx();
-                            } else {
-                                currentSfxPlayer = playSfx(sfxId, (noteIdx) => {
-                                    document.querySelectorAll('.sfx-note').forEach(el => el.classList.remove('playing'));
-                                    const noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
-                                    if (noteEl) noteEl.classList.add('playing');
-                                });
-                                if (currentSfxPlayer) {
-                                    btn.textContent = '⏹ ' + LOCALE.stop;
-                                    btn.dataset.playing = '1';
-                                }
-                            }
-                        };
-                    }
-
-                    function renderMusic() {
-                        const container = document.getElementById('music-patterns');
-                        container.innerHTML = '';
-
-                        // Wire up music toggle button
-                        document.getElementById('btn-toggle-music').onclick = () => {
-                            const btn = document.getElementById('btn-toggle-music');
-                            if (btn.dataset.playing) {
-                                stopMusic();
-                            } else {
-                                playMusic(0);
-                                if (currentMusicPlayer) {
-                                    btn.textContent = '⏹ ' + LOCALE.stop;
-                                    btn.dataset.playing = '1';
-                                }
-                            }
-                        };
-
-                        for (let i = 0; i < 64; i++) {
-                            const offset = i * 4;
-                            const ch0 = MUSIC[offset] || 0;
-                            const ch1 = MUSIC[offset + 1] || 0;
-                            const ch2 = MUSIC[offset + 2] || 0;
-                            const ch3 = MUSIC[offset + 3] || 0;
-
-                            // Parse channel bytes
-                            const channels = [ch0, ch1, ch2, ch3];
-                            const sfxIds = channels.map(c => c & 0x3f);
-                            const disabled = channels.map(c => (c & 0x40) !== 0);
-
-                            // Flags from bit 7
-                            const loopStart = (ch0 & 0x80) !== 0;
-                            const loopEnd = (ch1 & 0x80) !== 0;
-                            const stopAtEnd = (ch2 & 0x80) !== 0;
-
-                            // Check if pattern is empty (all channels disabled)
-                            const isEmpty = disabled.every(d => d);
-
-                            const div = document.createElement('div');
-                            let classes = 'music-pattern';
-                            if (isEmpty) classes += ' empty';
-                            if (loopStart) classes += ' loop-start';
-                            if (loopEnd) classes += ' loop-end';
-                            if (stopAtEnd) classes += ' stop';
-                            div.className = classes;
-                            div.dataset.pattern = i;
-
-                            // Click to play from this pattern
-                            if (!isEmpty) {
-                                div.onclick = () => {
-                                    playMusic(i);
-                                    if (currentMusicPlayer) {
-                                        const btn = document.getElementById('btn-toggle-music');
-                                        btn.textContent = '⏹ ' + LOCALE.stop;
-                                        btn.dataset.playing = '1';
-                                    }
-                                };
-                                div.title = 'Click to play from pattern ' + i;
-                            }
-
-                            let html = '<div class="music-pattern-id">' + i.toString().padStart(2, '0') + '</div>';
-                            for (let c = 0; c < 4; c++) {
-                                const chClass = disabled[c] ? 'disabled' : 'enabled';
-                                html += '<div class="music-channel ' + chClass + '">';
-                                html += 'CH' + c + ': ' + (disabled[c] ? '--' : sfxIds[c].toString().padStart(2, '0'));
-                                html += '</div>';
-                            }
-                            div.innerHTML = html;
-                            container.appendChild(div);
-                        }
-                    }
-
-                    // Initial render if active?
-                </script>
-            </body>
-            </html>`;
+        return generateCartViewerHtml({
+            cartData,
+            locale,
+            extensionUri: this.extensionUri,
+            webview: this._panel.webview,
+            gameName: game.name,
+            showRunButton: true,
+            showAudio: true,
+            editable: false
+        });
     }
 }
 
-
-// Show disclaimer/readme on activation
 function showDisclaimer(context: vscode.ExtensionContext) {
     const locale = t();
     const panel = vscode.window.createWebviewPanel(
@@ -1629,6 +761,24 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider(GameDetailViewProvider.viewType, detailProvider)
     );
 
+    // Custom Editor for .p8.png files
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            Pico8PngEditorProvider.viewType,
+            new Pico8PngEditorProvider(context),
+            { webviewOptions: { retainContextWhenHidden: true } }
+        )
+    );
+
+    // Custom Editor for .p8 files
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            Pico8P8EditorProvider.viewType,
+            new Pico8P8EditorProvider(context),
+            { webviewOptions: { retainContextWhenHidden: true } }
+        )
+    );
+
     // Refresh Command
     vscode.commands.registerCommand('pico8ide.refreshEntry', () => listsProvider.load());
 
@@ -1648,13 +798,39 @@ export function activate(context: vscode.ExtensionContext) {
         detailProvider.showListInfo(listInfo);
     });
 
-    // Select Game - updates detail panel AND opens cart view
+    // Select Game - updates detail panel and opens cart view
+    // Double-click detection: if same game clicked again within 300ms, pins the panel
+    let currentSelectedGame: GameMetadata | undefined;
+    let lastSelectedGameId: string | undefined;
+    let lastSelectedTime = 0;
+    const DOUBLE_CLICK_MS = 300;
+
+    // When a cart panel tab becomes active, sync the detail sidebar
+    Pico8CartPanel.setOnPanelActivated((game: GameMetadata) => {
+        currentSelectedGame = game;
+        detailProvider.updateGame(game);
+    });
+
     vscode.commands.registerCommand('pico8ide.selectGame', async (game: GameMetadata) => {
+        const now = Date.now();
+        const isDoubleClick = game.id === lastSelectedGameId && (now - lastSelectedTime) < DOUBLE_CLICK_MS;
+        lastSelectedGameId = game.id;
+        lastSelectedTime = now;
+
+        currentSelectedGame = game;
         // Update detail panel (this will download thumbnail in background)
         detailProvider.updateGame(game);
 
-        // Also open the cart view
-        vscode.commands.executeCommand('pico8ide.openCart', game);
+        if (isDoubleClick) {
+            // Double-click: pin the preview panel
+            Pico8CartPanel.pinCurrent();
+        } else if (Pico8CartPanel.hasGame(game.id)) {
+            // Already open (pinned or preview), just reveal it
+            Pico8CartPanel.revealGame(game.id);
+        } else {
+            // Single click: open as preview
+            await vscode.commands.executeCommand('pico8ide.openCart', game);
+        }
     });
 
     // Open Cart (Download & View)
@@ -1693,282 +869,176 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Set PICO-8 Path Command
+    vscode.commands.registerCommand('pico8ide.setPico8Path', async () => {
+        const result = await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            title: locale.pico8PathSelectPrompt,
+            filters: process.platform === 'win32'
+                ? { 'Executable': ['exe'] }
+                : undefined
+        });
+        if (result && result[0]) {
+            let selectedPath = result[0].fsPath;
+            // macOS: if user selects a .app bundle, resolve to inner binary
+            if (process.platform === 'darwin' && selectedPath.endsWith('.app')) {
+                selectedPath = path.join(selectedPath, 'Contents', 'MacOS', 'pico8');
+            }
+            await vscode.workspace.getConfiguration('pico8ide').update('pico8Path', selectedPath, vscode.ConfigurationTarget.Global);
+        }
+    });
+
+    // Run Game in PICO-8 Command
+    async function runGameInPico8(gameOrPath: GameMetadata | string) {
+        // If already running, stop first
+        if (Pico8CartPanel.getRunningProcess()) {
+            stopRunningGame();
+        }
+
+        const config = vscode.workspace.getConfiguration('pico8ide');
+        let pico8Path = config.get<string>('pico8Path') || '';
+
+        if (!pico8Path) {
+            const action = await vscode.window.showWarningMessage(
+                locale.pico8PathNotSet,
+                'Yes', 'No'
+            );
+            if (action === 'Yes') {
+                await vscode.commands.executeCommand('pico8ide.setPico8Path');
+                pico8Path = vscode.workspace.getConfiguration('pico8ide').get<string>('pico8Path') || '';
+            }
+            if (!pico8Path) {
+                return;
+            }
+        }
+
+        if (!fs.existsSync(pico8Path)) {
+            vscode.window.showErrorMessage(locale.pico8PathNotFound);
+            return;
+        }
+
+        try {
+            const cartPath = typeof gameOrPath === 'string'
+                ? gameOrPath
+                : await dataManager.getAssetPath(gameOrPath, 'cart');
+            const child = spawn(pico8Path, ['-run', cartPath], {
+                detached: true,
+                stdio: 'ignore'
+            });
+            child.unref();
+            Pico8CartPanel.setRunningProcess(child);
+
+            child.on('exit', () => {
+                if (Pico8CartPanel.getRunningProcess() === child) {
+                    Pico8CartPanel.setRunningProcess(undefined);
+                }
+            });
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`${locale.runGameFailed}: ${e.message}`);
+        }
+    }
+
+    function stopRunningGame() {
+        const proc = Pico8CartPanel.getRunningProcess();
+        if (proc) {
+            try {
+                // Kill the process group on unix, or the process on windows
+                if (proc.pid) {
+                    if (process.platform === 'win32') {
+                        spawn('taskkill', ['/pid', proc.pid.toString(), '/f', '/t']);
+                    } else {
+                        process.kill(-proc.pid, 'SIGTERM');
+                    }
+                }
+            } catch (_) {
+                // Process may have already exited
+            }
+            Pico8CartPanel.setRunningProcess(undefined);
+        }
+    }
+
+    // Wire up webview run/stop handlers
+    Pico8CartPanel.setRunHandler((game) => runGameInPico8(game));
+    Pico8CartPanel.setStopHandler(() => stopRunningGame());
+
+    vscode.commands.registerCommand('pico8ide.runGame', async (item?: ListGameItem) => {
+        const game = item?.game ?? currentSelectedGame ?? Pico8CartPanel.currentGame;
+        if (game) {
+            await runGameInPico8(game);
+            return;
+        }
+        // Fallback: check active text editor for .p8 file
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && activeEditor.document.fileName.endsWith('.p8')) {
+            await runGameInPico8(activeEditor.document.uri.fsPath);
+            return;
+        }
+        // Fallback: check active tab for .p8.png custom editor
+        const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+        if (activeTab?.input && typeof (activeTab.input as any).uri?.fsPath === 'string') {
+            const fsPath: string = (activeTab.input as any).uri.fsPath;
+            if (fsPath.endsWith('.p8.png')) {
+                await runGameInPico8(fsPath);
+                return;
+            }
+        }
+    });
+
+    // Stop Game Command
+    vscode.commands.registerCommand('pico8ide.stopGame', () => {
+        stopRunningGame();
+    });
+
+    // Fork Game command - copy database game into workspace as .p8
+    vscode.commands.registerCommand('pico8ide.forkGame', async (item?: ListGameItem) => {
+        const locale = t();
+        const game = item?.game ?? currentSelectedGame;
+        if (!game) {
+            return;
+        }
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            vscode.window.showErrorMessage(locale.forkNoWorkspace);
+            return;
+        }
+
+        try {
+            const cartPath = await dataManager.getAssetPath(game, 'cart');
+            const cartData = await Pico8Decoder.decode(cartPath);
+            const p8Content = cartDataToP8(cartData);
+
+            // Sanitize game name for filename
+            const safeName = game.name.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_').substring(0, 64);
+            const destPath = path.join(workspaceFolders[0].uri.fsPath, `${safeName}.p8`);
+
+            fs.writeFileSync(destPath, p8Content, 'utf-8');
+            vscode.window.showInformationMessage(locale.forkSuccess);
+            const destUri = vscode.Uri.file(destPath);
+            await vscode.commands.executeCommand('vscode.openWith', destUri, Pico8P8EditorProvider.viewType);
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`${locale.error}: ${e.message}`);
+        }
+    });
+
+    // Preview .p8 Cart command - open .p8 file in the cart editor
+    vscode.commands.registerCommand('pico8ide.previewP8Cart', async (uri?: vscode.Uri) => {
+        if (!uri) {
+            const activeEditor = vscode.window.activeTextEditor;
+            if (activeEditor && activeEditor.document.fileName.endsWith('.p8')) {
+                uri = activeEditor.document.uri;
+            }
+        }
+        if (!uri) {
+            return;
+        }
+
+        await vscode.commands.executeCommand('vscode.openWith', uri, Pico8P8EditorProvider.viewType);
+    });
+
     // Initial Load
     listsProvider.load();
 }
 
-/**
- * DECODER LOGIC
- * Since we can't easily import a complex class from another file if we want to keep this simple
- * or if we had separate files before.
- * But wait, we have ./decoder.ts on disk still?
- * The user said "help implmenet" which implies we need to write the code.
- * We can reuse the decoder.ts via import.
- */
-
-// Helper to decode using the Decoder class
-class Pico8Decoder {
-    // We'll trust the separate file `decoder.ts` handles the heavy lifting of LZSS/PXA.
-    // But we need to EXTRACT the bytes from PNG first.
-    // The previous `decoder.ts` ONLY took a PNG path and returned CODE string.
-    // It didn't return gfx/map.
-    // We need to enhance the decoder or do it here.
-
-    // Let's reimplement a robust decoder here that returns structured data.
-
-    static async decode(cartPath: string): Promise<CartData> {
-        return new Promise((resolve, reject) => {
-            const stream = fs.createReadStream(cartPath);
-            const png = new PNG();
-
-            stream.pipe(png).on('parsed', function(this: any) {
-                try {
-                    // Extract full RAM
-                    // 128*128 pixels * 4 channels = 65536 bytes of raw pixel data
-                    // But we care about RGBA channels.
-                    // Each pixel holds 1 byte of PICO-8 RAM.
-                    // RAM size = 0x8000 (32k).
-                    // Image size needed: 32768 pixels.
-                    // 160x205 image = 32800 pixels. Enough.
-
-                    const ram = new Uint8Array(0x8000); // 32k
-                    let ramIdx = 0;
-
-                    // Also extract the label image (128x128 visible portion)
-                    const labelPng = new PNG({ width: 128, height: 128 });
-
-                    for (let y=0; y<this.height; y++) {
-                        for (let x=0; x<this.width; x++) {
-                            const idx = (this.width * y + x) << 2;
-                            const r = this.data[idx];
-                            const g = this.data[idx+1];
-                            const b = this.data[idx+2];
-                            const a = this.data[idx+3];
-
-                            // Extract RAM data from steganography
-                            if (ramIdx < 0x8000) {
-                                // Reconstruct byte
-                                // PICO-8 steganography standard:
-                                // byte = (alpha & 3) << 6 | (red & 3) << 4 | (green & 3) << 2 | (blue & 3)
-                                const byte = ((a & 3) << 6) | ((r & 3) << 4) | ((g & 3) << 2) | (b & 3);
-                                ram[ramIdx++] = byte;
-                            }
-
-                            // Copy label pixels (128x128 area starting at offset 16,24)
-                            const labelX = x - 16;
-                            const labelY = y - 24;
-                            if (labelX >= 0 && labelX < 128 && labelY >= 0 && labelY < 128) {
-                                const labelIdx = (labelY * 128 + labelX) << 2;
-                                labelPng.data[labelIdx] = r;
-                                labelPng.data[labelIdx + 1] = g;
-                                labelPng.data[labelIdx + 2] = b;
-                                labelPng.data[labelIdx + 3] = 255; // Full alpha
-                            }
-                        }
-                    }
-
-                    // Convert label to base64 data URL
-                    const labelBuffer = PNG.sync.write(labelPng);
-                    const label = `data:image/png;base64,${labelBuffer.toString('base64')}`;
-
-                    // Slice Sections
-                    const gfx = Array.from(ram.slice(0x0000, 0x2000));
-                    const map = Array.from(ram.slice(0x2000, 0x3000));
-                    const gfxFlags = Array.from(ram.slice(0x3000, 0x3100));
-                    const music = Array.from(ram.slice(0x3100, 0x3200));
-                    const sfx = Array.from(ram.slice(0x3200, 0x4300));
-
-                    const codeStart = 0x4300;
-
-                    // Decode Code
-                    let code = "";
-
-                    // Check Header
-                    if (ram[codeStart] === 0x3a && ram[codeStart+1] === 0x63 && ram[codeStart+2] === 0x3a && ram[codeStart+3] === 0x00) {
-                        // :c: compression (legacy LZSS)
-                        code = Pico8Decoder.decompressLZSS(ram.slice(codeStart + 4));
-                    } else if (ram[codeStart] === 0x00 && ram[codeStart+1] === 0x70 && ram[codeStart+2] === 0x78 && ram[codeStart+3] === 0x61) {
-                        // \0pxa (new PXA compression)
-                        code = Pico8Decoder.decompressPXA(ram.slice(codeStart + 4));
-                    } else {
-                         // Raw
-                         code = Pico8Decoder.readRaw(ram.slice(codeStart));
-                    }
-
-                    resolve({
-                        code,
-                        gfx,
-                        map,
-                        gfxFlags,
-                        music,
-                        sfx,
-                        label
-                    });
-
-                } catch (e) { reject(e); }
-            }).on('error', reject);
-        });
-    }
-
-    private static readRaw(buffer: Uint8Array): string {
-         let s = "";
-         for (let i=0; i<buffer.length; i++) {
-             if (buffer[i] === 0) break;
-             s += String.fromCharCode(buffer[i]);
-         }
-         return s;
-    }
-
-    private static decompressLZSS(buffer: Uint8Array): string {
-        const LUT = "\n 0123456789abcdefghijklmnopqrstuvwxyz!#%(){}[]<>+=/*:;.,~_";
-        let out = "";
-        let i = 0;
-
-        while (i < buffer.length) {
-            const b = buffer[i++];
-            if (b === 0x00) {
-                // Literal next
-                if (i >= buffer.length) break;
-                out += String.fromCharCode(buffer[i++]);
-            } else if (b < 0x3c) {
-                out += LUT[b-1];
-            } else {
-                // Copy
-                if (i >= buffer.length) break;
-                const b2 = buffer[i++];
-                const offset = (b - 0x3c) * 16 + (b2 & 0x0f);
-                const length = (b2 >> 4) + 2;
-
-                if (offset > out.length) {
-                    out += Array(length).fill('?').join(''); // Error fallback
-                } else {
-                    const start = out.length - offset;
-                    for (let k=0; k<length; k++) {
-                        out += out[start + k];
-                    }
-                }
-            }
-        }
-        return out;
-    }
-
-    private static decompressPXA(buffer: Uint8Array): string {
-        // PXA compression format (PICO-8 v0.2.0+)
-        // After header "\0pxa":
-        // - 2 bytes: decompressed length (MSB first / big-endian)
-        // - 2 bytes: compressed length + 8 (MSB first / big-endian)
-        // - bitstream data (bits read LSB to MSB within each byte)
-
-        if (buffer.length < 4) {
-            return "-- Empty PXA data";
-        }
-
-        const uncompressedLen = (buffer[0] << 8) | buffer[1];
-        // const compressedLen = (buffer[2] << 8) | buffer[3]; // Not needed for decompression
-
-        // Initialize MTF table with identity mapping (0→0, 1→1, ..., 255→255)
-        const mtfTable: number[] = [];
-        for (let i = 0; i < 256; i++) {
-            mtfTable.push(i);
-        }
-
-        // Bit reader - LSB to MSB order within each byte
-        let bitPos = 0;
-        const dataStart = 4;
-
-        const getBit = (): number => {
-            const byteIdx = dataStart + (bitPos >> 3);
-            if (byteIdx >= buffer.length) return 0;
-            // LSB to MSB: bit 0 is least significant
-            const bit = (buffer[byteIdx] >> (bitPos & 7)) & 1;
-            bitPos++;
-            return bit;
-        };
-
-        const getBits = (n: number): number => {
-            let val = 0;
-            for (let i = 0; i < n; i++) {
-                // LSB first: each new bit goes to higher position
-                val |= (getBit() << i);
-            }
-            return val;
-        };
-
-        const output: number[] = [];
-
-        while (output.length < uncompressedLen) {
-            const headerBit = getBit();
-
-            if (headerBit === 1) {
-                // Literal character
-                // Read unary prefix: count consecutive 1-bits until 0
-                let unary = 0;
-                while (getBit() === 1) {
-                    unary++;
-                }
-
-                // Calculate index: read (4 + unary) bits, add mask offset
-                const unaryMask = (1 << unary) - 1;
-                const index = getBits(4 + unary) + (unaryMask << 4);
-
-                if (index >= 256) break;
-
-                const charCode = mtfTable[index];
-                output.push(charCode);
-
-                // Move to front
-                if (index > 0) {
-                    mtfTable.splice(index, 1);
-                    mtfTable.unshift(charCode);
-                }
-            } else {
-                // Copy reference
-                // Determine offset bit width: 15, 10, or 5 bits
-                let offsetBits: number;
-                if (getBit() === 0) {
-                    offsetBits = 15;
-                } else if (getBit() === 0) {
-                    offsetBits = 10;
-                } else {
-                    offsetBits = 5;
-                }
-
-                const offset = getBits(offsetBits) + 1;
-
-                // Check for uncompressed block signal (offset_bits == 10 && offset == 1)
-                if (offsetBits === 10 && offset === 1) {
-                    // Read raw 8-bit characters until null byte
-                    while (output.length < uncompressedLen) {
-                        const rawChar = getBits(8);
-                        if (rawChar === 0) break;
-                        output.push(rawChar);
-                    }
-                    continue;
-                }
-
-                // Read length: base 3, add 3-bit chunks until chunk != 7
-                let length = 3;
-                let part: number;
-                do {
-                    part = getBits(3);
-                    length += part;
-                } while (part === 7);
-
-                // Copy from back-reference
-                if (offset > output.length) {
-                    // Invalid reference, fill with zeros
-                    for (let k = 0; k < length && output.length < uncompressedLen; k++) {
-                        output.push(0);
-                    }
-                } else {
-                    const start = output.length - offset;
-                    for (let k = 0; k < length && output.length < uncompressedLen; k++) {
-                        output.push(output[start + k]);
-                    }
-                }
-            }
-        }
-
-        return String.fromCharCode(...output);
-    }
-}

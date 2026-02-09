@@ -6,10 +6,18 @@
   "command.search.title": "Search",
   "command.openCart.title": "Open Cartridge",
   "command.refresh.title": "Refresh",
+  "command.setPico8Path.title": "Set PICO-8 Path",
+  "command.runGame.title": "Run in PICO-8",
+  "command.stopGame.title": "Stop PICO-8",
+  "command.forkGame.title": "Fork to Workspace",
+  "command.previewP8Cart.title": "Preview PICO-8 Cart",
+  "customEditor.pngViewer.displayName": "PICO-8 Cart Viewer",
+  "customEditor.p8Editor.displayName": "PICO-8 Cart Editor",
   "config.title": "PICO-8 IDE",
   "config.dataMode.description": "Source of game data: 'remote' (download from URL) or 'local' (read from directory).",
   "config.remoteUrl.description": "URL to the master database JSON file (used in remote mode).",
   "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode).",
   "config.language.description": "Override display language. Leave empty to use VS Code's language setting.",
-  "config.language.auto": "Auto (use VS Code language)"
+  "config.language.auto": "Auto (use VS Code language)",
+  "config.pico8Path.description": "Absolute path to the PICO-8 executable. On macOS you can point to the .app bundle."
 }

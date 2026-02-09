@@ -50,6 +50,53 @@ export interface LocaleStrings {
     extracting: string;
     error: string;
     noImage: string;
+
+    // Run in PICO-8
+    pico8PathNotSet: string;
+    pico8PathNotFound: string;
+    pico8PathSelectPrompt: string;
+    runGameFailed: string;
+    stopGame: string;
+    runInPico8: string;
+
+    // Workspace integration
+    convertBanner: string;
+    convertButton: string;
+    convertSuccess: string;
+    companionExists: string;
+    openP8File: string;
+    exportToP8Prompt: string;
+    exportToP8: string;
+    keepP8Png: string;
+    forkGame: string;
+    forkSuccess: string;
+    forkNoWorkspace: string;
+    previewP8Cart: string;
+
+    // Sprite editor tools
+    toolPencil: string;
+    toolFill: string;
+    toolRectangle: string;
+    toolCircle: string;
+    toolLine: string;
+    toolSelect: string;
+    toolHand: string;
+    zoomIn: string;
+    zoomOut: string;
+    zoomFit: string;
+    foreground: string;
+    background: string;
+    position: string;
+    spriteLabel: string;
+    quickPalette: string;
+    undo: string;
+    redo: string;
+    flagLabel: string;
+    flagsLabel: string;
+
+    // Map editor
+    tileLabel: string;
+    tilePicker: string;
 }
 
 const en: LocaleStrings = {
@@ -60,8 +107,8 @@ const en: LocaleStrings = {
     searchPrompt: "Filter by name or author",
 
     // Disclaimer
-    disclaimerTitle: "PICO-8 IDE Browser",
-    disclaimerImportant: "Important Disclaimer",
+    disclaimerTitle: "PICO-8 IDE",
+    disclaimerImportant: "Disclaimer",
     disclaimerHobbyProject: "This is a <strong>hobby project</strong> created for <strong>learning purposes only</strong>.",
     disclaimerNotForSale: "This extension is <strong>NOT for sale</strong> and is <strong>NOT affiliated with Lexaloffle Games</strong>.",
     disclaimerAboutTitle: "About PICO-8",
@@ -100,7 +147,52 @@ const en: LocaleStrings = {
     downloading: "Downloading cartridge...",
     extracting: "Extracting data...",
     error: "Error",
-    noImage: "No Image"
+    noImage: "No Image",
+
+    // Run in PICO-8
+    pico8PathNotSet: "PICO-8 path is not set. Would you like to set it now?",
+    pico8PathNotFound: "PICO-8 executable not found at the configured path.",
+    pico8PathSelectPrompt: "Select PICO-8 executable",
+    runGameFailed: "Failed to launch PICO-8",
+    stopGame: "Stop PICO-8",
+    runInPico8: "Run in PICO-8",
+
+    // Workspace integration
+    convertBanner: "Convert to .p8 to edit in VS Code",
+    convertButton: "Convert to .p8",
+    convertSuccess: "Converted! Opening .p8 file...",
+    companionExists: "A .p8 text version already exists.",
+    openP8File: "Open .p8 File",
+    exportToP8Prompt: "Export to .p8 for easier editing?",
+    exportToP8: "Export to .p8",
+    keepP8Png: "Keep .p8.png",
+    forkGame: "Fork to Workspace",
+    forkSuccess: "Game forked to workspace",
+    forkNoWorkspace: "No workspace folder open.",
+    previewP8Cart: "Preview PICO-8 Cart",
+
+    // Sprite editor tools
+    toolPencil: "Pencil",
+    toolFill: "Fill",
+    toolRectangle: "Rectangle",
+    toolCircle: "Circle",
+    toolLine: "Line",
+    toolSelect: "Select",
+    toolHand: "Hand",
+    zoomIn: "Zoom In",
+    zoomOut: "Zoom Out",
+    zoomFit: "Fit",
+    foreground: "FG",
+    background: "BG",
+    position: "Pos",
+    spriteLabel: "Sprite",
+    quickPalette: "Quick Palette",
+    undo: "Undo",
+    redo: "Redo",
+    flagLabel: "Flag",
+    flagsLabel: "Flags",
+    tileLabel: "Tile",
+    tilePicker: "Tile Picker"
 };
 
 const zhCN: LocaleStrings = {
@@ -111,8 +203,8 @@ const zhCN: LocaleStrings = {
     searchPrompt: "按名称或作者筛选",
 
     // Disclaimer
-    disclaimerTitle: "PICO-8 IDE 浏览器",
-    disclaimerImportant: "重要声明",
+    disclaimerTitle: "PICO-8 IDE",
+    disclaimerImportant: "声明",
     disclaimerHobbyProject: "这是一个<strong>业余项目</strong>，仅供<strong>学习目的</strong>。",
     disclaimerNotForSale: "此扩展<strong>非卖品</strong>，且<strong>与 Lexaloffle Games 无关</strong>。",
     disclaimerAboutTitle: "关于 PICO-8",
@@ -151,7 +243,52 @@ const zhCN: LocaleStrings = {
     downloading: "正在下载卡带...",
     extracting: "正在提取数据...",
     error: "错误",
-    noImage: "无图片"
+    noImage: "无图片",
+
+    // Run in PICO-8
+    pico8PathNotSet: "未设置 PICO-8 路径。是否现在设置？",
+    pico8PathNotFound: "在配置的路径中未找到 PICO-8 可执行文件。",
+    pico8PathSelectPrompt: "选择 PICO-8 可执行文件",
+    runGameFailed: "启动 PICO-8 失败",
+    stopGame: "停止 PICO-8",
+    runInPico8: "在 PICO-8 中运行",
+
+    // Workspace integration
+    convertBanner: "转换为 .p8 以在 VS Code 中编辑",
+    convertButton: "转换为 .p8",
+    convertSuccess: "已转换！正在打开 .p8 文件...",
+    companionExists: ".p8 文本版本已存在。",
+    openP8File: "打开 .p8 文件",
+    exportToP8Prompt: "是否导出为 .p8 以便编辑？",
+    exportToP8: "导出为 .p8",
+    keepP8Png: "保留 .p8.png",
+    forkGame: "复制到工作区",
+    forkSuccess: "游戏已复制到工作区",
+    forkNoWorkspace: "未打开工作区文件夹。",
+    previewP8Cart: "预览 PICO-8 卡带",
+
+    // Sprite editor tools
+    toolPencil: "画笔",
+    toolFill: "填充",
+    toolRectangle: "矩形",
+    toolCircle: "圆形",
+    toolLine: "直线",
+    toolSelect: "选择",
+    toolHand: "抓手",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+    zoomFit: "适合",
+    foreground: "前景",
+    background: "背景",
+    position: "位置",
+    spriteLabel: "精灵",
+    quickPalette: "快速调色板",
+    undo: "撤销",
+    redo: "重做",
+    flagLabel: "标志",
+    flagsLabel: "标志",
+    tileLabel: "图块",
+    tilePicker: "图块选择器"
 };
 
 // Locale map

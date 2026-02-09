@@ -1,0 +1,11 @@
+node_modules/**
+src/**
+scripts/**
+tsconfig.json
+.gitignore
+.github/**
+.claude/**
+docs/**
+README.dev.md
+README.marketplace.md
+README.zh_CN.md

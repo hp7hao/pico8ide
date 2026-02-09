@@ -2,7 +2,7 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "publisher": "hp7hao",
   "license": "MIT",
   "icon": "resources/logo.png",
@@ -42,6 +42,36 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "pico8ide.pngViewer",
+        "displayName": "%customEditor.pngViewer.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.p8.png"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "pico8ide.p8Editor",
+        "displayName": "%customEditor.p8Editor.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.p8"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "languages": [
+      {
+        "id": "pico8",
+        "extensions": [".p8"],
+        "aliases": ["PICO-8", "pico8"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "commands": [
       {
         "command": "pico8ide.search",
@@ -62,6 +92,38 @@
           "light": "resources/light/refresh.svg",
           "dark": "resources/dark/refresh.svg"
         }
+      },
+      {
+        "command": "pico8ide.setPico8Path",
+        "title": "%command.setPico8Path.title%"
+      },
+      {
+        "command": "pico8ide.runGame",
+        "title": "%command.runGame.title%",
+        "icon": {
+          "light": "resources/light/play.svg",
+          "dark": "resources/dark/play.svg"
+        }
+      },
+      {
+        "command": "pico8ide.stopGame",
+        "title": "%command.stopGame.title%",
+        "icon": {
+          "light": "resources/light/stop.svg",
+          "dark": "resources/dark/stop.svg"
+        }
+      },
+      {
+        "command": "pico8ide.forkGame",
+        "title": "%command.forkGame.title%",
+        "icon": {
+          "light": "resources/light/fork.svg",
+          "dark": "resources/dark/fork.svg"
+        }
+      },
+      {
+        "command": "pico8ide.previewP8Cart",
+        "title": "%command.previewP8Cart.title%"
       }
     ],
     "menus": {
@@ -76,8 +138,35 @@
           "when": "view == pico8Lists",
           "group": "navigation"
         }
+      ],
+      "view/item/context": [
+        {
+          "command": "pico8ide.runGame",
+          "when": "view == pico8Lists && viewItem == gameItem",
+          "group": "inline"
+        },
+        {
+          "command": "pico8ide.forkGame",
+          "when": "view == pico8Lists && viewItem == gameItem",
+          "group": "inline"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "pico8ide.previewP8Cart",
+          "when": "resourceExtname == .p8",
+          "group": "navigation"
+        }
       ]
     },
+    "keybindings": [
+      {
+        "command": "pico8ide.runGame",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "activeWebviewPanelId == pico8Cart || resourceExtname == .p8"
+      }
+    ],
     "configuration": {
       "title": "%config.title%",
       "properties": {
@@ -106,6 +195,11 @@
           "enum": ["", "en_US", "zh_CN"],
           "enumDescriptions": ["%config.language.auto%", "English", "中文(简体)"],
           "description": "%config.language.description%"
+        },
+        "pico8ide.pico8Path": {
+          "type": "string",
+          "default": "",
+          "description": "%config.pico8Path.description%"
         }
       }
     }
@@ -113,6 +207,8 @@
   "scripts": {
     "vscode:prepublish": "cp README.md README.dev.md && cp README.marketplace.md README.md && npm run compile",
     "postpublish": "mv README.dev.md README.md",
+    "postinstall": "node scripts/copy-monaco.js",
+    "precompile": "node scripts/copy-monaco.js",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package"
@@ -127,6 +223,7 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
+    "monaco-editor": "^0.52.0",
     "pngjs": "^7.0.0"
   }
 }
