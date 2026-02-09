@@ -93,7 +93,7 @@ function setupEditableWebview(
         ]
     };
 
-    webviewPanel.webview.onDidReceiveMessage(async (message: { type: string; code?: string; gfx?: number[]; flags?: number[]; map?: number[] }) => {
+    webviewPanel.webview.onDidReceiveMessage(async (message: { type: string; code?: string; gfx?: number[]; flags?: number[]; map?: number[]; sfx?: number[]; music?: number[] }) => {
         if (message.type === 'codeChanged' && message.code !== undefined) {
             document.currentCode = message.code;
             onDidChange.fire({
@@ -120,6 +120,22 @@ function setupEditableWebview(
         }
         if (message.type === 'mapChanged' && message.map !== undefined && document.cartData) {
             document.cartData.map = message.map;
+            onDidChange.fire({
+                document,
+                undo: () => {},
+                redo: () => {}
+            });
+        }
+        if (message.type === 'sfxChanged' && message.sfx !== undefined && document.cartData) {
+            document.cartData.sfx = message.sfx;
+            onDidChange.fire({
+                document,
+                undo: () => {},
+                redo: () => {}
+            });
+        }
+        if (message.type === 'musicChanged' && message.music !== undefined && document.cartData) {
+            document.cartData.music = message.music;
             onDidChange.fire({
                 document,
                 undo: () => {},

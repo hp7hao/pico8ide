@@ -1,6 +1,6 @@
 # PICO-8 IDE Extension — Specification
 
-> Version 0.0.11 — 2026-02-09
+> Version 0.0.13 — 2026-02-09
 
 ## 1. Overview
 
@@ -143,8 +143,8 @@ img-src <cspSource>;
 - **Code** — Monaco editor with PICO-8 Lua syntax highlighting
 - **Sprites** — 128×128 sprite sheet rendered to `<canvas>`; three-area layout: header bar (tools + palette + flags + zoom), canvas, status bar (see §7.4)
 - **Map** — 128×64 tile map editor; three-area layout: header bar (tools + tile picker + zoom), dual canvas (tiles + overlay), status bar (see §7.6)
-- **SFX** — split panel: left list of 64 SFX entries, right detail with note tracker; per-SFX playback (when audio enabled)
-- **Music** — 64-pattern grid (8 columns); per-pattern playback (when audio enabled)
+- **SFX** — interactive SFX editor with bar (pitch) and tracker modes; 64 SFX × 32 notes; per-SFX playback (see §7.7)
+- **Music** — interactive music pattern editor with 4-channel pattern editing, 64-pattern navigator, flags, and playback (see §7.8)
 
 Tab switching calls `monacoEditor.layout()` when returning to the Code tab (Monaco does not auto-resize when its container is `display: none`).
 
@@ -250,6 +250,221 @@ Same model as sprite editor (§7.4):
 
 `initMapEditor()` is called when the Map tab is first activated (lazy init, same pattern as sprite editor's `initSpriteEditor()`). It sets up the dual canvas, fits to container, attaches event listeners, and calls `meRenderCanvas()`.
 
+### 7.7 SFX Editor Layout
+
+The SFX editor replaces the previous split-panel text-only view with an interactive editor modeled after PICO-8's native SFX editor. It supports two editing modes — **bar mode** (pitch view) and **tracker mode** — toggled with the Tab key or toolbar buttons.
+
+#### Data Model
+
+- 64 SFX entries, each 68 bytes at `SFX[sfxId * 68]`.
+- Each SFX contains 32 notes (2 bytes each) + speed (byte 65) + loop start (byte 66) + loop end (byte 67).
+- Per-note fields (packed in 2 bytes):
+  - `pitch` (6 bits, 0–63): C-0 to D#5.
+  - `waveform` (3 bits, 0–7): sine, triangle, saw, square, pulse, ring, noise, ring2.
+  - `volume` (3 bits, 0–7).
+  - `effect` (3 bits, 0–7): none, slide, vibrato, drop, fade-in, fade-out, arpeggio-fast, arpeggio-slow.
+  - `customWave` (1 bit): if set, waveform index references SFX 0–7 as a custom instrument.
+
+#### Three-Area Layout
+
+```
+┌────────────────────────────────────────────────┐
+│  SFX Toolbar                                   │
+├──────────┬─────────────────────────────────────┤
+│          │  Bar/Tracker Canvas Area            │
+│  SFX     │  ┌──────────────────────────────┐   │
+│  List    │  │  Pitch bars (32 columns)     │   │
+│  (64     │  │  height = pitch, color =     │   │
+│  entries)│  │  waveform                    │   │
+│          │  ├──────────────────────────────┤   │
+│          │  │  Volume row (32 mini-bars)   │   │
+│          │  ├──────────────────────────────┤   │
+│          │  │  Effect row (32 cells)       │   │
+│          │  └──────────────────────────────┘   │
+│          │                                     │
+├──────────┴─────────────────────────────────────┤
+│  Status bar                                    │
+└────────────────────────────────────────────────┘
+```
+
+1. **Toolbar** (top, full width): Mode toggle (bar/tracker) → SFX index selector (◀ #nn ▶) → speed control (SPD ◀ nn ▶) → loop controls (LOOP ◀ nn ▶ ◀ nn ▶) → separator → waveform selector (8 buttons, colored by waveform) → separator → effect selector (8 buttons) → separator → play/stop button (when audio enabled).
+2. **Left panel** (narrow, scrollable): List of 64 SFX entries. Each shows `SFX nn` with a mini waveform preview or "empty" label. Clicking selects the SFX for editing. Active SFX is highlighted. Play button per-entry when audio is enabled.
+3. **Main area** (flex-fills remaining space): Either bar mode canvas or tracker mode table (see below).
+4. **Status bar** (bottom): Current note index, pitch name, waveform, volume, effect values under the cursor. In editable mode, also shows "Modified" indicator.
+
+#### Bar Mode (Pitch View)
+
+The bar mode renders the 32 notes as vertical bars on a canvas. This is the default mode, matching PICO-8's "pitch mode" which is described as "more suitable for sound effects."
+
+**Pitch area** (top, ~70% of canvas height):
+- 32 columns, one per note. Each column is a vertical bar whose height maps to pitch (0 at bottom, 63 at top).
+- Bar color corresponds to the note's waveform instrument, using distinct colors per waveform:
+  - 0 sine: `#ff77a8` (pink), 1 triangle: `#29adff` (blue), 2 saw: `#00e436` (green), 3 square: `#ffec27` (yellow), 4 pulse: `#ff6c24` (orange), 5 ring: `#a8e6cf` (lavender), 6 noise: `#83769c` (gray-purple), 7 ring2: `#fff1e8` (peach).
+- Notes with volume 0 are drawn as dim/transparent bars.
+- A horizontal grid line is drawn at each octave boundary (every 12 pitches).
+- The current playback position (when playing) is highlighted with a vertical marker.
+
+**Volume area** (below pitch, ~15% of canvas height):
+- 32 mini-bars, height proportional to volume (0–7). Color: `#00e436` (green).
+
+**Effect area** (below volume, ~15% of canvas height):
+- 32 cells, each showing the effect value as a colored block. Effect 0 (none) is empty/dim.
+- Effect colors: 0 none: dim, 1 slide: `#29adff`, 2 vibrato: `#ff77a8`, 3 drop: `#ff004d`, 4 fade-in: `#00e436`, 5 fade-out: `#ffa300`, 6 arp-fast: `#ffec27`, 7 arp-slow: `#a8e6cf`.
+
+**Loop region**: Notes between loop-start and loop-end are shaded with a subtle background color. Loop markers are drawn as vertical lines at the loop boundaries.
+
+#### Bar Mode Interaction (editable mode)
+
+| Action | Target Area | Behavior |
+|--------|-------------|----------|
+| Left-click/drag | Pitch area | Set pitch for the note column under the cursor. Height maps linearly to pitch 0–63. |
+| Shift+left-drag | Pitch area | Apply currently selected waveform to notes without changing pitch. |
+| Ctrl+left-drag | Pitch area | Snap pitch to C minor pentatonic scale (C, D#, F, G, A#). |
+| Right-click | Pitch area | Eyedropper — pick the waveform of the note under the cursor as the active waveform. |
+| Left-click/drag | Volume area | Set volume (0–7) for the note column. |
+| Left-click/drag | Effect area | Set effect (0–7) for the note column. Uses the currently selected effect from toolbar. |
+| Right-click | Effect area | Eyedropper — pick the effect of the note under the cursor. |
+
+#### Tracker Mode
+
+The tracker mode displays 32 rows in a table with columns: `#` (index), `Note` (pitch as note name + octave), `Wave` (waveform name/index), `Vol` (0–7), `FX` (effect name). This is the existing tracker display, now enhanced for editing.
+
+**Tracker editing (editable mode):**
+- Click a cell to select it. Selected cell has a highlight border.
+- Keyboard note entry via piano layout: `q2w3er5t6y7ui` (octave 2), `zsxdcvgbhnjm` (octave 1). Entering a note sets the pitch and advances to the next row.
+- Hold Shift while entering a note to transpose ±1 octave.
+- Backspace: delete note (set volume to 0, clear pitch).
+- Arrow keys: navigate between cells (up/down = rows, left/right = columns).
+- PageUp/PageDown: skip 4 rows.
+- Home/End: jump to first/last row.
+- Tab: switch to bar mode.
+
+#### Toolbar Controls Detail
+
+**SFX index selector**: ◀ and ▶ buttons cycle through SFX 0–63. The current SFX number is displayed between the buttons. Clicking the number allows direct input.
+
+**Speed (SPD)**: Left-click ▶ to increase, left-click ◀ to decrease. Range 0–255. Hold Shift to change by 4. Direct click on value to type a number.
+
+**Loop start/end**: Two pairs of ◀▶ buttons. Range 0–31 each. When loop start ≥ loop end, looping is disabled (displayed as "OFF"). If loop end is 0 and loop start > 0, it functions as note length (displayed as "LEN" instead of "LOOP").
+
+**Waveform selector**: 8 buttons labeled 0–7 (or with waveform icons). The active waveform is highlighted. Clicking selects it as the brush waveform for painting in bar mode. Displayed in waveform colors (same as bar colors above).
+
+**Effect selector**: 8 buttons labeled 0–7. Clicking selects the brush effect for painting in bar mode.
+
+**Play/stop** (audio enabled only): Space key or button. Plays the current SFX. During playback, the current note is highlighted in both bar and tracker modes.
+
+#### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Tab | Toggle bar ↔ tracker mode |
+| Space | Play / stop current SFX (audio enabled) |
+| ◀ / ▶ (or - / +) | Previous / next SFX index |
+| Q / W | Previous / next waveform |
+| A / S | Previous / next effect |
+| 1–8 | Select waveform 0–7 directly |
+| Ctrl+Z | Undo |
+| Ctrl+Shift+Z / Ctrl+Y | Redo |
+
+#### Undo / Redo
+
+- Undo stack stores per-SFX snapshots (68 bytes). Max 50 undo levels (same as sprite/map editors).
+- Any edit (pitch, volume, waveform, effect, speed, loop) pushes an undo frame.
+
+#### Change Notification
+
+- `notifySfxChanged()`: Debounced 100ms. Sends `{ type: 'sfxChanged', sfx: SFX.slice() }` to the extension host.
+- Contains the full 4352-byte SFX array (64 × 68).
+
+#### Initialization
+
+`initSfxEditor()` is called when the SFX tab is first activated (lazy init). It renders the SFX list, creates the bar-mode canvas, attaches event listeners, and selects SFX 0 by default.
+
+### 7.8 Music Editor Layout
+
+The music editor replaces the previous read-only 8-column pattern grid with an interactive editor modeled after PICO-8's native music editor. It provides a focused pattern editor for the currently selected pattern, a compact pattern navigator showing all 64 patterns, and playback controls.
+
+#### Data Model
+
+- 64 music patterns, each 4 bytes (256 bytes total at `0x3100–0x31FF`).
+- Each pattern has 4 channels (ch0–ch3). Per-channel byte:
+  - Bits 0–5: SFX id (0–63).
+  - Bit 6: disabled/muted flag (1 = channel silent).
+  - Bit 7 (ch0 only): loop-start marker.
+  - Bit 7 (ch1 only): loop-end marker (playback jumps back to nearest preceding loop-start).
+  - Bit 7 (ch2 only): stop marker (song ends after this pattern).
+
+#### Three-Area Layout
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Music Toolbar                                       │
+│  [◀ ## ▶]  [▶ Play] / [■ Stop]                      │
+├──────────────────────────────────────────────────────┤
+│  Pattern Editor (current pattern)                    │
+│  ┌──────────┬──────────┬──────────┬──────────┐       │
+│  │  CH 0    │  CH 1    │  CH 2    │  CH 3    │       │
+│  │  ☑ ◀ 03 ▶│  ☑ ◀ 12 ▶│  ☐ ◀ -- ▶│  ☑ ◀ 08 ▶│    │
+│  └──────────┴──────────┴──────────┴──────────┘       │
+│  Flags: [○ Loop Start] [○ Loop End] [○ Stop]         │
+├──────────────────────────────────────────────────────┤
+│  Pattern Navigator (64 patterns, compact strip)      │
+│  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬── ... ──┬──┐    │
+│  │00│01│02│03│04│05│06│07│08│09│10│11  ...  63│  │    │
+│  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴── ... ──┴──┘    │
+├──────────────────────────────────────────────────────┤
+│  Status bar                                          │
+└──────────────────────────────────────────────────────┘
+```
+
+1. **Toolbar** (top, full width): Pattern index selector (◀ `##` ▶, range 0–63) → play/stop button (when audio enabled). The play button plays from the current pattern; during playback, it becomes a stop button.
+2. **Pattern Editor** (middle): Displays the 4 channels of the currently selected pattern. Each channel has:
+   - **Enable/disable checkbox**: Toggles bit 6 (muted). When disabled, the SFX id is shown as `--` and the channel is visually dimmed.
+   - **SFX id selector** (◀ `##` ▶): Range 0–63. Clicking ◀/▶ changes the SFX id. Only active when the channel is enabled.
+   - Below the 4 channels, three **flag toggle buttons**: Loop Start, Loop End, Stop. Active flags are highlighted with their associated color (green, red, yellow respectively).
+3. **Pattern Navigator** (below pattern editor): A compact horizontal strip of 64 pattern cells, wrapping into rows. Each cell shows the pattern number (00–63). Visual indicators:
+   - **Selected**: highlighted background.
+   - **Non-empty**: brighter text (at least one channel enabled).
+   - **Empty**: dimmed (all 4 channels disabled).
+   - **Loop start**: left green border.
+   - **Loop end**: right red border.
+   - **Stop**: bottom yellow border.
+   - **Playing** (during playback): pulsing/highlighted background.
+   - Clicking a cell selects it for editing and scrolls the pattern editor to that pattern.
+4. **Status bar** (bottom): Displays `Pattern ##` and, during playback, `Playing pattern ##`.
+
+#### Pattern Editor Interaction (editable mode)
+
+| Action | Behavior |
+|--------|----------|
+| Click channel checkbox | Toggle channel enable/disable (bit 6). |
+| Click ◀/▶ on channel SFX | Decrement/increment SFX id (0–63, wraps). |
+| Click flag button | Toggle the flag for the current pattern. |
+| Click pattern cell in navigator | Select that pattern for editing. |
+
+#### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Left / Right (or − / +) | Previous / next pattern index |
+| Space | Play / stop from current pattern (audio enabled) |
+| 1 / 2 / 3 / 4 | Toggle channel 1–4 enable/disable |
+
+#### Undo / Redo
+
+- Undo stack stores per-pattern snapshots (4 bytes × current pattern index). Max 50 undo levels.
+- Any edit (channel enable, SFX id, flags) pushes an undo frame.
+- `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`): Undo / redo.
+
+#### Change Notification
+
+- `notifyMusicChanged()`: Debounced 100ms. Sends `{ type: 'musicChanged', music: MUSIC.slice() }` to the extension host.
+- Contains the full 256-byte music array (64 × 4).
+
+#### Initialization
+
+`initMusicEditor()` is called when the Music tab is first activated (lazy init). It renders the pattern navigator, sets up the pattern editor for pattern 0, attaches event listeners, and wires up the toolbar.
+
 ### Cart Viewer Panel (`Pico8CartPanel`)
 
 ViewType: `pico8Cart`. Opens as an editor-area webview panel for database games.
@@ -286,6 +501,8 @@ A run/stop button is displayed in the top-right area of the cart viewer header (
 - `{ type: 'gfxChanged', gfx: number[] }` — sprite pixel data changed (editable mode only)
 - `{ type: 'mapChanged', map: number[] }` — map tile data changed (editable mode only, debounced 100ms)
 - `{ type: 'flagsChanged', flags: number[] }` — sprite flags changed (editable mode only, debounced 100ms)
+- `{ type: 'sfxChanged', sfx: number[] }` — SFX data changed (editable mode only, debounced 100ms)
+- `{ type: 'musicChanged', music: number[] }` — music pattern data changed (editable mode only, debounced 100ms)
 - `{ type: 'convert' }` — user clicked the convert-to-`.p8` banner button
 
 **Extension → Webview:**
@@ -402,6 +619,26 @@ All icons use 16×16 viewBox SVG format.
 ---
 
 ## Changelog
+
+### 0.0.13 — 2026-02-09
+- Added interactive music pattern editor (§7.8) replacing the read-only 8-column pattern grid.
+- Pattern editor: 4-channel view with enable/disable toggles and SFX id selectors per channel.
+- Pattern flags: loop start, loop end, stop — toggle buttons with colored indicators.
+- Compact 64-pattern navigator strip with visual indicators for empty/flags/selected/playing.
+- Toolbar: pattern index selector, play/stop button.
+- Keyboard shortcuts: Left/Right for pattern navigation, Space for play/stop, 1–4 for channel toggles.
+- Undo/redo for music edits (per-pattern 4-byte snapshots, max 50 levels).
+- Added `musicChanged` webview→extension message for music editing persistence.
+
+### 0.0.12 — 2026-02-09
+- Added interactive SFX editor (§7.7) replacing the split-panel text-only SFX viewer.
+- Two editing modes: bar mode (pitch view with 32 vertical bars) and tracker mode (table with note/wave/vol/fx columns), toggled with Tab.
+- Bar mode: pitch bars colored by waveform, volume mini-bars, effect cells; click/drag to edit pitch, volume, effect; right-click eyedropper; Ctrl+drag for scale snapping.
+- Tracker mode: keyboard note entry via piano layout, cell navigation, direct editing of all note fields.
+- Toolbar: SFX index selector, speed/loop controls, waveform selector (8 buttons), effect selector (8 buttons), play/stop.
+- SFX list panel with 64 entries, per-entry playback, mini waveform preview.
+- Undo/redo for SFX edits (per-SFX 68-byte snapshots, max 50 levels).
+- Added `sfxChanged` webview→extension message for SFX editing persistence.
 
 ### 0.0.11 — 2026-02-09
 - Added interactive map editor (§7.6) replacing the static read-only map canvas.

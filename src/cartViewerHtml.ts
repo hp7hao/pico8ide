@@ -53,19 +53,6 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     <div class="tab-spacer"></div>
                     <button id="btn-run-pico8" class="run-btn idle">&#9654; ${locale.runInPico8}</button>` : '';
 
-    // Audio-specific SFX controls HTML
-    const sfxControlsHtml = showAudio ? `
-                            <div class="sfx-controls">
-                                <button id="btn-toggle-sfx" disabled>&#9654; ${locale.play}</button>
-                            </div>` : '';
-
-    // Audio-specific music controls HTML
-    const musicControlsHtml = showAudio ? `
-                        <div class="music-controls">
-                            <button id="btn-toggle-music" data-playing="">&#9654; ${locale.playMusic}</button>
-                            <span id="music-status"></span>
-                        </div>` : '';
-
     // CSP
     const csp = `default-src 'none'; script-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-eval'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; worker-src blob:; img-src ${webview.cspSource};`;
 
@@ -152,53 +139,98 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     .map-tile-picker { position: absolute; inset: 0; display: none; background: rgba(0,0,0,0.5); z-index: 100; overflow: hidden; cursor: crosshair; }
                     .map-tile-picker canvas { image-rendering: pixelated; position: absolute; top: 0; left: 0; cursor: crosshair; }
 
-                    /* SFX Styles */
-                    .sfx-container { display: flex; flex: 1; min-height: 0; }
-                    .sfx-list { width: 200px; border-right: 1px solid #333; overflow-y: auto; }
-                    .sfx-item { padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #222; font-size: 12px; display: flex; align-items: center; }
+                    /* SFX Editor Styles */
+                    .sfx-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
+                    .sfx-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 2px; flex-shrink: 0; flex-wrap: wrap; }
+                    .sfx-toolbar .tool-btn { background: #333; border: 1px solid #444; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; }
+                    .sfx-toolbar .tool-btn:hover { background: #444; }
+                    .sfx-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: #fff; }
+                    .sfx-toolbar .tool-sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+                    .sfx-toolbar .sfx-label { color: #888; font-size: 11px; margin: 0 4px; }
+                    .sfx-toolbar .sfx-val { color: #fff; font-size: 11px; min-width: 20px; text-align: center; display: inline-block; }
+                    .sfx-body { display: flex; flex: 1; min-height: 0; }
+                    .sfx-list { width: 160px; border-right: 1px solid #333; overflow-y: auto; flex-shrink: 0; }
+                    .sfx-item { padding: 4px 8px; cursor: pointer; border-bottom: 1px solid #222; font-size: 11px; display: flex; align-items: center; gap: 4px; }
                     .sfx-item:hover { background: #2a2a2a; }
                     .sfx-item.active { background: #3a3a5a; }
                     .sfx-item.empty { opacity: 0.4; }
-                    .sfx-item .play-btn { margin-right: 8px; background: #4a4; border: none; color: #fff; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+                    .sfx-item .play-btn { background: #4a4; border: none; color: #fff; padding: 1px 5px; border-radius: 3px; cursor: pointer; font-size: 9px; }
                     .sfx-item .play-btn:hover { background: #5b5; }
-                    .sfx-detail { flex: 1; padding: 10px; overflow: auto; }
-                    .sfx-header { font-weight: bold; margin-bottom: 10px; color: #fff; }
-                    .sfx-controls { margin-bottom: 15px; }
-                    .sfx-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 6px 12px; margin-right: 8px; border-radius: 3px; cursor: pointer; }
-                    .sfx-controls button:hover:not(:disabled) { background: #555; }
-                    .sfx-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
-                    .sfx-info { margin-bottom: 15px; font-size: 12px; color: #888; }
+                    .sfx-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+                    .sfx-canvas-wrap { flex: 1; position: relative; overflow: hidden; cursor: crosshair; }
+                    #cvs-sfx-bars { image-rendering: pixelated; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+                    .sfx-tracker-wrap { flex: 1; overflow: auto; display: none; }
+                    .sfx-tracker-wrap.active { display: block; }
                     .sfx-tracker { font-family: monospace; font-size: 11px; background: #1a1a1a; border: 1px solid #333; }
                     .sfx-tracker-header { display: flex; background: #252525; border-bottom: 1px solid #333; padding: 4px; }
                     .sfx-tracker-header span { flex: 1; text-align: center; font-weight: bold; font-size: 10px; color: #888; }
-                    .sfx-note { display: flex; border-bottom: 1px solid #222; }
+                    .sfx-note { display: flex; border-bottom: 1px solid #222; cursor: pointer; }
                     .sfx-note:hover { background: #252530; }
                     .sfx-note.playing { background: #3a4a3a; }
+                    .sfx-note.selected { background: #3a3a5a; }
                     .sfx-note span { flex: 1; text-align: center; padding: 2px 4px; }
                     .sfx-note .note-idx { color: #666; width: 30px; flex: none; }
                     .sfx-note .note-pitch { color: #6cf; }
                     .sfx-note .note-wave { color: #fc6; }
                     .sfx-note .note-vol { color: #6f6; }
                     .sfx-note .note-fx { color: #f6c; }
+                    .sfx-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
 
-                    /* Music Styles */
-                    .music-container { flex: 1; padding: 0; overflow: auto; }
-                    .music-controls { padding: 10px; background: #1a1a1a; }
-                    .music-controls button { background: #444; border: 1px solid #555; color: #fff; padding: 8px 16px; margin-right: 10px; border-radius: 3px; cursor: pointer; }
-                    .music-controls button:hover { background: #555; }
-                    #music-status { color: #888; font-size: 12px; }
-                    .music-patterns { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; padding: 10px; }
-                    .music-pattern { background: #1a1a1a; border: 1px solid #333; padding: 8px; font-size: 11px; border-radius: 3px; cursor: pointer; }
-                    .music-pattern:hover { background: #252525; }
-                    .music-pattern.playing { background: #2a3a2a; border-color: #4a4; }
-                    .music-pattern.empty { opacity: 0.3; }
-                    .music-pattern.loop-start { border-left: 3px solid #6f6; }
-                    .music-pattern.loop-end { border-right: 3px solid #f66; }
-                    .music-pattern.stop { border-bottom: 3px solid #ff6; }
-                    .music-pattern-id { font-weight: bold; color: #fff; margin-bottom: 5px; }
-                    .music-channel { font-size: 10px; color: #888; }
-                    .music-channel.disabled { color: #444; text-decoration: line-through; }
-                    .music-channel.enabled { color: #6cf; }
+                    /* Music Editor Styles */
+                    .music-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+                    .music-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #1e1e1e; border-bottom: 1px solid #333; flex-shrink: 0; flex-wrap: wrap; }
+                    .music-toolbar .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 12px; min-width: 24px; text-align: center; }
+                    .music-toolbar .tool-btn:hover { background: #444; }
+                    .music-toolbar .tool-btn.active { background: #29adff; color: #fff; border-color: #29adff; }
+                    .music-toolbar .sep { width: 1px; height: 20px; background: #444; flex-shrink: 0; }
+                    .music-toolbar .label { color: #888; font-size: 11px; }
+                    .music-toolbar .value { color: #fff; font-size: 12px; min-width: 20px; text-align: center; }
+                    .music-pattern-editor { padding: 12px 10px; background: #1a1a1a; border-bottom: 1px solid #333; flex-shrink: 0; }
+                    .music-channels { display: flex; gap: 8px; margin-bottom: 10px; }
+                    .music-ch { flex: 1; background: #222; border: 1px solid #444; border-radius: 4px; padding: 8px; text-align: center; }
+                    .music-ch.disabled { opacity: 0.4; }
+                    .music-ch.ch-selected { border-color: #29adff; background: #1a2a3a; }
+                    .music-ch-label { font-size: 11px; color: #888; margin-bottom: 6px; }
+                    .music-ch-toggle { cursor: pointer; margin-right: 4px; }
+                    .music-ch-sfx { display: flex; align-items: center; justify-content: center; gap: 4px; }
+                    .music-ch-sfx .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; }
+                    .music-ch-sfx .tool-btn:hover { background: #444; }
+                    .music-ch-sfx .sfx-val { color: #6cf; font-size: 14px; font-weight: bold; min-width: 24px; text-align: center; cursor: pointer; }
+                    .music-ch-sfx .sfx-val:hover { text-decoration: underline; }
+                    .music-ch-sfx .sfx-val.muted { color: #555; }
+                    .music-flags { display: flex; gap: 8px; align-items: center; }
+                    .music-flags .flag-btn { background: #222; border: 2px solid #555; color: #888; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; }
+                    .music-flags .flag-btn:hover { background: #2a2a2a; }
+                    .music-flags .flag-btn.loop-start-on { border-color: #00e436; color: #00e436; background: #0a2a0a; }
+                    .music-flags .flag-btn.loop-end-on { border-color: #ff004d; color: #ff004d; background: #2a0a0a; }
+                    .music-flags .flag-btn.stop-on { border-color: #ffec27; color: #ffec27; background: #2a2a0a; }
+                    .music-navigator { flex: 1; overflow: auto; padding: 8px 10px; background: #111; }
+                    .music-nav-grid { display: flex; flex-wrap: wrap; gap: 2px; }
+                    .music-nav-cell { width: 36px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #888; background: #1a1a1a; border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; }
+                    .music-nav-cell:hover { background: #252525; }
+                    .music-nav-cell.selected { background: #29adff; color: #fff; border-color: #29adff; }
+                    .music-nav-cell.non-empty { color: #ccc; }
+                    .music-nav-cell.empty { opacity: 0.35; }
+                    .music-nav-cell.loop-start { border-left: 3px solid #00e436; }
+                    .music-nav-cell.loop-end { border-right: 3px solid #ff004d; }
+                    .music-nav-cell.stop-end { border-bottom: 3px solid #ffec27; }
+                    .music-nav-cell.playing { background: #2a3a2a; border-color: #4a4; animation: music-pulse 0.5s ease-in-out infinite alternate; }
+                    @keyframes music-pulse { from { background: #2a3a2a; } to { background: #3a5a3a; } }
+                    .music-sfx-picker { padding: 8px 10px; background: #1a1a1a; border-top: 1px solid #333; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+                    .music-sfx-picker-label { font-size: 11px; color: #888; margin-bottom: 6px; flex-shrink: 0; }
+                    .music-sfx-picker-label .ch-num { color: #6cf; font-weight: bold; }
+                    .music-sfx-grid { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; flex: 1; min-height: 0; }
+                    .music-sfx-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; color: #888; background: #222; border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; min-height: 0; position: relative; gap: 2px; }
+                    .music-sfx-cell:hover { background: #333; }
+                    .music-sfx-cell.non-empty { color: #ccc; }
+                    .music-sfx-cell.selected { background: #29adff; color: #fff; border-color: #29adff; }
+                    .music-sfx-cell .sfx-play-btn { display: none; font-size: 9px; color: #888; cursor: pointer; padding: 0 2px; }
+                    .music-sfx-cell.non-empty .sfx-play-btn { display: block; }
+                    .music-sfx-cell .sfx-play-btn:hover { color: #fff; }
+                    .music-sfx-cell.selected .sfx-play-btn { color: rgba(255,255,255,0.6); }
+                    .music-sfx-cell.selected .sfx-play-btn:hover { color: #fff; }
+                    .music-sfx-cell.sfx-playing { background: #2a3a2a; border-color: #4a4; }
+                    .music-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
                 </style>
             </head>
             <body>
@@ -241,18 +273,27 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                 </div>
 
                  <div id="tab-sfx" class="content">
-                    <div class="sfx-container">
-                        <div class="sfx-list" id="sfx-list"></div>
-                        <div class="sfx-detail" id="sfx-detail">
-                            <div class="sfx-header">${locale.selectSfx}</div>
-                            ${sfxControlsHtml}
+                    <div class="sfx-editor" id="sfx-editor">
+                        <div class="sfx-toolbar" id="sfx-toolbar"></div>
+                        <div class="sfx-body">
+                            <div class="sfx-list" id="sfx-list"></div>
+                            <div class="sfx-main" id="sfx-main">
+                                <div class="sfx-canvas-wrap" id="sfx-canvas-wrap">
+                                    <canvas id="cvs-sfx-bars" width="640" height="320"></canvas>
+                                </div>
+                                <div class="sfx-tracker-wrap" id="sfx-tracker-wrap"></div>
+                            </div>
                         </div>
+                        <div class="sfx-status" id="sfx-status"></div>
                     </div>
                  </div>
                  <div id="tab-music" class="content">
-                    <div class="music-container">
-                        ${musicControlsHtml}
-                        <div class="music-patterns" id="music-patterns"></div>
+                    <div class="music-editor" id="music-editor">
+                        <div class="music-toolbar" id="music-toolbar"></div>
+                        <div class="music-pattern-editor" id="music-pattern-editor"></div>
+                        <div class="music-navigator" id="music-navigator"></div>
+                        <div class="music-sfx-picker" id="music-sfx-picker"></div>
+                        <div class="music-status" id="music-status-bar"></div>
                     </div>
                  </div>
 
@@ -324,9 +365,9 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         } else if (id === 'map') {
                             initMapEditor();
                         } else if (id === 'sfx') {
-                            renderSfxList();
+                            initSfxEditor();
                         } else if (id === 'music') {
-                            renderMusic();
+                            initMusicEditor();
                         }
                     }
 
@@ -414,30 +455,199 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         return { notes: notes, speed: speed, loopStart: loopStart, loopEnd: loopEnd, isEmpty: isEmpty };
                     }
 
-                    ${showAudio ? getAudioSfxListScript() : getBasicSfxListScript()}
+                    // ============ SFX EDITOR ============
+                    var sfxEditorInited = false;
+                    var sfxCurrentId = 0;
+                    var sfxMode = 'bar'; // 'bar' or 'tracker'
+                    var sfxBrushWave = 0;
+                    var sfxBrushEffect = 0;
+                    var sfxHoverNote = -1;
+                    var sfxHoverArea = ''; // 'pitch', 'volume', 'effect', ''
+                    var sfxIsDrawing = false;
+                    var sfxDrawArea = '';
+                    var sfxUndoStack = [];
+                    var sfxRedoStack = [];
+                    var sfxChangedTimer = null;
+                    var sfxTrackerRow = -1;
+                    var sfxTrackerCol = 0;
 
-                    function renderSfxDetail(sfxId) {
-                        ${showAudio ? 'selectedSfxId = sfxId;' : ''}
-                        document.querySelectorAll('.sfx-item').forEach(function(el, idx) {
-                            el.classList.toggle('active', idx === sfxId);
-                        });
-                        var sfx = parseSfx(sfxId);
-                        var container = document.getElementById('sfx-detail');
-                        var html = '<div class="sfx-header">SFX ' + sfxId + '</div>';
-                        ${showAudio ? `
-                        html += '<div class="sfx-controls">';
-                        html += '<button id="btn-toggle-sfx" ' + (sfx.isEmpty ? 'disabled' : '') + ' data-playing="">&#9654; ' + LOCALE.play + '</button>';
-                        html += '</div>';
-                        ` : ''}
-                        html += '<div class="sfx-info">';
-                        html += LOCALE.speed + ': ' + sfx.speed + ' | ';
-                        html += LOCALE.loop + ': ' + sfx.loopStart + ' \\u2192 ' + sfx.loopEnd;
-                        html += '</div>';
-                        html += '<div class="sfx-tracker" id="sfx-tracker">';
-                        html += '<div class="sfx-tracker-header"><span>#</span><span>Note</span><span>Wave</span><span>Vol</span><span>FX</span></div>';
+                    var WAVE_COLORS = ['#ff77a8', '#29adff', '#00e436', '#ffec27', '#ff6c24', '#a8e6cf', '#83769c', '#fff1e8'];
+                    var FX_COLORS = ['#333', '#29adff', '#ff77a8', '#ff004d', '#00e436', '#ffa300', '#ffec27', '#a8e6cf'];
+
+                    function sfxPackNote(note) {
+                        var lo = (note.pitch & 0x3f) | ((note.waveform & 0x03) << 6);
+                        var hi = ((note.waveform >> 2) & 0x01) | ((note.volume & 0x07) << 1) | ((note.effect & 0x07) << 4) | ((note.customWave & 0x01) << 7);
+                        return [lo, hi];
+                    }
+
+                    function sfxSetNote(sfxId, noteIdx, field, value) {
+                        var offset = sfxId * 68 + noteIdx * 2;
+                        var lo = SFX[offset] || 0;
+                        var hi = SFX[offset + 1] || 0;
+                        var note = {
+                            pitch: lo & 0x3f,
+                            waveform: ((lo >> 6) & 0x03) | ((hi & 0x01) << 2),
+                            volume: (hi >> 1) & 0x07,
+                            effect: (hi >> 4) & 0x07,
+                            customWave: (hi >> 7) & 0x01
+                        };
+                        note[field] = value;
+                        var packed = sfxPackNote(note);
+                        SFX[offset] = packed[0];
+                        SFX[offset + 1] = packed[1];
+                    }
+
+                    function sfxGetSpeed(sfxId) { return SFX[sfxId * 68 + 65] || 0; }
+                    function sfxSetSpeed(sfxId, v) { SFX[sfxId * 68 + 65] = Math.max(0, Math.min(255, v)); }
+                    function sfxGetLoopStart(sfxId) { return SFX[sfxId * 68 + 66] || 0; }
+                    function sfxSetLoopStart(sfxId, v) { SFX[sfxId * 68 + 66] = Math.max(0, Math.min(31, v)); }
+                    function sfxGetLoopEnd(sfxId) { return SFX[sfxId * 68 + 67] || 0; }
+                    function sfxSetLoopEnd(sfxId, v) { SFX[sfxId * 68 + 67] = Math.max(0, Math.min(31, v)); }
+
+                    function sfxPushUndo() {
+                        var offset = sfxCurrentId * 68;
+                        var snap = SFX.slice(offset, offset + 68);
+                        sfxUndoStack.push({ id: sfxCurrentId, data: snap });
+                        if (sfxUndoStack.length > 50) sfxUndoStack.shift();
+                        sfxRedoStack = [];
+                    }
+
+                    function sfxDoUndo() {
+                        if (sfxUndoStack.length === 0) return;
+                        var frame = sfxUndoStack.pop();
+                        var offset = frame.id * 68;
+                        var current = SFX.slice(offset, offset + 68);
+                        sfxRedoStack.push({ id: frame.id, data: current });
+                        for (var i = 0; i < 68; i++) SFX[offset + i] = frame.data[i];
+                        sfxCurrentId = frame.id;
+                        sfxRenderAll();
+                        notifySfxChanged();
+                    }
+
+                    function sfxDoRedo() {
+                        if (sfxRedoStack.length === 0) return;
+                        var frame = sfxRedoStack.pop();
+                        var offset = frame.id * 68;
+                        var current = SFX.slice(offset, offset + 68);
+                        sfxUndoStack.push({ id: frame.id, data: current });
+                        for (var i = 0; i < 68; i++) SFX[offset + i] = frame.data[i];
+                        sfxCurrentId = frame.id;
+                        sfxRenderAll();
+                        notifySfxChanged();
+                    }
+
+                    function notifySfxChanged() {
+                        if (sfxChangedTimer) clearTimeout(sfxChangedTimer);
+                        sfxChangedTimer = setTimeout(function() {
+                            vscodeApi.postMessage({ type: 'sfxChanged', sfx: Array.from(SFX) });
+                        }, 100);
+                    }
+
+                    // ---- Render bar mode canvas ----
+                    function sfxRenderBars() {
+                        var cvs = document.getElementById('cvs-sfx-bars');
+                        if (!cvs) return;
+                        var wrap = document.getElementById('sfx-canvas-wrap');
+                        var w = wrap.clientWidth || 640;
+                        var h = wrap.clientHeight || 320;
+                        cvs.width = w; cvs.height = h;
+                        var ctx = cvs.getContext('2d');
+                        ctx.fillStyle = '#111';
+                        ctx.fillRect(0, 0, w, h);
+
+                        var sfx = parseSfx(sfxCurrentId);
+                        var colW = Math.floor(w / 32);
+                        var fxH = 16;
+                        var volH = Math.floor((h - fxH) * 0.15);
+                        var pitchH = h - volH - fxH;
+                        var pitchY = 0;
+                        var volY = pitchH;
+                        var fxY = pitchH + volH;
+
+                        // Loop region shade
+                        if (sfx.loopStart < sfx.loopEnd) {
+                            ctx.fillStyle = 'rgba(100,200,100,0.07)';
+                            ctx.fillRect(sfx.loopStart * colW, 0, (sfx.loopEnd - sfx.loopStart) * colW, h);
+                            ctx.strokeStyle = 'rgba(100,200,100,0.3)';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(sfx.loopStart * colW + 0.5, 0); ctx.lineTo(sfx.loopStart * colW + 0.5, h);
+                            ctx.moveTo(sfx.loopEnd * colW + 0.5, 0); ctx.lineTo(sfx.loopEnd * colW + 0.5, h);
+                            ctx.stroke();
+                        }
+
+                        // Octave grid lines in pitch area
+                        ctx.strokeStyle = '#222';
+                        ctx.lineWidth = 1;
+                        for (var oct = 1; oct <= 5; oct++) {
+                            var y = pitchY + pitchH - (oct * 12 / 63) * pitchH;
+                            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                        }
+
+                        // Area separators
+                        ctx.strokeStyle = '#444';
+                        ctx.beginPath(); ctx.moveTo(0, volY); ctx.lineTo(w, volY); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(0, fxY); ctx.lineTo(w, fxY); ctx.stroke();
+
+                        // Draw bars
                         for (var i = 0; i < 32; i++) {
                             var n = sfx.notes[i];
-                            html += '<div class="sfx-note" data-idx="' + i + '">';
+                            var x = i * colW;
+
+                            // Pitch bar
+                            if (n.volume > 0 && n.pitch > 0) {
+                                var barH = (n.pitch / 63) * pitchH;
+                                var alpha = 0.4 + (n.volume / 7) * 0.6;
+                                ctx.globalAlpha = alpha;
+                                ctx.fillStyle = WAVE_COLORS[n.waveform] || WAVE_COLORS[0];
+                                ctx.fillRect(x + 1, pitchY + pitchH - barH, colW - 2, barH);
+                                ctx.globalAlpha = 1;
+                            } else if (n.pitch > 0) {
+                                // Volume 0 — dim ghost bar
+                                var barH2 = (n.pitch / 63) * pitchH;
+                                ctx.globalAlpha = 0.15;
+                                ctx.fillStyle = WAVE_COLORS[n.waveform] || WAVE_COLORS[0];
+                                ctx.fillRect(x + 1, pitchY + pitchH - barH2, colW - 2, barH2);
+                                ctx.globalAlpha = 1;
+                            }
+
+                            // Volume mini-bar
+                            if (n.volume > 0) {
+                                var vBarH = (n.volume / 7) * (volH - 2);
+                                ctx.fillStyle = '#00e436';
+                                ctx.fillRect(x + 1, volY + volH - vBarH - 1, colW - 2, vBarH);
+                            }
+
+                            // Effect cell
+                            if (n.effect > 0) {
+                                ctx.fillStyle = FX_COLORS[n.effect] || FX_COLORS[0];
+                                ctx.fillRect(x + 1, fxY + 1, colW - 2, fxH - 2);
+                            }
+
+                            // Column separator
+                            ctx.strokeStyle = '#1a1a1a';
+                            ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); ctx.stroke();
+                        }
+
+                        // Hover highlight
+                        if (sfxHoverNote >= 0 && sfxHoverNote < 32) {
+                            ctx.strokeStyle = '#fff';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(sfxHoverNote * colW + 0.5, 0.5, colW - 1, h - 1);
+                        }
+                    }
+
+                    // ---- Render tracker mode ----
+                    function sfxRenderTracker() {
+                        var wrap = document.getElementById('sfx-tracker-wrap');
+                        if (!wrap) return;
+                        var sfx = parseSfx(sfxCurrentId);
+                        var html = '<div class="sfx-tracker"><div class="sfx-tracker-header"><span>#</span><span>Note</span><span>Wave</span><span>Vol</span><span>FX</span></div>';
+                        for (var i = 0; i < 32; i++) {
+                            var n = sfx.notes[i];
+                            var cls = 'sfx-note';
+                            if (i === sfxTrackerRow) cls += ' selected';
+                            html += '<div class="' + cls + '" data-idx="' + i + '">';
                             html += '<span class="note-idx">' + i.toString().padStart(2, '0') + '</span>';
                             html += '<span class="note-pitch">' + pitchToNote(n.pitch) + '</span>';
                             html += '<span class="note-wave">' + (n.customWave ? 'C' + n.waveform : WAVEFORMS[n.waveform]) + '</span>';
@@ -446,93 +656,944 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                             html += '</div>';
                         }
                         html += '</div>';
-                        container.innerHTML = html;
-                        ${showAudio ? `
-                        // Wire up toggle button
-                        document.getElementById('btn-toggle-sfx').onclick = function() {
-                            var btn = document.getElementById('btn-toggle-sfx');
-                            if (btn.dataset.playing) {
-                                stopSfx();
-                            } else {
-                                currentSfxPlayer = playSfx(sfxId, function(noteIdx) {
-                                    document.querySelectorAll('.sfx-note').forEach(function(el) { el.classList.remove('playing'); });
-                                    var noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
-                                    if (noteEl) noteEl.classList.add('playing');
-                                });
-                                if (currentSfxPlayer) {
-                                    btn.textContent = '\\u23f9 ' + LOCALE.stop;
-                                    btn.dataset.playing = '1';
-                                }
-                            }
-                        };
-                        ` : ''}
+                        wrap.innerHTML = html;
+
+                        // Click to select row
+                        wrap.querySelectorAll('.sfx-note').forEach(function(el) {
+                            el.addEventListener('mousedown', function() {
+                                sfxTrackerRow = parseInt(el.dataset.idx);
+                                sfxRenderTracker();
+                            });
+                        });
                     }
 
-                    function renderMusic() {
-                        var container = document.getElementById('music-patterns');
+                    // ---- SFX list ----
+                    function sfxRenderList() {
+                        var container = document.getElementById('sfx-list');
                         container.innerHTML = '';
-                        ${showAudio ? `
-                        // Wire up music toggle button
-                        document.getElementById('btn-toggle-music').onclick = function() {
-                            var btn = document.getElementById('btn-toggle-music');
-                            if (btn.dataset.playing) {
-                                stopMusic();
-                            } else {
-                                playMusic(0);
-                                if (currentMusicPlayer) {
-                                    btn.textContent = '\\u23f9 ' + LOCALE.stop;
-                                    btn.dataset.playing = '1';
-                                }
-                            }
-                        };
-                        ` : ''}
                         for (var i = 0; i < 64; i++) {
-                            var offset = i * 4;
-                            var ch0 = MUSIC[offset] || 0;
-                            var ch1 = MUSIC[offset + 1] || 0;
-                            var ch2 = MUSIC[offset + 2] || 0;
-                            var ch3 = MUSIC[offset + 3] || 0;
-                            var channels = [ch0, ch1, ch2, ch3];
-                            var sfxIds = channels.map(function(c) { return c & 0x3f; });
-                            var disabled = channels.map(function(c) { return (c & 0x40) !== 0; });
-                            var loopStart = (ch0 & 0x80) !== 0;
-                            var loopEnd = (ch1 & 0x80) !== 0;
-                            var stopAtEnd = (ch2 & 0x80) !== 0;
-                            var isEmpty = disabled.every(function(d) { return d; });
+                            var sfx = parseSfx(i);
                             var div = document.createElement('div');
-                            var classes = 'music-pattern';
-                            if (isEmpty) classes += ' empty';
-                            if (loopStart) classes += ' loop-start';
-                            if (loopEnd) classes += ' loop-end';
-                            if (stopAtEnd) classes += ' stop';
-                            div.className = classes;
-                            div.dataset.pattern = i;
+                            div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '') + (i === sfxCurrentId ? ' active' : '');
                             ${showAudio ? `
-                            if (!isEmpty) {
-                                (function(patIdx) {
-                                    div.onclick = function() {
-                                        playMusic(patIdx);
-                                        if (currentMusicPlayer) {
-                                            var btn = document.getElementById('btn-toggle-music');
-                                            btn.textContent = '\\u23f9 ' + LOCALE.stop;
-                                            btn.dataset.playing = '1';
+                            if (!sfx.isEmpty) {
+                                var playBtn = document.createElement('button');
+                                playBtn.className = 'play-btn';
+                                playBtn.textContent = '\\u25b6';
+                                (function(sfxIdx, btn) {
+                                    btn.onclick = function(e) {
+                                        e.stopPropagation();
+                                        if (btn.classList.contains('is-playing')) {
+                                            stopSfx();
+                                        } else {
+                                            currentSfxPlayer = playSfx(sfxIdx, function(noteIdx) {
+                                                sfxHighlightPlayingNote(noteIdx);
+                                            });
+                                            if (currentSfxPlayer) {
+                                                btn.textContent = '\\u23f9';
+                                                btn.classList.add('is-playing');
+                                            }
                                         }
                                     };
-                                    div.title = 'Click to play from pattern ' + patIdx;
-                                })(i);
-                            ` : ''}
-                            ${showAudio ? '}' : ''}
-                            var html = '<div class="music-pattern-id">' + i.toString().padStart(2, '0') + '</div>';
-                            for (var c = 0; c < 4; c++) {
-                                var chClass = disabled[c] ? 'disabled' : 'enabled';
-                                html += '<div class="music-channel ' + chClass + '">';
-                                html += 'CH' + c + ': ' + (disabled[c] ? '--' : sfxIds[c].toString().padStart(2, '0'));
-                                html += '</div>';
+                                })(i, playBtn);
+                                div.appendChild(playBtn);
                             }
-                            div.innerHTML = html;
+                            ` : ''}
+                            var label = document.createElement('span');
+                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? '' : ' spd:' + sfx.speed);
+                            div.appendChild(label);
+                            (function(idx) {
+                                div.onclick = function() {
+                                    sfxCurrentId = idx;
+                                    sfxRenderAll();
+                                };
+                            })(i);
                             container.appendChild(div);
                         }
                     }
+
+                    function sfxHighlightPlayingNote(noteIdx) {
+                        // For both bar and tracker modes
+                        sfxHoverNote = noteIdx;
+                        if (sfxMode === 'bar') sfxRenderBars();
+                        if (sfxMode === 'tracker') {
+                            document.querySelectorAll('.sfx-note').forEach(function(el) { el.classList.remove('playing'); });
+                            var noteEl = document.querySelector('.sfx-note[data-idx="' + noteIdx + '"]');
+                            if (noteEl) noteEl.classList.add('playing');
+                        }
+                    }
+
+                    // ---- Toolbar ----
+                    function sfxRenderToolbar() {
+                        var tb = document.getElementById('sfx-toolbar');
+                        tb.innerHTML = '';
+
+                        // Mode toggle
+                        var barBtn = document.createElement('button');
+                        barBtn.className = 'tool-btn' + (sfxMode === 'bar' ? ' active' : '');
+                        barBtn.textContent = '\\u2581\\u2583\\u2585\\u2587';
+                        barBtn.title = 'Bar mode (Tab)';
+                        barBtn.onclick = function() { sfxMode = 'bar'; sfxUpdateMode(); };
+                        tb.appendChild(barBtn);
+
+                        var trkBtn = document.createElement('button');
+                        trkBtn.className = 'tool-btn' + (sfxMode === 'tracker' ? ' active' : '');
+                        trkBtn.textContent = '\\u2261';
+                        trkBtn.title = 'Tracker mode (Tab)';
+                        trkBtn.onclick = function() { sfxMode = 'tracker'; sfxUpdateMode(); };
+                        tb.appendChild(trkBtn);
+
+                        var sep0 = document.createElement('span'); sep0.className = 'tool-sep'; tb.appendChild(sep0);
+
+                        // SFX selector
+                        var prevBtn = document.createElement('button');
+                        prevBtn.className = 'tool-btn'; prevBtn.textContent = '\\u25c0'; prevBtn.title = 'Previous SFX (-)';
+                        prevBtn.onclick = function() { sfxCurrentId = (sfxCurrentId - 1 + 64) % 64; sfxRenderAll(); };
+                        tb.appendChild(prevBtn);
+
+                        var idLabel = document.createElement('span');
+                        idLabel.className = 'sfx-val';
+                        idLabel.textContent = sfxCurrentId.toString().padStart(2, '0');
+                        tb.appendChild(idLabel);
+
+                        var nextBtn = document.createElement('button');
+                        nextBtn.className = 'tool-btn'; nextBtn.textContent = '\\u25b6'; nextBtn.title = 'Next SFX (+)';
+                        nextBtn.onclick = function() { sfxCurrentId = (sfxCurrentId + 1) % 64; sfxRenderAll(); };
+                        tb.appendChild(nextBtn);
+
+                        var sep1 = document.createElement('span'); sep1.className = 'tool-sep'; tb.appendChild(sep1);
+
+                        // Speed
+                        var spdLabel = document.createElement('span'); spdLabel.className = 'sfx-label'; spdLabel.textContent = 'SPD'; tb.appendChild(spdLabel);
+                        var spdDown = document.createElement('button'); spdDown.className = 'tool-btn'; spdDown.textContent = '\\u25c0';
+                        spdDown.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetSpeed(sfxCurrentId, sfxGetSpeed(sfxCurrentId) - 1); sfxRenderToolbar(); notifySfxChanged(); };
+                        tb.appendChild(spdDown);
+                        var spdVal = document.createElement('span'); spdVal.className = 'sfx-val'; spdVal.textContent = sfxGetSpeed(sfxCurrentId).toString(); tb.appendChild(spdVal);
+                        var spdUp = document.createElement('button'); spdUp.className = 'tool-btn'; spdUp.textContent = '\\u25b6';
+                        spdUp.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetSpeed(sfxCurrentId, sfxGetSpeed(sfxCurrentId) + 1); sfxRenderToolbar(); notifySfxChanged(); };
+                        tb.appendChild(spdUp);
+
+                        var sep2 = document.createElement('span'); sep2.className = 'tool-sep'; tb.appendChild(sep2);
+
+                        // Loop
+                        var ls = sfxGetLoopStart(sfxCurrentId);
+                        var le = sfxGetLoopEnd(sfxCurrentId);
+                        var loopLabel = document.createElement('span'); loopLabel.className = 'sfx-label';
+                        loopLabel.textContent = (le === 0 && ls > 0) ? 'LEN' : 'LOOP';
+                        tb.appendChild(loopLabel);
+                        var lsDown = document.createElement('button'); lsDown.className = 'tool-btn'; lsDown.textContent = '\\u25c0';
+                        lsDown.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetLoopStart(sfxCurrentId, sfxGetLoopStart(sfxCurrentId) - 1); sfxRenderAll(); notifySfxChanged(); };
+                        tb.appendChild(lsDown);
+                        var lsVal = document.createElement('span'); lsVal.className = 'sfx-val'; lsVal.textContent = ls.toString(); tb.appendChild(lsVal);
+                        var lsUp = document.createElement('button'); lsUp.className = 'tool-btn'; lsUp.textContent = '\\u25b6';
+                        lsUp.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetLoopStart(sfxCurrentId, sfxGetLoopStart(sfxCurrentId) + 1); sfxRenderAll(); notifySfxChanged(); };
+                        tb.appendChild(lsUp);
+                        var leDown = document.createElement('button'); leDown.className = 'tool-btn'; leDown.textContent = '\\u25c0';
+                        leDown.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetLoopEnd(sfxCurrentId, sfxGetLoopEnd(sfxCurrentId) - 1); sfxRenderAll(); notifySfxChanged(); };
+                        tb.appendChild(leDown);
+                        var leVal = document.createElement('span'); leVal.className = 'sfx-val'; leVal.textContent = le.toString(); tb.appendChild(leVal);
+                        var leUp = document.createElement('button'); leUp.className = 'tool-btn'; leUp.textContent = '\\u25b6';
+                        leUp.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetLoopEnd(sfxCurrentId, sfxGetLoopEnd(sfxCurrentId) + 1); sfxRenderAll(); notifySfxChanged(); };
+                        tb.appendChild(leUp);
+
+                        var sep3 = document.createElement('span'); sep3.className = 'tool-sep'; tb.appendChild(sep3);
+
+                        // Waveform selector
+                        var wLabel = document.createElement('span'); wLabel.className = 'sfx-label'; wLabel.textContent = 'WAV'; tb.appendChild(wLabel);
+                        for (var wi = 0; wi < 8; wi++) {
+                            (function(wIdx) {
+                                var wb = document.createElement('button');
+                                wb.className = 'tool-btn' + (sfxBrushWave === wIdx ? ' active' : '');
+                                wb.textContent = wIdx.toString();
+                                wb.style.color = WAVE_COLORS[wIdx];
+                                wb.title = WAVEFORMS[wIdx];
+                                wb.onclick = function() { sfxBrushWave = wIdx; sfxRenderToolbar(); };
+                                tb.appendChild(wb);
+                            })(wi);
+                        }
+
+                        var sep4 = document.createElement('span'); sep4.className = 'tool-sep'; tb.appendChild(sep4);
+
+                        // Effect selector
+                        var fxLabel = document.createElement('span'); fxLabel.className = 'sfx-label'; fxLabel.textContent = 'FX'; tb.appendChild(fxLabel);
+                        for (var fi = 0; fi < 8; fi++) {
+                            (function(fIdx) {
+                                var fb = document.createElement('button');
+                                fb.className = 'tool-btn' + (sfxBrushEffect === fIdx ? ' active' : '');
+                                fb.textContent = fIdx.toString();
+                                fb.style.color = FX_COLORS[fIdx];
+                                fb.title = EFFECTS[fIdx];
+                                fb.onclick = function() { sfxBrushEffect = fIdx; sfxRenderToolbar(); };
+                                tb.appendChild(fb);
+                            })(fi);
+                        }
+
+                        ${showAudio ? `
+                        var sep5 = document.createElement('span'); sep5.className = 'tool-sep'; tb.appendChild(sep5);
+                        var playBtn = document.createElement('button');
+                        playBtn.className = 'tool-btn';
+                        playBtn.id = 'sfx-play-btn';
+                        playBtn.textContent = '\\u25b6 ' + LOCALE.play;
+                        playBtn.title = 'Play (Space)';
+                        playBtn.onclick = function() { sfxTogglePlay(); };
+                        tb.appendChild(playBtn);
+                        ` : ''}
+                    }
+
+                    ${showAudio ? `
+                    function sfxTogglePlay() {
+                        var btn = document.getElementById('sfx-play-btn');
+                        if (currentSfxPlayer) {
+                            stopSfx();
+                        } else {
+                            currentSfxPlayer = playSfx(sfxCurrentId, function(noteIdx) {
+                                sfxHighlightPlayingNote(noteIdx);
+                            });
+                            if (currentSfxPlayer && btn) {
+                                btn.textContent = '\\u23f9 ' + LOCALE.stop;
+                            }
+                        }
+                    }
+                    ` : ''}
+
+                    // ---- Status bar ----
+                    function sfxUpdateStatus() {
+                        var st = document.getElementById('sfx-status');
+                        if (!st) return;
+                        if (sfxHoverNote >= 0 && sfxHoverNote < 32) {
+                            var sfx = parseSfx(sfxCurrentId);
+                            var n = sfx.notes[sfxHoverNote];
+                            st.textContent = 'Note: ' + sfxHoverNote + ' | ' + pitchToNote(n.pitch) + ' | ' + WAVEFORMS[n.waveform] + ' | Vol: ' + n.volume + ' | FX: ' + EFFECTS[n.effect];
+                        } else {
+                            st.textContent = 'SFX ' + sfxCurrentId;
+                        }
+                    }
+
+                    // ---- Mode toggle ----
+                    function sfxUpdateMode() {
+                        var cvsWrap = document.getElementById('sfx-canvas-wrap');
+                        var trkWrap = document.getElementById('sfx-tracker-wrap');
+                        if (sfxMode === 'bar') {
+                            cvsWrap.style.display = 'block';
+                            trkWrap.classList.remove('active');
+                            sfxRenderBars();
+                        } else {
+                            cvsWrap.style.display = 'none';
+                            trkWrap.classList.add('active');
+                            sfxRenderTracker();
+                        }
+                        sfxRenderToolbar();
+                    }
+
+                    // ---- Render all ----
+                    function sfxRenderAll() {
+                        sfxRenderToolbar();
+                        sfxRenderList();
+                        if (sfxMode === 'bar') sfxRenderBars();
+                        else sfxRenderTracker();
+                        sfxUpdateStatus();
+                    }
+
+                    // ---- Bar mode mouse interaction ----
+                    function sfxBarHitTest(e) {
+                        var cvs = document.getElementById('cvs-sfx-bars');
+                        var rect = cvs.getBoundingClientRect();
+                        var mx = e.clientX - rect.left;
+                        var my = e.clientY - rect.top;
+                        var w = rect.width;
+                        var h = rect.height;
+                        var colW = w / 32;
+                        var pitchH = h * 0.70;
+                        var volH = h * 0.15;
+                        var noteIdx = Math.floor(mx / colW);
+                        if (noteIdx < 0) noteIdx = 0;
+                        if (noteIdx > 31) noteIdx = 31;
+                        var area = '';
+                        var value = 0;
+                        if (my < pitchH) {
+                            area = 'pitch';
+                            value = Math.round((1 - my / pitchH) * 63);
+                            if (value < 0) value = 0;
+                            if (value > 63) value = 63;
+                        } else if (my < pitchH + volH) {
+                            area = 'volume';
+                            value = Math.round((1 - ((my - pitchH) / volH)) * 7);
+                            if (value < 0) value = 0;
+                            if (value > 7) value = 7;
+                        } else {
+                            area = 'effect';
+                            value = sfxBrushEffect;
+                        }
+                        return { noteIdx: noteIdx, area: area, value: value };
+                    }
+
+                    function sfxApplyDraw(hit) {
+                        if (!EDITABLE) return;
+                        if (hit.area === 'pitch') {
+                            sfxSetNote(sfxCurrentId, hit.noteIdx, 'pitch', hit.value);
+                            // Also set waveform and ensure volume > 0
+                            sfxSetNote(sfxCurrentId, hit.noteIdx, 'waveform', sfxBrushWave);
+                            var sfx = parseSfx(sfxCurrentId);
+                            if (sfx.notes[hit.noteIdx].volume === 0) {
+                                sfxSetNote(sfxCurrentId, hit.noteIdx, 'volume', 5);
+                            }
+                        } else if (hit.area === 'volume') {
+                            sfxSetNote(sfxCurrentId, hit.noteIdx, 'volume', hit.value);
+                        } else if (hit.area === 'effect') {
+                            sfxSetNote(sfxCurrentId, hit.noteIdx, 'effect', hit.value);
+                        }
+                    }
+
+                    function sfxOnBarMouseDown(e) {
+                        e.preventDefault();
+                        if (e.button === 2) {
+                            // Right-click: eyedropper
+                            var hit = sfxBarHitTest(e);
+                            var sfx = parseSfx(sfxCurrentId);
+                            var n = sfx.notes[hit.noteIdx];
+                            if (hit.area === 'pitch') {
+                                sfxBrushWave = n.waveform;
+                            } else if (hit.area === 'effect') {
+                                sfxBrushEffect = n.effect;
+                            }
+                            sfxRenderToolbar();
+                            return;
+                        }
+                        if (e.button === 0 && EDITABLE) {
+                            sfxPushUndo();
+                            sfxIsDrawing = true;
+                            var hit = sfxBarHitTest(e);
+                            sfxDrawArea = hit.area;
+                            sfxApplyDraw(hit);
+                            sfxRenderBars();
+                            sfxUpdateStatus();
+                        }
+                    }
+
+                    function sfxOnBarMouseMove(e) {
+                        var hit = sfxBarHitTest(e);
+                        var prevHoverNote = sfxHoverNote;
+                        sfxHoverNote = hit.noteIdx;
+                        sfxHoverArea = hit.area;
+                        if (sfxIsDrawing && EDITABLE) {
+                            hit.area = sfxDrawArea;
+                            sfxApplyDraw(hit);
+                        }
+                        if (sfxHoverNote !== prevHoverNote || sfxIsDrawing) {
+                            sfxRenderBars();
+                        }
+                        sfxUpdateStatus();
+                    }
+
+                    function sfxOnBarMouseUp(e) {
+                        if (sfxIsDrawing) {
+                            sfxIsDrawing = false;
+                            sfxDrawArea = '';
+                            notifySfxChanged();
+                            sfxRenderList();
+                        }
+                    }
+
+                    function sfxOnBarMouseLeave(e) {
+                        sfxHoverNote = -1;
+                        sfxHoverArea = '';
+                        sfxRenderBars();
+                        sfxUpdateStatus();
+                    }
+
+                    // ---- Keyboard ----
+                    function sfxOnKeyDown(e) {
+                        var sfxTab = document.getElementById('tab-sfx');
+                        if (!sfxTab || !sfxTab.classList.contains('active')) return;
+
+                        var key = e.key.toLowerCase();
+
+                        // Tab: toggle mode
+                        if (key === 'tab' && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            sfxMode = (sfxMode === 'bar') ? 'tracker' : 'bar';
+                            sfxUpdateMode();
+                            return;
+                        }
+
+                        ${showAudio ? `
+                        // Space: play/stop
+                        if (key === ' ' && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            sfxTogglePlay();
+                            return;
+                        }
+                        ` : ''}
+
+                        // SFX prev/next
+                        if (key === '-' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxCurrentId = (sfxCurrentId - 1 + 64) % 64; sfxRenderAll(); return; }
+                        if (key === '=' || key === '+') { e.preventDefault(); sfxCurrentId = (sfxCurrentId + 1) % 64; sfxRenderAll(); return; }
+
+                        // Waveform prev/next
+                        if (key === 'q' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushWave = (sfxBrushWave - 1 + 8) % 8; sfxRenderToolbar(); return; }
+                        if (key === 'w' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushWave = (sfxBrushWave + 1) % 8; sfxRenderToolbar(); return; }
+
+                        // Effect prev/next
+                        if (key === 'a' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect - 1 + 8) % 8; sfxRenderToolbar(); return; }
+                        if (key === 's' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect + 1) % 8; sfxRenderToolbar(); return; }
+
+                        // Direct waveform selection 1-8
+                        if (!e.ctrlKey && !e.metaKey && key >= '1' && key <= '8') { e.preventDefault(); sfxBrushWave = parseInt(key) - 1; sfxRenderToolbar(); return; }
+
+                        // Undo/redo
+                        if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && EDITABLE) { e.preventDefault(); sfxDoUndo(); return; }
+                        if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey && EDITABLE) { e.preventDefault(); sfxDoRedo(); return; }
+                        if ((e.ctrlKey || e.metaKey) && key === 'y' && EDITABLE) { e.preventDefault(); sfxDoRedo(); return; }
+
+                        // Tracker mode: keyboard note entry
+                        if (sfxMode === 'tracker' && sfxTrackerRow >= 0 && EDITABLE) {
+                            var pianoMap = {
+                                'z': 0, 's': 1, 'x': 2, 'd': 3, 'c': 4,
+                                'v': 5, 'g': 6, 'b': 7, 'h': 8, 'n': 9, 'j': 10, 'm': 11
+                            };
+                            var pianoMap2 = {
+                                'q': 12, '2': 13, 'w': 14, '3': 15, 'e': 16,
+                                'r': 17, '5': 18, 't': 19, '6': 20, 'y': 21, '7': 22, 'u': 23, 'i': 24
+                            };
+                            // Skip piano input if Q/W would conflict with waveform nav (only use piano in tracker with note entry)
+                            var pitch = -1;
+                            if (pianoMap[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap[key] + 24;
+                            if (pianoMap2[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap2[key] + 24;
+                            if (e.shiftKey && pitch >= 0) pitch += 12;
+                            if (pitch >= 0 && pitch <= 63) {
+                                e.preventDefault();
+                                sfxPushUndo();
+                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'pitch', pitch);
+                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'waveform', sfxBrushWave);
+                                if (parseSfx(sfxCurrentId).notes[sfxTrackerRow].volume === 0) {
+                                    sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', 5);
+                                }
+                                sfxTrackerRow = Math.min(31, sfxTrackerRow + 1);
+                                sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
+                                return;
+                            }
+                            if (key === 'backspace') {
+                                e.preventDefault();
+                                sfxPushUndo();
+                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', 0);
+                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'pitch', 0);
+                                sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
+                                return;
+                            }
+                            if (key === 'arrowup') { e.preventDefault(); sfxTrackerRow = Math.max(0, sfxTrackerRow - 1); sfxRenderTracker(); return; }
+                            if (key === 'arrowdown') { e.preventDefault(); sfxTrackerRow = Math.min(31, sfxTrackerRow + 1); sfxRenderTracker(); return; }
+                            if (key === 'pageup') { e.preventDefault(); sfxTrackerRow = Math.max(0, sfxTrackerRow - 4); sfxRenderTracker(); return; }
+                            if (key === 'pagedown') { e.preventDefault(); sfxTrackerRow = Math.min(31, sfxTrackerRow + 4); sfxRenderTracker(); return; }
+                            if (key === 'home') { e.preventDefault(); sfxTrackerRow = 0; sfxRenderTracker(); return; }
+                            if (key === 'end') { e.preventDefault(); sfxTrackerRow = 31; sfxRenderTracker(); return; }
+                        }
+                    }
+
+                    // ---- Init ----
+                    function initSfxEditor() {
+                        if (sfxEditorInited) {
+                            sfxRenderAll();
+                            return;
+                        }
+                        sfxEditorInited = true;
+
+                        sfxRenderAll();
+
+                        var cvsWrap = document.getElementById('sfx-canvas-wrap');
+                        cvsWrap.addEventListener('mousedown', sfxOnBarMouseDown);
+                        cvsWrap.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+                        window.addEventListener('mousemove', function(e) {
+                            if (!document.getElementById('tab-sfx').classList.contains('active')) return;
+                            if (sfxMode !== 'bar') return;
+                            var cvs = document.getElementById('cvs-sfx-bars');
+                            if (!cvs) return;
+                            var rect = cvs.getBoundingClientRect();
+                            if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                                sfxOnBarMouseMove(e);
+                            } else if (sfxIsDrawing) {
+                                sfxOnBarMouseMove(e);
+                            } else if (sfxHoverNote >= 0) {
+                                sfxOnBarMouseLeave(e);
+                            }
+                        });
+                        window.addEventListener('mouseup', sfxOnBarMouseUp);
+                        window.addEventListener('keydown', sfxOnKeyDown);
+
+                        // Resize observer to re-render bars when size changes
+                        if (window.ResizeObserver) {
+                            var ro = new ResizeObserver(function() {
+                                if (sfxMode === 'bar') sfxRenderBars();
+                            });
+                            ro.observe(cvsWrap);
+                        }
+                    }
+                    // ============ END SFX EDITOR ============
+
+                    // ============ MUSIC EDITOR ============
+                    var musicInited = false;
+                    var musicCurrentPattern = 0;
+                    var musicSelectedChannel = 0;
+                    var musicUndoStack = [];
+                    var musicRedoStack = [];
+
+                    function musicParsePattern(idx) {
+                        var offset = idx * 4;
+                        var ch0 = MUSIC[offset] || 0;
+                        var ch1 = MUSIC[offset + 1] || 0;
+                        var ch2 = MUSIC[offset + 2] || 0;
+                        var ch3 = MUSIC[offset + 3] || 0;
+                        var channels = [ch0, ch1, ch2, ch3];
+                        return {
+                            sfxIds: channels.map(function(c) { return c & 0x3f; }),
+                            disabled: channels.map(function(c) { return (c & 0x40) !== 0; }),
+                            loopStart: (ch0 & 0x80) !== 0,
+                            loopEnd: (ch1 & 0x80) !== 0,
+                            stopAtEnd: (ch2 & 0x80) !== 0,
+                            isEmpty: channels.every(function(c) { return (c & 0x40) !== 0; })
+                        };
+                    }
+
+                    function musicPushUndo() {
+                        var offset = musicCurrentPattern * 4;
+                        musicUndoStack.push({ pattern: musicCurrentPattern, data: [MUSIC[offset], MUSIC[offset+1], MUSIC[offset+2], MUSIC[offset+3]] });
+                        if (musicUndoStack.length > 50) musicUndoStack.shift();
+                        musicRedoStack = [];
+                    }
+
+                    function musicUndo() {
+                        if (musicUndoStack.length === 0) return;
+                        var frame = musicUndoStack.pop();
+                        var offset = frame.pattern * 4;
+                        musicRedoStack.push({ pattern: frame.pattern, data: [MUSIC[offset], MUSIC[offset+1], MUSIC[offset+2], MUSIC[offset+3]] });
+                        for (var i = 0; i < 4; i++) MUSIC[offset + i] = frame.data[i];
+                        musicCurrentPattern = frame.pattern;
+                        musicRenderAll();
+                        notifyMusicChanged();
+                    }
+
+                    function musicRedo() {
+                        if (musicRedoStack.length === 0) return;
+                        var frame = musicRedoStack.pop();
+                        var offset = frame.pattern * 4;
+                        musicUndoStack.push({ pattern: frame.pattern, data: [MUSIC[offset], MUSIC[offset+1], MUSIC[offset+2], MUSIC[offset+3]] });
+                        for (var i = 0; i < 4; i++) MUSIC[offset + i] = frame.data[i];
+                        musicCurrentPattern = frame.pattern;
+                        musicRenderAll();
+                        notifyMusicChanged();
+                    }
+
+                    var musicChangeTimer = null;
+                    function notifyMusicChanged() {
+                        if (!EDITABLE) return;
+                        if (musicChangeTimer) clearTimeout(musicChangeTimer);
+                        musicChangeTimer = setTimeout(function() {
+                            vscodeApi.postMessage({ type: 'musicChanged', music: Array.prototype.slice.call(MUSIC) });
+                        }, 100);
+                    }
+
+                    function musicRenderToolbar() {
+                        var tb = document.getElementById('music-toolbar');
+                        tb.innerHTML = '';
+
+                        // Pattern index selector
+                        var lbl = document.createElement('span');
+                        lbl.className = 'label';
+                        lbl.textContent = 'PATTERN';
+                        tb.appendChild(lbl);
+
+                        var prevBtn = document.createElement('button');
+                        prevBtn.className = 'tool-btn';
+                        prevBtn.textContent = '\\u25c0';
+                        prevBtn.addEventListener('click', function() {
+                            musicCurrentPattern = (musicCurrentPattern + 63) % 64;
+                            musicRenderAll();
+                        });
+                        tb.appendChild(prevBtn);
+
+                        var val = document.createElement('span');
+                        val.className = 'value';
+                        val.id = 'music-pat-value';
+                        val.textContent = musicCurrentPattern.toString().padStart(2, '0');
+                        tb.appendChild(val);
+
+                        var nextBtn = document.createElement('button');
+                        nextBtn.className = 'tool-btn';
+                        nextBtn.textContent = '\\u25b6';
+                        nextBtn.addEventListener('click', function() {
+                            musicCurrentPattern = (musicCurrentPattern + 1) % 64;
+                            musicRenderAll();
+                        });
+                        tb.appendChild(nextBtn);
+
+                        ${showAudio ? `
+                        var sep = document.createElement('span');
+                        sep.className = 'sep';
+                        tb.appendChild(sep);
+
+                        var playBtn = document.createElement('button');
+                        playBtn.className = 'tool-btn';
+                        playBtn.id = 'music-play-btn';
+                        playBtn.textContent = '\\u25b6 ' + LOCALE.play;
+                        playBtn.addEventListener('click', function() { musicTogglePlay(); });
+                        tb.appendChild(playBtn);
+                        ` : ''}
+                    }
+
+                    ${showAudio ? `
+                    function musicTogglePlay() {
+                        var btn = document.getElementById('music-play-btn');
+                        if (currentMusicPlayer) {
+                            stopMusic();
+                        } else {
+                            playMusic(musicCurrentPattern);
+                            if (currentMusicPlayer && btn) {
+                                btn.textContent = '\\u23f9 ' + LOCALE.stop;
+                                btn.classList.add('active');
+                            }
+                        }
+                    }
+                    ` : ''}
+
+                    function musicRenderPatternEditor() {
+                        var container = document.getElementById('music-pattern-editor');
+                        container.innerHTML = '';
+                        var pat = musicParsePattern(musicCurrentPattern);
+
+                        // Channel boxes
+                        var chRow = document.createElement('div');
+                        chRow.className = 'music-channels';
+                        for (var c = 0; c < 4; c++) {
+                            (function(ch) {
+                                var box = document.createElement('div');
+                                var boxCls = 'music-ch';
+                                if (pat.disabled[ch]) boxCls += ' disabled';
+                                if (ch === musicSelectedChannel) boxCls += ' ch-selected';
+                                box.className = boxCls;
+
+                                if (!pat.disabled[ch]) {
+                                    box.style.cursor = 'pointer';
+                                    box.addEventListener('click', function(e) {
+                                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                                        musicSelectedChannel = ch;
+                                        musicRenderPatternEditor();
+                                        musicRenderSfxPicker();
+                                    });
+                                }
+
+                                var label = document.createElement('div');
+                                label.className = 'music-ch-label';
+
+                                if (EDITABLE) {
+                                    var cb = document.createElement('input');
+                                    cb.type = 'checkbox';
+                                    cb.checked = !pat.disabled[ch];
+                                    cb.className = 'music-ch-toggle';
+                                    cb.addEventListener('change', function() {
+                                        musicPushUndo();
+                                        var offset = musicCurrentPattern * 4 + ch;
+                                        if (cb.checked) {
+                                            MUSIC[offset] = MUSIC[offset] & ~0x40;
+                                        } else {
+                                            MUSIC[offset] = MUSIC[offset] | 0x40;
+                                            if (musicSelectedChannel === ch) musicSelectedChannel = -1;
+                                        }
+                                        musicRenderPatternEditor();
+                                        musicRenderNavigator();
+                                        musicRenderSfxPicker();
+                                        notifyMusicChanged();
+                                    });
+                                    label.appendChild(cb);
+                                }
+                                label.appendChild(document.createTextNode('CH ' + ch));
+                                box.appendChild(label);
+
+                                var sfxRow = document.createElement('div');
+                                sfxRow.className = 'music-ch-sfx';
+
+                                if (EDITABLE && !pat.disabled[ch]) {
+                                    var decBtn = document.createElement('button');
+                                    decBtn.className = 'tool-btn';
+                                    decBtn.textContent = '\\u25c0';
+                                    decBtn.addEventListener('click', function() {
+                                        musicPushUndo();
+                                        var offset = musicCurrentPattern * 4 + ch;
+                                        var cur = MUSIC[offset] & 0x3f;
+                                        var flags = MUSIC[offset] & 0xc0;
+                                        cur = (cur + 63) % 64;
+                                        MUSIC[offset] = flags | cur;
+                                        musicRenderPatternEditor();
+                                        musicRenderSfxPicker();
+                                        notifyMusicChanged();
+                                    });
+                                    sfxRow.appendChild(decBtn);
+                                }
+
+                                var sfxVal = document.createElement('span');
+                                sfxVal.className = 'sfx-val' + (pat.disabled[ch] ? ' muted' : '');
+                                sfxVal.textContent = pat.disabled[ch] ? '--' : pat.sfxIds[ch].toString().padStart(2, '0');
+                                if (!pat.disabled[ch]) {
+                                    sfxVal.addEventListener('click', function(e) {
+                                        e.stopPropagation();
+                                        musicSelectedChannel = (musicSelectedChannel === ch) ? -1 : ch;
+                                        musicRenderPatternEditor();
+                                        musicRenderSfxPicker();
+                                    });
+                                }
+                                sfxRow.appendChild(sfxVal);
+
+                                if (EDITABLE && !pat.disabled[ch]) {
+                                    var incBtn = document.createElement('button');
+                                    incBtn.className = 'tool-btn';
+                                    incBtn.textContent = '\\u25b6';
+                                    incBtn.addEventListener('click', function() {
+                                        musicPushUndo();
+                                        var offset = musicCurrentPattern * 4 + ch;
+                                        var cur = MUSIC[offset] & 0x3f;
+                                        var flags = MUSIC[offset] & 0xc0;
+                                        cur = (cur + 1) % 64;
+                                        MUSIC[offset] = flags | cur;
+                                        musicRenderPatternEditor();
+                                        musicRenderSfxPicker();
+                                        notifyMusicChanged();
+                                    });
+                                    sfxRow.appendChild(incBtn);
+                                }
+
+                                box.appendChild(sfxRow);
+                                chRow.appendChild(box);
+                            })(c);
+                        }
+                        container.appendChild(chRow);
+
+                        // Flags row
+                        var flagsRow = document.createElement('div');
+                        flagsRow.className = 'music-flags';
+
+                        var flagDefs = [
+                            { name: 'Loop Start', cls: 'loop-start-on', bit: 0x80, chIdx: 0 },
+                            { name: 'Loop End', cls: 'loop-end-on', bit: 0x80, chIdx: 1 },
+                            { name: 'Stop', cls: 'stop-on', bit: 0x80, chIdx: 2 }
+                        ];
+
+                        var flagLabel = document.createElement('span');
+                        flagLabel.className = 'label';
+                        flagLabel.textContent = 'Flags:';
+                        flagLabel.style.color = '#888';
+                        flagLabel.style.fontSize = '11px';
+                        flagsRow.appendChild(flagLabel);
+
+                        for (var fi = 0; fi < flagDefs.length; fi++) {
+                            (function(fd) {
+                                var btn = document.createElement('button');
+                                btn.className = 'flag-btn';
+                                var offset = musicCurrentPattern * 4 + fd.chIdx;
+                                var isOn = (MUSIC[offset] & fd.bit) !== 0;
+                                if (isOn) btn.classList.add(fd.cls);
+                                btn.textContent = (isOn ? '\\u25cf ' : '\\u25cb ') + fd.name;
+                                if (EDITABLE) {
+                                    btn.addEventListener('click', function() {
+                                        musicPushUndo();
+                                        MUSIC[offset] = MUSIC[offset] ^ fd.bit;
+                                        musicRenderPatternEditor();
+                                        musicRenderNavigator();
+                                        notifyMusicChanged();
+                                    });
+                                }
+                                flagsRow.appendChild(btn);
+                            })(flagDefs[fi]);
+                        }
+                        container.appendChild(flagsRow);
+                    }
+
+                    function musicRenderNavigator() {
+                        var container = document.getElementById('music-navigator');
+                        container.innerHTML = '';
+                        var grid = document.createElement('div');
+                        grid.className = 'music-nav-grid';
+                        for (var i = 0; i < 64; i++) {
+                            (function(idx) {
+                                var pat = musicParsePattern(idx);
+                                var cell = document.createElement('div');
+                                var cls = 'music-nav-cell';
+                                if (idx === musicCurrentPattern) cls += ' selected';
+                                if (pat.isEmpty) cls += ' empty';
+                                else cls += ' non-empty';
+                                if (pat.loopStart) cls += ' loop-start';
+                                if (pat.loopEnd) cls += ' loop-end';
+                                if (pat.stopAtEnd) cls += ' stop-end';
+                                cell.className = cls;
+                                cell.textContent = idx.toString().padStart(2, '0');
+                                cell.addEventListener('click', function() {
+                                    musicCurrentPattern = idx;
+                                    musicRenderAll();
+                                });
+                                grid.appendChild(cell);
+                            })(i);
+                        }
+                        container.appendChild(grid);
+                    }
+
+                    var musicPlayingSfxId = -1;
+
+                    function musicRenderSfxPicker() {
+                        var picker = document.getElementById('music-sfx-picker');
+                        if (!picker) return;
+                        picker.innerHTML = '';
+
+                        var pat = musicParsePattern(musicCurrentPattern);
+
+                        // Auto-fix: if selected channel is disabled, pick first enabled one
+                        if (musicSelectedChannel >= 0 && musicSelectedChannel <= 3 && pat.disabled[musicSelectedChannel]) {
+                            musicSelectedChannel = -1;
+                            for (var ci = 0; ci < 4; ci++) {
+                                if (!pat.disabled[ci]) { musicSelectedChannel = ci; break; }
+                            }
+                        }
+
+                        var currentSfxId = -1;
+                        if (musicSelectedChannel >= 0 && musicSelectedChannel <= 3 && !pat.disabled[musicSelectedChannel]) {
+                            currentSfxId = pat.sfxIds[musicSelectedChannel];
+                        }
+
+                        var label = document.createElement('div');
+                        label.className = 'music-sfx-picker-label';
+                        if (musicSelectedChannel >= 0 && musicSelectedChannel <= 3) {
+                            label.innerHTML = 'SFX for <span class="ch-num">CH ' + musicSelectedChannel + '</span>';
+                        } else {
+                            label.textContent = 'SFX (no channel selected)';
+                        }
+                        picker.appendChild(label);
+
+                        var grid = document.createElement('div');
+                        grid.className = 'music-sfx-grid';
+                        for (var i = 0; i < 64; i++) {
+                            (function(sfxIdx) {
+                                var cell = document.createElement('div');
+                                var cls = 'music-sfx-cell';
+                                // Check if SFX has any non-zero note data
+                                var sfxOffset = sfxIdx * 68;
+                                var hasData = false;
+                                for (var b = 0; b < 64; b++) {
+                                    if (SFX[sfxOffset + b]) { hasData = true; break; }
+                                }
+                                if (hasData) cls += ' non-empty';
+                                if (sfxIdx === currentSfxId) cls += ' selected';
+                                if (sfxIdx === musicPlayingSfxId) cls += ' sfx-playing';
+                                cell.className = cls;
+
+                                var numSpan = document.createElement('span');
+                                numSpan.textContent = sfxIdx.toString().padStart(2, '0');
+                                cell.appendChild(numSpan);
+
+                                // Play button for non-empty SFX
+                                var playBtn = document.createElement('span');
+                                playBtn.className = 'sfx-play-btn';
+                                playBtn.textContent = '\u25B6';
+                                playBtn.addEventListener('click', function(e) {
+                                    e.stopPropagation();
+                                    if (musicPlayingSfxId === sfxIdx) {
+                                        stopSfx();
+                                        musicPlayingSfxId = -1;
+                                        musicRenderSfxPicker();
+                                    } else {
+                                        stopSfx();
+                                        musicPlayingSfxId = sfxIdx;
+                                        musicRenderSfxPicker();
+                                        playSfx(sfxIdx, null, false);
+                                        // Clear playing state when SFX finishes
+                                        var sfxData = parseSfx(sfxIdx);
+                                        if (!sfxData.isEmpty) {
+                                            var dur = (sfxData.speed || 1) * 183 / 22050 * 32;
+                                            setTimeout(function() {
+                                                if (musicPlayingSfxId === sfxIdx) {
+                                                    musicPlayingSfxId = -1;
+                                                    musicRenderSfxPicker();
+                                                }
+                                            }, dur * 1000 + 200);
+                                        }
+                                    }
+                                });
+                                cell.appendChild(playBtn);
+
+                                if (EDITABLE && musicSelectedChannel >= 0) {
+                                    cell.addEventListener('click', function() {
+                                        if (musicSelectedChannel < 0 || musicSelectedChannel > 3) return;
+                                        musicPushUndo();
+                                        var offset = musicCurrentPattern * 4 + musicSelectedChannel;
+                                        var flags = MUSIC[offset] & 0xc0;
+                                        MUSIC[offset] = flags | (sfxIdx & 0x3f);
+                                        musicRenderPatternEditor();
+                                        musicRenderSfxPicker();
+                                        notifyMusicChanged();
+                                    });
+                                }
+                                grid.appendChild(cell);
+                            })(i);
+                        }
+                        picker.appendChild(grid);
+                    }
+
+                    function musicRenderStatus() {
+                        var st = document.getElementById('music-status-bar');
+                        if (!st) return;
+                        st.textContent = 'Pattern ' + musicCurrentPattern.toString().padStart(2, '0');
+                    }
+
+                    function musicRenderAll() {
+                        var valEl = document.getElementById('music-pat-value');
+                        if (valEl) valEl.textContent = musicCurrentPattern.toString().padStart(2, '0');
+                        musicRenderPatternEditor();
+                        musicRenderNavigator();
+                        musicRenderSfxPicker();
+                        musicRenderStatus();
+                    }
+
+                    function musicOnKeyDown(e) {
+                        var tabMusic = document.getElementById('tab-music');
+                        if (!tabMusic || !tabMusic.classList.contains('active')) return;
+                        if (e.key === 'ArrowLeft' || e.key === '-') {
+                            e.preventDefault();
+                            musicCurrentPattern = (musicCurrentPattern + 63) % 64;
+                            musicRenderAll();
+                        } else if (e.key === 'ArrowRight' || e.key === '+' || e.key === '=') {
+                            e.preventDefault();
+                            musicCurrentPattern = (musicCurrentPattern + 1) % 64;
+                            musicRenderAll();
+                        } else if (e.key === ' ') {
+                            e.preventDefault();
+                            ${showAudio ? 'musicTogglePlay();' : ''}
+                        } else if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '4') {
+                            if (EDITABLE) {
+                                e.preventDefault();
+                                var ch = parseInt(e.key) - 1;
+                                musicPushUndo();
+                                var offset = musicCurrentPattern * 4 + ch;
+                                MUSIC[offset] = MUSIC[offset] ^ 0x40;
+                                musicRenderPatternEditor();
+                                musicRenderNavigator();
+                                notifyMusicChanged();
+                            }
+                        } else if (e.ctrlKey && e.key === 'z') {
+                            e.preventDefault();
+                            if (e.shiftKey) musicRedo();
+                            else musicUndo();
+                        } else if (e.ctrlKey && e.key === 'y') {
+                            e.preventDefault();
+                            musicRedo();
+                        }
+                    }
+
+                    function initMusicEditor() {
+                        if (musicInited) {
+                            musicRenderAll();
+                            return;
+                        }
+                        musicInited = true;
+                        musicRenderToolbar();
+                        musicRenderAll();
+                        window.addEventListener('keydown', musicOnKeyDown);
+                    }
+                    // ============ END MUSIC EDITOR ============
 
                     ${showAudio ? getAudioEngineScript() : ''}
 
@@ -2734,76 +3795,13 @@ function getMapEditorScript(): string {
                     // ============ END MAP EDITOR ============`;
 }
 
-function getBasicSfxListScript(): string {
+function getAudioEngineScript(): string {
     return `
-                    function renderSfxList() {
-                        var container = document.getElementById('sfx-list');
-                        container.innerHTML = '';
-                        for (var i = 0; i < 64; i++) {
-                            var sfx = parseSfx(i);
-                            var div = document.createElement('div');
-                            div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '');
-                            var label = document.createElement('span');
-                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (' + LOCALE.empty + ')' : ' ' + LOCALE.speed + ':' + sfx.speed);
-                            div.appendChild(label);
-                            (function(idx) { div.onclick = function() { renderSfxDetail(idx); }; })(i);
-                            container.appendChild(div);
-                        }
-                    }`;
-}
-
-function getAudioSfxListScript(): string {
-    return `
+                    // ============ AUDIO ENGINE ============
                     var audioCtx = null;
                     var currentSfxPlayer = null;
                     var currentMusicPlayer = null;
                     var allActiveSfxPlayers = [];
-                    var selectedSfxId = null;
-
-                    function renderSfxList() {
-                        var container = document.getElementById('sfx-list');
-                        container.innerHTML = '';
-                        for (var i = 0; i < 64; i++) {
-                            var sfx = parseSfx(i);
-                            var div = document.createElement('div');
-                            div.className = 'sfx-item' + (sfx.isEmpty ? ' empty' : '');
-                            if (!sfx.isEmpty) {
-                                var playBtn = document.createElement('button');
-                                playBtn.className = 'play-btn';
-                                playBtn.textContent = '\\u25b6';
-                                (function(sfxIdx, btn) {
-                                    btn.onclick = function(e) {
-                                        e.stopPropagation();
-                                        if (btn.classList.contains('is-playing')) {
-                                            stopSfx();
-                                        } else {
-                                            currentSfxPlayer = playSfx(sfxIdx, null);
-                                            if (currentSfxPlayer) {
-                                                btn.textContent = '\\u23f9';
-                                                btn.classList.add('is-playing');
-                                            }
-                                        }
-                                    };
-                                })(i, playBtn);
-                                div.appendChild(playBtn);
-                            }
-                            var label = document.createElement('span');
-                            label.textContent = 'SFX ' + i.toString().padStart(2, '0') + (sfx.isEmpty ? ' (' + LOCALE.empty + ')' : ' ' + LOCALE.speed + ':' + sfx.speed);
-                            div.appendChild(label);
-                            (function(idx) {
-                                div.onclick = function() {
-                                    selectedSfxId = idx;
-                                    renderSfxDetail(idx);
-                                };
-                            })(i);
-                            container.appendChild(div);
-                        }
-                    }`;
-}
-
-function getAudioEngineScript(): string {
-    return `
-                    // ============ AUDIO ENGINE ============
                     var BASE_FREQ = 16.35;
 
                     function pitchToFreq(pitch) {
@@ -2936,8 +3934,13 @@ function getAudioEngineScript(): string {
                         allActiveSfxPlayers.forEach(function(p) { try { p.stop(); } catch(e) {} });
                         allActiveSfxPlayers = [];
                         document.querySelectorAll('.sfx-note.playing').forEach(function(el) { el.classList.remove('playing'); });
-                        var btn = document.getElementById('btn-toggle-sfx');
-                        if (btn) { btn.textContent = '\\u25b6 ' + LOCALE.play; btn.dataset.playing = ''; }
+                        var btn = document.getElementById('sfx-play-btn');
+                        if (btn) { btn.textContent = '\\u25b6 ' + LOCALE.play; }
+                        sfxHoverNote = -1;
+                        if (typeof sfxRenderBars === 'function' && sfxMode === 'bar') sfxRenderBars();
+                        if (typeof sfxRenderTracker === 'function' && sfxMode === 'tracker') {
+                            document.querySelectorAll('.sfx-note.playing').forEach(function(el) { el.classList.remove('playing'); });
+                        }
                         document.querySelectorAll('.play-btn.is-playing').forEach(function(el) {
                             el.textContent = '\\u25b6';
                             el.classList.remove('is-playing');
@@ -2954,10 +3957,11 @@ function getAudioEngineScript(): string {
                         var channelPlayers = [null, null, null, null];
 
                         function updatePatternHighlight() {
-                            document.querySelectorAll('.music-pattern').forEach(function(el, idx) {
+                            document.querySelectorAll('.music-nav-cell').forEach(function(el, idx) {
                                 el.classList.toggle('playing', idx === patternIndex);
                             });
-                            document.getElementById('music-status').textContent = LOCALE.playingPattern + ' ' + patternIndex;
+                            var statusEl = document.getElementById('music-status-bar');
+                            if (statusEl) statusEl.textContent = LOCALE.playingPattern + ' ' + patternIndex;
                         }
 
                         function playPattern() {
@@ -3024,11 +4028,11 @@ function getAudioEngineScript(): string {
                         }
                         allActiveSfxPlayers.forEach(function(p) { try { p.stop(); } catch(e) {} });
                         allActiveSfxPlayers = [];
-                        document.querySelectorAll('.music-pattern.playing').forEach(function(el) { el.classList.remove('playing'); });
-                        var statusEl = document.getElementById('music-status');
-                        if (statusEl) statusEl.textContent = '';
-                        var btn = document.getElementById('btn-toggle-music');
-                        if (btn) { btn.textContent = '\\u25b6 ' + LOCALE.playMusic; btn.dataset.playing = ''; }
+                        document.querySelectorAll('.music-nav-cell.playing').forEach(function(el) { el.classList.remove('playing'); });
+                        var statusEl = document.getElementById('music-status-bar');
+                        if (statusEl) statusEl.textContent = 'Pattern ' + (typeof musicCurrentPattern !== 'undefined' ? musicCurrentPattern.toString().padStart(2, '0') : '00');
+                        var btn = document.getElementById('music-play-btn');
+                        if (btn) { btn.textContent = '\\u25b6 ' + LOCALE.play; btn.classList.remove('active'); }
                     }
                     // ============ END AUDIO ENGINE ============`;
 }
