@@ -9,6 +9,7 @@ import { Pico8Decoder } from './pngDecoder';
 import { cartDataToP8 } from './p8format';
 import { Pico8PngEditorProvider, Pico8P8EditorProvider } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
+import { pico8RunState } from './pico8Runner';
 
 // Webview provider for game detail panel in sidebar
 class GameDetailViewProvider implements vscode.WebviewViewProvider {
@@ -447,6 +448,7 @@ class Pico8CartPanel {
     public static setRunningProcess(proc: ChildProcess | undefined) {
         Pico8CartPanel._runningProcess = proc;
         Pico8CartPanel._lastActivePanel?.postRunState(!!proc);
+        pico8RunState.set(!!proc);
     }
 
     public static getRunningProcess(): ChildProcess | undefined {
@@ -963,8 +965,13 @@ export function activate(context: vscode.ExtensionContext) {
     Pico8CartPanel.setRunHandler((game) => runGameInPico8(game));
     Pico8CartPanel.setStopHandler(() => stopRunningGame());
 
-    vscode.commands.registerCommand('pico8ide.runGame', async (item?: ListGameItem) => {
-        const game = item?.game ?? currentSelectedGame ?? Pico8CartPanel.currentGame;
+    vscode.commands.registerCommand('pico8ide.runGame', async (itemOrPath?: ListGameItem | string) => {
+        // Accept a direct file path from custom editors
+        if (typeof itemOrPath === 'string') {
+            await runGameInPico8(itemOrPath);
+            return;
+        }
+        const game = itemOrPath?.game ?? currentSelectedGame ?? Pico8CartPanel.currentGame;
         if (game) {
             await runGameInPico8(game);
             return;

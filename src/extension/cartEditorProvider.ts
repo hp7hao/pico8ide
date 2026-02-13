@@ -2,15 +2,20 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CartData } from './cartData';
+import { MetaData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
+import { Pico8Encoder } from './pngDecoder';
 import { cartDataToP8, p8ToCartData } from './p8format';
 import { t } from './i18n';
 import { generateCartViewerHtml } from './cartViewerHtml';
+import { pico8RunState } from './pico8Runner';
 
 interface Pico8Document extends vscode.CustomDocument {
     uri: vscode.Uri;
     cartData: CartData | null;
     currentCode: string | null;
+    i18nData: object | null;
+    metaData: MetaData | null;
 }
 
 // ---- Breadcrumb suppression ----
@@ -55,6 +60,64 @@ function suppressBreadcrumbs(webviewPanel: vscode.WebviewPanel): vscode.Disposab
 
 // ---- Shared helpers ----
 
+function exportSingleCart(
+    document: Pico8Document,
+    message: any,
+    context: vscode.ExtensionContext
+): string {
+    if (!document.cartData) {
+        throw new Error('No cart data');
+    }
+    const variant: string = message.variant || 'base';
+    const glyphs: { [char: string]: number[] } = message.glyphs || {};
+
+    // Determine final code
+    let finalCode = document.currentCode ?? document.cartData.code;
+    if (variant !== 'base' && message.i18nLuaCode) {
+        finalCode = message.i18nLuaCode + '\n' + finalCode;
+    }
+
+    // Assemble RAM (uses LZSS compression automatically for large code)
+    const ram = Pico8Encoder.assembleRAM(document.cartData, finalCode);
+
+    // Determine title/author for cover
+    const meta = document.metaData?.meta;
+    let coverTitle = meta?.title || '';
+    let coverAuthor = meta?.author || '';
+    if (variant !== 'base' && message.localeMeta) {
+        coverTitle = message.localeMeta.title || coverTitle;
+        coverAuthor = message.localeMeta.author || coverAuthor;
+    }
+
+    // Generate cover PNG
+    const templateName = meta?.template || 'default';
+    const templatePath = path.join(context.extensionPath, 'resources', 'cart_templates', `${templateName}.png`);
+    const coverPng = Pico8Encoder.generateCover(
+        templatePath,
+        document.cartData.label,
+        coverTitle,
+        coverAuthor,
+        glyphs
+    );
+
+    // Steganography encode
+    const finalPngBuf = Pico8Encoder.encodeSteg(coverPng, ram);
+
+    // Determine output path
+    const cartDir = path.dirname(document.uri.fsPath);
+    const baseName = path.basename(document.uri.fsPath).replace(/\.(p8|p8\.png)$/i, '');
+    let outName: string;
+    if (variant === 'base') {
+        outName = `${baseName}.p8.png`;
+    } else {
+        outName = `${baseName}.${variant}.p8.png`;
+    }
+    const outPath = path.join(cartDir, outName);
+    fs.writeFileSync(outPath, finalPngBuf);
+
+    return outName;
+}
+
 function getErrorHtml(error: string): string {
     const locale = t();
     return `<!DOCTYPE html>
@@ -77,6 +140,24 @@ function getErrorHtml(error: string): string {
         </html>`;
 }
 
+function generateTemplatePreviews(context: vscode.ExtensionContext): { [name: string]: string } {
+    const templatesDir = path.join(context.extensionPath, 'resources', 'cart_templates');
+    const previews: { [name: string]: string } = {};
+    const templateNames = ['default', 'cyan', 'e-zombie', 'e-zombie16'];
+    for (const name of templateNames) {
+        const filePath = path.join(templatesDir, `${name}.png`);
+        try {
+            if (fs.existsSync(filePath)) {
+                const buf = fs.readFileSync(filePath);
+                previews[name] = `data:image/png;base64,${buf.toString('base64')}`;
+            }
+        } catch {
+            // Skip missing templates
+        }
+    }
+    return previews;
+}
+
 function setupEditableWebview(
     document: Pico8Document,
     webviewPanel: vscode.WebviewPanel,
@@ -89,11 +170,32 @@ function setupEditableWebview(
         enableScripts: true,
         localResourceRoots: [
             context.extensionUri,
-            vscode.Uri.joinPath(context.extensionUri, 'resources', 'monaco')
+            vscode.Uri.joinPath(context.extensionUri, 'resources', 'monaco'),
+            vscode.Uri.joinPath(context.extensionUri, 'resources', 'fonts'),
+            vscode.Uri.joinPath(context.extensionUri, 'resources', 'cart_templates')
         ]
     };
 
-    webviewPanel.webview.onDidReceiveMessage(async (message: { type: string; code?: string; gfx?: number[]; flags?: number[]; map?: number[]; sfx?: number[]; music?: number[] }) => {
+    const templatePreviews = generateTemplatePreviews(context);
+
+    webviewPanel.webview.onDidReceiveMessage(async (message: any) => {
+        if (message.type === 'run') {
+            // Save current state to .p8, then launch via shared command
+            if (document.cartData) {
+                const p8Path = document.uri.fsPath.replace(/\.p8\.png$/i, '.p8');
+                if (!p8Path.endsWith('.p8')) {
+                    // Already a .p8 file
+                    saveDocumentAsP8(document, document.uri.fsPath);
+                    await vscode.commands.executeCommand('pico8ide.runGame', document.uri.fsPath);
+                } else {
+                    saveDocumentAsP8(document, p8Path);
+                    await vscode.commands.executeCommand('pico8ide.runGame', p8Path);
+                }
+            }
+        }
+        if (message.type === 'stop') {
+            await vscode.commands.executeCommand('pico8ide.stopGame');
+        }
         if (message.type === 'codeChanged' && message.code !== undefined) {
             document.currentCode = message.code;
             onDidChange.fire({
@@ -120,6 +222,9 @@ function setupEditableWebview(
         }
         if (message.type === 'mapChanged' && message.map !== undefined && document.cartData) {
             document.cartData.map = message.map;
+            if (message.gfx !== undefined) {
+                document.cartData.gfx = message.gfx;
+            }
             onDidChange.fire({
                 document,
                 undo: () => {},
@@ -142,6 +247,69 @@ function setupEditableWebview(
                 redo: () => {}
             });
         }
+        if (message.type === 'metaChanged' && message.metaData !== undefined) {
+            document.metaData = message.metaData;
+            document.i18nData = message.metaData.i18n;
+            // Persist to .meta.json alongside the cart
+            const metaPath = document.uri.fsPath.replace(/\.(p8|p8\.png)$/i, '.meta.json');
+            try {
+                fs.writeFileSync(metaPath, JSON.stringify(message.metaData, null, 4), 'utf-8');
+            } catch {
+                // Silently ignore write errors
+            }
+            onDidChange.fire({
+                document,
+                undo: () => {},
+                redo: () => {}
+            });
+        }
+        if (message.type === 'exportCart') {
+            try {
+                if (!document.cartData) {
+                    throw new Error('No cart data');
+                }
+                const outName = exportSingleCart(document, message, context);
+
+                webviewPanel.webview.postMessage({
+                    type: 'exportComplete',
+                    path: outName
+                });
+                vscode.window.showInformationMessage(`${locale.exportSuccess}: ${outName}`);
+            } catch (e: any) {
+                webviewPanel.webview.postMessage({
+                    type: 'exportError',
+                    error: e.message || 'Unknown error'
+                });
+                vscode.window.showErrorMessage(`${locale.exportError}: ${e.message}`);
+            }
+        }
+        if (message.type === 'exportCartBatch') {
+            if (!document.cartData) {
+                webviewPanel.webview.postMessage({
+                    type: 'exportBatchComplete',
+                    paths: [],
+                    errors: ['No cart data']
+                });
+                return;
+            }
+            const results: string[] = [];
+            const errors: string[] = [];
+            for (const item of message.items) {
+                try {
+                    const outName = exportSingleCart(document, item, context);
+                    results.push(outName);
+                } catch (e: any) {
+                    errors.push(`${item.variant}: ${e.message}`);
+                }
+            }
+            if (errors.length === 0) {
+                webviewPanel.webview.postMessage({ type: 'exportBatchComplete', paths: results });
+                vscode.window.showInformationMessage(`${locale.exportSuccess}: ${results.length} files`);
+            } else {
+                webviewPanel.webview.postMessage({ type: 'exportBatchComplete', paths: results, errors: errors });
+                vscode.window.showWarningMessage(`Export: ${results.length} ok, ${errors.length} failed`);
+            }
+        }
     });
 
     webviewPanel.webview.html = generateCartViewerHtml({
@@ -150,8 +318,18 @@ function setupEditableWebview(
         extensionUri: context.extensionUri,
         webview: webviewPanel.webview,
         showAudio: true,
-        editable: true
+        showRunButton: true,
+        editable: true,
+        i18nData: document.i18nData,
+        metaData: document.metaData,
+        templatePreviews
     });
+
+    // Subscribe to shared run state so the button updates
+    const runStateDisposable = pico8RunState.onChanged((running) => {
+        webviewPanel.webview.postMessage({ type: 'runState', running });
+    });
+    webviewPanel.onDidDispose(() => runStateDisposable.dispose());
 }
 
 function saveDocumentAsP8(document: Pico8Document, destPath: string): void {
@@ -160,6 +338,34 @@ function saveDocumentAsP8(document: Pico8Document, destPath: string): void {
     const saveData = { ...document.cartData, code };
     const p8Content = cartDataToP8(saveData);
     fs.writeFileSync(destPath, p8Content, 'utf-8');
+}
+
+function loadMetaData(cartPath: string): MetaData | null {
+    const metaPath = cartPath.replace(/\.(p8|p8\.png)$/i, '.meta.json');
+    const i18nPath = cartPath.replace(/\.(p8|p8\.png)$/i, '.i18n.json');
+    // Try .meta.json first
+    try {
+        if (fs.existsSync(metaPath)) {
+            const raw = fs.readFileSync(metaPath, 'utf-8');
+            return JSON.parse(raw);
+        }
+    } catch {
+        // Fall through to i18n fallback
+    }
+    // Fall back to .i18n.json (migration)
+    try {
+        if (fs.existsSync(i18nPath)) {
+            const raw = fs.readFileSync(i18nPath, 'utf-8');
+            const i18nData = JSON.parse(raw);
+            return {
+                meta: { title: '', author: '', template: 'default' },
+                i18n: i18nData
+            };
+        }
+    } catch {
+        // Ignore parse errors
+    }
+    return null;
 }
 
 function backupDocumentAsP8(document: Pico8Document, backupPath: string): void {
@@ -194,10 +400,13 @@ export class Pico8PngEditorProvider implements vscode.CustomEditorProvider<Pico8
         } catch {
             // cartData stays null; error shown in resolveCustomEditor
         }
+        const metaData = loadMetaData(uri.fsPath);
         return {
             uri,
             cartData,
             currentCode: null,
+            i18nData: metaData ? metaData.i18n : null,
+            metaData,
             dispose: () => {}
         };
     }
@@ -402,10 +611,13 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
         } catch {
             // cartData stays null; error shown in resolveCustomEditor
         }
+        const metaData = loadMetaData(uri.fsPath);
         return {
             uri,
             cartData,
             currentCode: null,
+            i18nData: metaData ? metaData.i18n : null,
+            metaData,
             dispose: () => {}
         };
     }

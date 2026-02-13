@@ -17,7 +17,7 @@
     "Other"
   ],
   "activationEvents": [],
-  "main": "./out/extension.js",
+  "main": "./out/extension/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -67,8 +67,13 @@
     "languages": [
       {
         "id": "pico8",
-        "extensions": [".p8"],
-        "aliases": ["PICO-8", "pico8"],
+        "extensions": [
+          ".p8"
+        ],
+        "aliases": [
+          "PICO-8",
+          "pico8"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -192,8 +197,16 @@
         "pico8ide.language": {
           "type": "string",
           "default": "",
-          "enum": ["", "en_US", "zh_CN"],
-          "enumDescriptions": ["%config.language.auto%", "English", "中文(简体)"],
+          "enum": [
+            "",
+            "en_US",
+            "zh_CN"
+          ],
+          "enumDescriptions": [
+            "%config.language.auto%",
+            "English",
+            "中文(简体)"
+          ],
           "description": "%config.language.description%"
         },
         "pico8ide.pico8Path": {
@@ -209,21 +222,29 @@
     "postpublish": "mv README.dev.md README.md",
     "postinstall": "node scripts/copy-monaco.js",
     "precompile": "node scripts/copy-monaco.js",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node esbuild.config.mjs",
+    "build:webview": "node esbuild.config.mjs",
     "watch": "tsc -watch -p ./",
+    "watch:webview": "node esbuild.config.mjs --watch",
     "package": "vsce package"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
     "@types/node": "^16.x",
     "@types/pngjs": "^6.0.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.80.0",
     "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.27.3",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
     "monaco-editor": "^0.52.0",
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zustand": "^5.0.11"
   }
 }

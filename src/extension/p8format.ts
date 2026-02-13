@@ -66,20 +66,24 @@ export function cartDataToP8(cartData: CartData): string {
             + loopEnd.toString(16).padStart(2, '0');
 
         // 32 notes x 5 hex chars each
+        // .p8 text format per note: PP W V E (pitch 2 hex, waveform 1 hex, volume 1 hex, effect 1 hex)
         let notesStr = '';
         for (let n = 0; n < 32; n++) {
             const lo = cartData.sfx[offset + n * 2] || 0;
             const hi = cartData.sfx[offset + n * 2 + 1] || 0;
 
-            // Decode note fields from binary
+            // Decode note fields from binary RAM format
             const pitch = lo & 0x3f;
             const waveform = ((lo >> 6) & 0x03) | ((hi & 0x01) << 2);
             const volume = (hi >> 1) & 0x07;
             const effect = (hi >> 4) & 0x07;
             const custom = (hi >> 7) & 0x01;
 
-            // Encode as 20-bit value: (custom<<15) | (effect<<12) | (volume<<9) | (waveform<<6) | pitch
-            const val = (custom << 15) | (effect << 12) | (volume << 9) | (waveform << 6) | pitch;
+            // Combine custom flag into waveform (custom=1 means waveform 8+)
+            const fullWaveform = waveform | (custom << 3);
+
+            // Encode as PICO-8 .p8 text format: pitch(8 bits) | waveform(4 bits) | volume(4 bits) | effect(4 bits)
+            const val = (pitch << 12) | (fullWaveform << 8) | (volume << 4) | effect;
             notesStr += val.toString(16).padStart(5, '0');
         }
 
@@ -185,18 +189,23 @@ export function p8ToCartData(text: string): CartData {
         sfx[offset + 67] = parseInt(line.substr(6, 2), 16);
 
         // 32 notes x 5 hex chars each starting at position 8
+        // .p8 text format per note: PP W V E (pitch 2 hex, waveform 1 hex, volume 1 hex, effect 1 hex)
         for (let n = 0; n < 32; n++) {
             const noteStart = 8 + n * 5;
             if (noteStart + 5 > line.length) break;
             const val = parseInt(line.substr(noteStart, 5), 16);
 
-            const pitch = val & 0x3f;
-            const waveform = (val >> 6) & 0x07;
-            const volume = (val >> 9) & 0x07;
-            const effect = (val >> 12) & 0x07;
-            const custom = (val >> 15) & 0x01;
+            // Decode from PICO-8 .p8 text format
+            const pitch = (val >> 12) & 0xff;
+            const fullWaveform = (val >> 8) & 0x0f;
+            const volume = (val >> 4) & 0x0f;
+            const effect = val & 0x0f;
 
-            // Encode back to binary (2 bytes per note)
+            // Split custom flag from waveform (waveform 8+ means custom SFX waveform)
+            const waveform = fullWaveform & 0x07;
+            const custom = (fullWaveform >> 3) & 0x01;
+
+            // Encode back to binary RAM format (2 bytes per note)
             // lo: ww pppppp (low 6 bits = pitch, bits 6-7 = low 2 bits of waveform)
             // hi: c eee vvv w (bit 0 = high bit of waveform, bits 1-3 = volume, bits 4-6 = effect, bit 7 = custom)
             const lo = (pitch & 0x3f) | ((waveform & 0x03) << 6);

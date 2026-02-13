@@ -8,10 +8,15 @@
     ],
     "sourceMap": true,
     "rootDir": "./src",
-    "strict": true
+    "strict": true,
+    "skipLibCheck": true
   },
+  "include": [
+    "src/extension/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
-    ".vscode-test"
+    ".vscode-test",
+    "src/webview"
   ]
 }

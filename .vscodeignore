@@ -2,6 +2,7 @@ node_modules/**
 src/**
 scripts/**
 tsconfig.json
+esbuild.config.mjs
 .gitignore
 .github/**
 .claude/**

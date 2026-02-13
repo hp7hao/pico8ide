@@ -31,6 +31,7 @@ export interface LocaleStrings {
     tabMap: string;
     tabSfx: string;
     tabMusic: string;
+    tabI18n: string;
 
     // Cart viewer labels
     spriteSheetLabel: string;
@@ -97,6 +98,18 @@ export interface LocaleStrings {
     // Map editor
     tileLabel: string;
     tilePicker: string;
+
+    // Export tab
+    tabExport: string;
+    exportTitle: string;
+    exportAuthor: string;
+    exportTemplate: string;
+    exportButton: string;
+    exportSuccess: string;
+    exportError: string;
+    exportLocaleVariant: string;
+    exportAll: string;
+    exportCodeTooLarge: string;
 }
 
 const en: LocaleStrings = {
@@ -129,6 +142,7 @@ const en: LocaleStrings = {
     tabMap: "Map",
     tabSfx: "SFX",
     tabMusic: "Music",
+    tabI18n: "i18n",
 
     // Cart viewer labels
     spriteSheetLabel: "128x128 Sprite Sheet",
@@ -192,7 +206,19 @@ const en: LocaleStrings = {
     flagLabel: "Flag",
     flagsLabel: "Flags",
     tileLabel: "Tile",
-    tilePicker: "Tile Picker"
+    tilePicker: "Tile Picker",
+
+    // Export tab
+    tabExport: "Export",
+    exportTitle: "Title",
+    exportAuthor: "Author",
+    exportTemplate: "Template",
+    exportButton: "Export .p8.png",
+    exportSuccess: "Exported successfully",
+    exportError: "Export failed",
+    exportLocaleVariant: "Export",
+    exportAll: "Export All",
+    exportCodeTooLarge: "Code exceeds 15616 bytes limit",
 };
 
 const zhCN: LocaleStrings = {
@@ -225,6 +251,7 @@ const zhCN: LocaleStrings = {
     tabMap: "地图",
     tabSfx: "音效",
     tabMusic: "音乐",
+    tabI18n: "国际化",
 
     // Cart viewer labels
     spriteSheetLabel: "128x128 精灵图表",
@@ -288,7 +315,19 @@ const zhCN: LocaleStrings = {
     flagLabel: "标志",
     flagsLabel: "标志",
     tileLabel: "图块",
-    tilePicker: "图块选择器"
+    tilePicker: "图块选择器",
+
+    // Export tab
+    tabExport: "导出",
+    exportTitle: "标题",
+    exportAuthor: "作者",
+    exportTemplate: "模板",
+    exportButton: "导出 .p8.png",
+    exportSuccess: "导出成功",
+    exportError: "导出失败",
+    exportLocaleVariant: "导出",
+    exportAll: "全部导出",
+    exportCodeTooLarge: "代码超过 15616 字节限制",
 };
 
 // Locale map

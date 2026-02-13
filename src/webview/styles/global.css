@@ -1,0 +1,702 @@
+:root {
+    --p8-bg-primary: #1d2b53;
+    --p8-bg-secondary: #222;
+    --p8-bg-surface: #2a2a2a;
+    --p8-accent: #29adff;
+    --p8-accent-hover: #3dbfff;
+    --p8-text-primary: #fff;
+    --p8-text-secondary: #aaa;
+    --p8-border: #444;
+    --p8-radius-sm: 3px;
+    --p8-radius-md: 6px;
+    --p8-transition-fast: 0.15s ease;
+    --p8-transition-normal: 0.25s ease;
+}
+
+html {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: #111;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+#root {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Global focus-visible for accessibility */
+:focus-visible {
+    outline: 2px solid var(--p8-accent);
+    outline-offset: 2px;
+}
+
+.tab-header {
+    display: flex;
+    background: var(--p8-bg-secondary);
+    flex-shrink: 0;
+}
+
+.tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--p8-text-secondary);
+    white-space: nowrap;
+    user-select: none;
+    transition: color var(--p8-transition-fast), background var(--p8-transition-fast);
+}
+
+.tab:hover {
+    color: var(--p8-text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tab.active {
+    color: var(--p8-accent);
+    background: #111;
+}
+
+.tab-spacer {
+    flex: 1;
+}
+
+.tab-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Run button */
+.run-btn {
+    border: none;
+    color: var(--p8-text-primary);
+    padding: 6px 16px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    border-radius: var(--p8-radius-sm);
+    margin: 4px 8px;
+    transition: background var(--p8-transition-fast);
+}
+
+.run-btn.idle {
+    background: #00a000;
+}
+
+.run-btn.idle:hover {
+    background: #00c000;
+}
+
+.run-btn.running {
+    background: #c00;
+}
+
+.run-btn.running:hover {
+    background: #e00;
+}
+
+/* Common editor layouts */
+.sprite-editor,
+.map-editor,
+.sfx-editor,
+.music-editor,
+.i18n-editor,
+.export-editor {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Toolbars */
+.sprite-toolbar,
+.map-toolbar,
+.sfx-toolbar,
+.music-toolbar,
+.i18n-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--p8-bg-secondary);
+    flex-shrink: 0;
+}
+
+/* Status bars */
+.sprite-statusbar,
+.map-statusbar,
+.sfx-statusbar,
+.music-statusbar,
+.i18n-statusbar {
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    background: var(--p8-bg-secondary);
+    flex-shrink: 0;
+}
+
+/* Canvas containers */
+.sprite-canvas-container,
+.map-canvas-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+}
+
+/* Buttons */
+button {
+    border: none;
+    color: var(--p8-text-primary);
+    background: var(--p8-bg-surface);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: var(--p8-radius-sm);
+    transition: background var(--p8-transition-fast);
+}
+
+button:hover {
+    background: #3a3a3a;
+}
+
+button.active {
+    background: var(--p8-accent);
+}
+
+button.secondary {
+    background: #555;
+}
+
+button.secondary:hover {
+    background: #666;
+}
+
+/* Inputs */
+input[type="text"] {
+    background: #333;
+    border: 1px solid var(--p8-border);
+    color: var(--p8-text-primary);
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: var(--p8-radius-sm);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* ============ SFX Editor ============ */
+
+.tool-sep {
+    display: inline-block;
+    width: 1px;
+    height: 20px;
+    background: var(--p8-border);
+    margin: 0 4px;
+}
+
+.sfx-label {
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    margin-right: 2px;
+}
+
+.sfx-val {
+    font-size: 12px;
+    color: var(--p8-text-primary);
+    min-width: 20px;
+    text-align: center;
+    display: inline-block;
+}
+
+.sfx-val.muted {
+    color: #555;
+}
+
+.sfx-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.sfx-list {
+    width: 160px;
+    min-width: 140px;
+    overflow-y: auto;
+    border-right: 1px solid var(--p8-border);
+    background: #1a1a1a;
+    flex-shrink: 0;
+}
+
+.sfx-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    border-bottom: 1px solid #1f1f1f;
+    transition: background var(--p8-transition-fast);
+}
+
+.sfx-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sfx-item.active {
+    background: var(--p8-accent);
+    color: var(--p8-text-primary);
+}
+
+.sfx-item.empty {
+    opacity: 0.5;
+}
+
+.sfx-item.playing {
+    background: rgba(0, 228, 54, 0.15);
+}
+
+.sfx-item .play-btn {
+    padding: 1px 4px;
+    font-size: 10px;
+    min-width: 18px;
+    background: transparent;
+}
+
+.sfx-item .play-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sfx-item .play-btn.is-playing {
+    color: #00e436;
+}
+
+.sfx-item-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sfx-mini-wave {
+    width: 64px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.sfx-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sfx-canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+/* SFX Tracker */
+.sfx-tracker-wrap {
+    flex: 1;
+    overflow-y: auto;
+    background: #111;
+}
+
+.sfx-tracker {
+    font-size: 12px;
+}
+
+.sfx-tracker-header {
+    display: flex;
+    position: sticky;
+    top: 0;
+    background: var(--p8-bg-secondary);
+    z-index: 1;
+    border-bottom: 1px solid var(--p8-border);
+}
+
+.sfx-tracker-header span {
+    flex: 1;
+    padding: 4px 6px;
+    text-align: center;
+    color: var(--p8-text-secondary);
+    font-size: 11px;
+}
+
+.sfx-tracker-header span:first-child {
+    flex: 0 0 30px;
+}
+
+.sfx-note {
+    display: flex;
+    cursor: pointer;
+    border-bottom: 1px solid #1a1a1a;
+    transition: background var(--p8-transition-fast);
+}
+
+.sfx-note:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.sfx-note.selected {
+    background: rgba(41, 173, 255, 0.12);
+}
+
+.sfx-note.playing {
+    background: rgba(0, 228, 54, 0.12);
+}
+
+.sfx-note span {
+    flex: 1;
+    padding: 3px 6px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--p8-text-primary);
+}
+
+.sfx-note .note-idx {
+    flex: 0 0 30px;
+    color: var(--p8-text-secondary);
+    font-size: 11px;
+}
+
+.sfx-note span.col-active {
+    background: rgba(41, 173, 255, 0.25);
+    outline: 1px solid var(--p8-accent);
+}
+
+/* ============ Music Editor ============ */
+
+.music-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.music-pattern-editor {
+    margin-bottom: 12px;
+}
+
+.music-channels {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.music-ch {
+    flex: 1;
+    padding: 8px;
+    background: var(--p8-bg-surface);
+    border-radius: var(--p8-radius-md);
+    text-align: center;
+    border: 2px solid transparent;
+    transition: border-color var(--p8-transition-fast);
+}
+
+.music-ch.ch-selected {
+    border-color: var(--p8-accent);
+}
+
+.music-ch.disabled {
+    opacity: 0.4;
+}
+
+.music-ch-label {
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.music-ch-toggle {
+    cursor: pointer;
+}
+
+.music-ch-sfx {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.music-ch-sfx .sfx-val {
+    font-size: 16px;
+    font-weight: bold;
+    min-width: 28px;
+}
+
+.music-flags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.flag-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--p8-bg-surface);
+}
+
+.flag-btn.loop-start-on {
+    color: #00e436;
+    border: 1px solid #00e436;
+}
+
+.flag-btn.loop-end-on {
+    color: #ff004d;
+    border: 1px solid #ff004d;
+}
+
+.flag-btn.stop-on {
+    color: #ffec27;
+    border: 1px solid #ffec27;
+}
+
+/* Music SFX picker */
+.music-sfx-picker {
+    margin-top: 8px;
+}
+
+.music-sfx-picker-label {
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    margin-bottom: 4px;
+}
+
+.music-sfx-picker-label .ch-num {
+    color: var(--p8-accent);
+    font-weight: bold;
+}
+
+.music-sfx-grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 2px;
+}
+
+.music-sfx-cell {
+    padding: 4px 2px;
+    text-align: center;
+    font-size: 10px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    cursor: pointer;
+    color: #555;
+    position: relative;
+    transition: background var(--p8-transition-fast);
+}
+
+.music-sfx-cell.non-empty {
+    color: var(--p8-text-secondary);
+    background: var(--p8-bg-surface);
+}
+
+.music-sfx-cell.selected {
+    background: var(--p8-accent);
+    color: var(--p8-text-primary);
+}
+
+.music-sfx-cell.sfx-playing {
+    background: rgba(0, 228, 54, 0.2);
+}
+
+.music-sfx-cell:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.music-sfx-cell .sfx-play-btn {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 8px;
+    cursor: pointer;
+    color: #00e436;
+}
+
+.music-sfx-cell:hover .sfx-play-btn {
+    display: block;
+}
+
+/* Pattern navigator */
+.music-navigator {
+    margin-top: 12px;
+}
+
+.music-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 2px;
+}
+
+.music-nav-cell {
+    padding: 4px 2px;
+    text-align: center;
+    font-size: 10px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    cursor: pointer;
+    color: #555;
+    border: 2px solid transparent;
+    transition: background var(--p8-transition-fast);
+}
+
+.music-nav-cell.non-empty {
+    color: var(--p8-text-primary);
+    background: var(--p8-bg-surface);
+}
+
+.music-nav-cell.selected {
+    background: var(--p8-accent);
+    color: var(--p8-text-primary);
+}
+
+.music-nav-cell.playing {
+    background: rgba(0, 228, 54, 0.3);
+    color: var(--p8-text-primary);
+}
+
+.music-nav-cell.loop-start {
+    border-left-color: #00e436;
+}
+
+.music-nav-cell.loop-end {
+    border-right-color: #ff004d;
+}
+
+.music-nav-cell.stop-end {
+    border-bottom-color: #ffec27;
+}
+
+.music-nav-cell:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============ Sprite Toolbar ============ */
+
+.pal-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    margin: 1px;
+    border-radius: 2px;
+}
+
+.pal-swatch.fg-active {
+    border-color: #fff;
+    box-shadow: 0 0 0 1px #fff;
+}
+
+.pal-swatch.bg-active {
+    border-color: #888;
+    box-shadow: 0 0 0 1px #888;
+}
+
+.pal-info {
+    font-size: 10px;
+    color: var(--p8-text-secondary);
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
+.flag-group {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.flag-btn {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 2px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 0;
+}
+
+.flag-dot {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid;
+    cursor: pointer;
+    font-size: 0;
+}
+
+.flag-dot.set {
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.zoom-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.zoom-label {
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    min-width: 30px;
+    text-align: center;
+}
+
+/* ============ Map Toolbar ============ */
+
+.tile-preview {
+    vertical-align: middle;
+}
+
+.tile-info {
+    font-size: 11px;
+    color: var(--p8-text-secondary);
+    margin-left: 4px;
+    white-space: nowrap;
+}

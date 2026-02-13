@@ -39,6 +39,23 @@ export interface MusicPattern {
     stopAtEnd: boolean;
 }
 
+// Combined sidecar metadata (.meta.json)
+export interface MetaData {
+    meta: {
+        title: string;
+        author: string;
+        template: string;
+    };
+    i18n: {
+        locales: string[];
+        entries: Array<{
+            key: string;
+            translations: { [locale: string]: string };
+        }>;
+        outputLocale: string;
+    };
+}
+
 // PICO-8 16-color palette
 export const PICO8_PALETTE = [
     '#000000', // 0 black

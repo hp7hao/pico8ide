@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CartData, PICO8_PALETTE } from './cartData';
+import { CartData, PICO8_PALETTE, MetaData } from './cartData';
 import { LocaleStrings } from './i18n';
 
 export interface CartViewerOptions {
@@ -12,6 +12,9 @@ export interface CartViewerOptions {
     showConvertBanner?: boolean;
     showAudio?: boolean;
     editable?: boolean;
+    i18nData?: object | null;
+    metaData?: MetaData | null;
+    templatePreviews?: { [name: string]: string };
 }
 
 function getNonce(): string {
@@ -24,11 +27,12 @@ function getNonce(): string {
 }
 
 export function generateCartViewerHtml(options: CartViewerOptions): string {
-    const { cartData, locale, extensionUri, webview, gameName, showRunButton, showConvertBanner, showAudio, editable } = options;
+    const { cartData, locale, extensionUri, webview, gameName, showRunButton, showConvertBanner, showAudio, editable, i18nData, metaData, templatePreviews } = options;
 
     const nonce = getNonce();
 
     const monacoBase = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'resources', 'monaco'));
+    const fontUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'resources', 'fonts', 'BoutiqueBitmap7x7_1.7.ttf'));
 
     const gfxJson = JSON.stringify(cartData.gfx);
     const mapJson = JSON.stringify(cartData.map);
@@ -40,7 +44,16 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
     // Escape code for embedding in a JS string literal (inside <script>)
     const codeForJs = JSON.stringify(cartData.code);
 
+    // Read VS Code editor font settings
+    const editorConfig = vscode.workspace.getConfiguration('editor');
+    const editorFontSize = editorConfig.get<number>('fontSize', 13);
+    const editorFontFamily = editorConfig.get<string>('fontFamily', "'Courier New', monospace");
+    const editorLineHeight = editorConfig.get<number>('lineHeight', 0); // 0 means auto
+
     const title = gameName ? `PICO-8 Cart: ${gameName}` : 'PICO-8 Cart';
+
+    const i18nTabHtml = editable ? `<div class="tab" data-tab="i18n">${locale.tabI18n}</div>` : '';
+    const exportTabHtml = editable ? `<div class="tab" data-tab="export">${locale.tabExport}</div>` : '';
 
     // Build conditional HTML pieces
     const bannerHtml = showConvertBanner ? `
@@ -54,7 +67,7 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     <button id="btn-run-pico8" class="run-btn idle">&#9654; ${locale.runInPico8}</button>` : '';
 
     // CSP
-    const csp = `default-src 'none'; script-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-eval'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; worker-src blob:; img-src ${webview.cspSource};`;
+    const csp = `default-src 'none'; script-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-eval'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; worker-src blob:; img-src ${webview.cspSource} data:;`;
 
     return `<!DOCTYPE html>
             <html lang="en">
@@ -64,19 +77,37 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>${title}</title>
                 <style>
+                    :root {
+                        --p8-bg-primary: #1d2b53;
+                        --p8-bg-secondary: #222;
+                        --p8-bg-surface: #2a2a2a;
+                        --p8-accent: #29adff;
+                        --p8-accent-hover: #3dbfff;
+                        --p8-text-primary: #fff;
+                        --p8-text-secondary: #aaa;
+                        --p8-border: #444;
+                        --p8-radius-sm: 3px;
+                        --p8-radius-md: 6px;
+                        --p8-transition-fast: 0.15s ease;
+                        --p8-transition-normal: 0.25s ease;
+                    }
+
                     body { background: #111; color: #ccc; font-family: 'Courier New', monospace; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 0; overflow: hidden; }
+
+                    /* Global focus-visible for accessibility */
+                    :focus-visible { outline: 2px solid var(--p8-accent); outline-offset: 2px; }
 
                     .convert-banner { background: #3a3500; border-bottom: 2px solid #ffec27; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; }
                     .convert-banner span { color: #ffec27; font-size: 13px; }
-                    .convert-banner button { background: #ffec27; color: #111; border: none; padding: 6px 16px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: bold; }
+                    .convert-banner button { background: #ffec27; color: #111; border: none; padding: 6px 16px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: bold; transition: background-color var(--p8-transition-fast); }
                     .convert-banner button:hover { background: #fff170; }
 
                     .tab-header { display: flex; background: #252525; align-items: center; }
-                    .tab { padding: 8px 16px; cursor: pointer; background: #222; }
-                    .tab:hover { background: #2a2a2a; }
-                    .tab.active { background: #1a1a1a; color: #fff; font-weight: bold; }
+                    .tab { padding: 10px 18px; cursor: pointer; background: var(--p8-bg-secondary); border-bottom: 2px solid transparent; transition: background-color var(--p8-transition-fast), border-color var(--p8-transition-fast); }
+                    .tab:hover { background: var(--p8-bg-surface); }
+                    .tab.active { background: #1a1a1a; color: var(--p8-text-primary); font-weight: bold; border-bottom: 2px solid var(--p8-accent); }
                     .tab-spacer { flex: 1; }
-                    .run-btn { margin-right: 10px; padding: 4px 12px; border: 1px solid #555; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 12px; }
+                    .run-btn { margin-right: 10px; padding: 4px 12px; border: 1px solid #555; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 12px; transition: background-color var(--p8-transition-fast); }
                     .run-btn.idle { background: #2a5a2a; color: #6f6; }
                     .run-btn.idle:hover { background: #3a6a3a; }
                     .run-btn.running { background: #5a2a2a; color: #f66; }
@@ -89,45 +120,63 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
 
                     /* Monaco container */
                     #monaco-container { flex: 1; width: 100%; min-height: 0; overflow: hidden; }
+                    .code-stats { background: #1a1a1a; border-top: 1px solid var(--p8-border); padding: 4px 8px; font-family: monospace; font-size: 11px; color: #c2c3c7; display: flex; gap: 16px; flex-shrink: 0; }
+
+                    /* Shared editor toolbar base */
+                    .editor-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 2px; flex-shrink: 0; flex-wrap: wrap; }
+                    .editor-toolbar .tool-btn { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; transition: background-color var(--p8-transition-fast); }
+                    .editor-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .editor-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: var(--p8-text-primary); border-left: 2px solid var(--p8-accent); }
+                    .editor-toolbar .tool-sep { width: 1px; height: 20px; background: var(--p8-border); margin: 0 4px; }
 
                     /* Sprites */
                     .sprite-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
                     .sprite-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 2px; flex-shrink: 0; flex-wrap: wrap; }
-                    .sprite-toolbar .tool-btn { background: #333; border: 1px solid #444; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; }
-                    .sprite-toolbar .tool-btn:hover { background: #444; }
-                    .sprite-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: #fff; }
-                    .sprite-toolbar .tool-sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+                    .sprite-toolbar .tool-btn { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; transition: background-color var(--p8-transition-fast); }
+                    .sprite-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .sprite-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: var(--p8-text-primary); border-left: 2px solid var(--p8-accent); }
+                    .sprite-toolbar .tool-sep { width: 1px; height: 20px; background: var(--p8-border); margin: 0 4px; }
                     .sprite-toolbar .zoom-group { margin-left: auto; display: flex; align-items: center; gap: 4px; }
                     .sprite-toolbar .zoom-label { color: #888; font-size: 11px; min-width: 28px; text-align: center; }
-                    .sprite-toolbar .pal-swatch { width: 18px; height: 18px; border: 2px solid transparent; border-radius: 2px; cursor: pointer; box-sizing: border-box; display: inline-block; }
+                    .sprite-toolbar .pal-swatch { width: 18px; height: 18px; border: 2px solid transparent; border-radius: 2px; cursor: pointer; box-sizing: border-box; display: inline-block; transition: border-color var(--p8-transition-fast); }
                     .sprite-toolbar .pal-swatch:hover { border-color: #888; }
-                    .sprite-toolbar .pal-swatch.fg-active { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
+                    .sprite-toolbar .pal-swatch.fg-active { border-color: var(--p8-text-primary); box-shadow: 0 0 0 1px var(--p8-text-primary); }
                     .sprite-toolbar .pal-swatch.bg-active { border-color: #ff004d; border-style: dashed; }
                     .sprite-toolbar .pal-info { color: #888; font-size: 11px; margin-left: 4px; margin-right: 4px; }
                     .sprite-canvas-wrap { flex: 1; overflow: hidden; position: relative; cursor: crosshair; }
                     #cvs-gfx { image-rendering: pixelated; position: absolute; top: 0; left: 0; background: #000; }
                     #cvs-gfx-overlay { position: absolute; top: 0; left: 0; pointer-events: none; background: transparent; }
-                    .sprite-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+                    .sprite-status { display: flex; align-items: center; padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
                     .sprite-toolbar .flag-group { display: flex; align-items: center; gap: 2px; }
-                    .sprite-toolbar .flag-btn { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #444; cursor: pointer; opacity: 0.35; transition: opacity 0.1s; padding: 0; }
+                    .sprite-toolbar .flag-btn { width: 18px; height: 18px; border-radius: var(--p8-radius-sm); border: 1px solid var(--p8-border); cursor: pointer; opacity: 0.35; transition: opacity 0.1s; padding: 0; }
                     .sprite-toolbar .flag-btn:hover { opacity: 0.7; }
-                    .sprite-toolbar .flag-btn.active { opacity: 1; border-color: #fff; }
-                    .sprite-toolbar .flag-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #444; cursor: pointer; opacity: 0.3; box-sizing: border-box; padding: 0; background: transparent; display: inline-block; }
+                    .sprite-toolbar .flag-btn.active { opacity: 1; border-color: var(--p8-text-primary); }
+                    .sprite-toolbar .flag-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--p8-border); cursor: pointer; opacity: 0.3; box-sizing: border-box; padding: 0; background: transparent; display: inline-block; }
                     .sprite-toolbar .flag-dot:hover { opacity: 0.7; }
-                    .sprite-toolbar .flag-dot.set { opacity: 1; border-color: #fff; }
-                    .quick-palette { position: absolute; display: none; background: #222; border: 1px solid #555; border-radius: 4px; padding: 4px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+                    .sprite-toolbar .flag-dot.set { opacity: 1; border-color: var(--p8-text-primary); }
+                    .quick-palette { position: absolute; display: none; background: var(--p8-bg-secondary); border: 1px solid #555; border-radius: var(--p8-radius-md); padding: 4px; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+                    .shortcuts-overlay { position: fixed; inset: 0; display: none; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; }
+                    .shortcuts-overlay.visible { display: flex; }
+                    .shortcuts-panel { background: var(--p8-bg-surface); border: 1px solid var(--p8-border); border-radius: var(--p8-radius-md); padding: 16px 24px; max-width: 480px; max-height: 70vh; overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.5); color: var(--p8-text-primary); font-size: 13px; }
+                    .shortcuts-panel h3 { margin: 0 0 12px 0; font-size: 15px; color: var(--p8-accent); border-bottom: 1px solid var(--p8-border); padding-bottom: 8px; }
+                    .shortcuts-panel table { width: 100%; border-collapse: collapse; }
+                    .shortcuts-panel td { padding: 3px 8px; }
+                    .shortcuts-panel td:first-child { white-space: nowrap; text-align: right; padding-right: 12px; color: var(--p8-accent); font-family: monospace; font-weight: bold; }
+                    .shortcuts-panel td:last-child { color: var(--p8-text-secondary); }
+                    .shortcuts-help-btn { background: transparent; border: 1px solid var(--p8-border); color: var(--p8-text-secondary); border-radius: var(--p8-radius-sm); padding: 2px 8px; cursor: pointer; font-size: 12px; margin-left: auto; transition: background-color var(--p8-transition-fast), color var(--p8-transition-fast); }
+                    .shortcuts-help-btn:hover { background: var(--p8-border); color: var(--p8-text-primary); }
                     .quick-palette .qp-swatch { width: 24px; height: 24px; display: inline-block; cursor: pointer; border: 1px solid #333; box-sizing: border-box; }
-                    .quick-palette .qp-swatch:hover { border-color: #fff; }
+                    .quick-palette .qp-swatch:hover { border-color: var(--p8-text-primary); }
                     .sprite-sheet-container { display: flex; justify-content: center; padding: 20px; background: #1a1a1a; }
                     canvas { image-rendering: pixelated; border: 1px solid #333; background: #000; }
 
                     /* Map Editor */
                     .map-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
                     .map-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 2px; flex-shrink: 0; flex-wrap: wrap; }
-                    .map-toolbar .tool-btn { background: #333; border: 1px solid #444; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; }
-                    .map-toolbar .tool-btn:hover { background: #444; }
-                    .map-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: #fff; }
-                    .map-toolbar .tool-sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+                    .map-toolbar .tool-btn { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; transition: background-color var(--p8-transition-fast); }
+                    .map-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .map-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: var(--p8-text-primary); border-left: 2px solid var(--p8-accent); }
+                    .map-toolbar .tool-sep { width: 1px; height: 20px; background: var(--p8-border); margin: 0 4px; }
                     .map-toolbar .zoom-group { margin-left: auto; display: flex; align-items: center; gap: 4px; }
                     .map-toolbar .zoom-label { color: #888; font-size: 11px; min-width: 28px; text-align: center; }
                     .map-toolbar .tile-preview { width: 18px; height: 18px; image-rendering: pixelated; border: 1px solid #555; cursor: pointer; vertical-align: middle; }
@@ -135,26 +184,26 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     .map-canvas-wrap { flex: 1; overflow: hidden; position: relative; cursor: crosshair; }
                     #cvs-map { image-rendering: pixelated; position: absolute; top: 0; left: 0; background: #000; }
                     #cvs-map-overlay { position: absolute; top: 0; left: 0; pointer-events: none; background: transparent; }
-                    .map-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+                    .map-status { display: flex; align-items: center; padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
                     .map-tile-picker { position: absolute; inset: 0; display: none; background: rgba(0,0,0,0.5); z-index: 100; overflow: hidden; cursor: crosshair; }
                     .map-tile-picker canvas { image-rendering: pixelated; position: absolute; top: 0; left: 0; cursor: crosshair; }
 
                     /* SFX Editor Styles */
                     .sfx-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
                     .sfx-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 2px; flex-shrink: 0; flex-wrap: wrap; }
-                    .sfx-toolbar .tool-btn { background: #333; border: 1px solid #444; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; }
-                    .sfx-toolbar .tool-btn:hover { background: #444; }
-                    .sfx-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: #fff; }
-                    .sfx-toolbar .tool-sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+                    .sfx-toolbar .tool-btn { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; min-width: 28px; text-align: center; transition: background-color var(--p8-transition-fast); }
+                    .sfx-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .sfx-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: var(--p8-text-primary); border-left: 2px solid var(--p8-accent); }
+                    .sfx-toolbar .tool-sep { width: 1px; height: 20px; background: var(--p8-border); margin: 0 4px; }
                     .sfx-toolbar .sfx-label { color: #888; font-size: 11px; margin: 0 4px; }
-                    .sfx-toolbar .sfx-val { color: #fff; font-size: 11px; min-width: 20px; text-align: center; display: inline-block; }
+                    .sfx-toolbar .sfx-val { color: var(--p8-text-primary); font-size: 11px; min-width: 20px; text-align: center; display: inline-block; }
                     .sfx-body { display: flex; flex: 1; min-height: 0; }
                     .sfx-list { width: 160px; border-right: 1px solid #333; overflow-y: auto; flex-shrink: 0; }
-                    .sfx-item { padding: 4px 8px; cursor: pointer; border-bottom: 1px solid #222; font-size: 11px; display: flex; align-items: center; gap: 4px; }
-                    .sfx-item:hover { background: #2a2a2a; }
+                    .sfx-item { padding: 4px 8px; cursor: pointer; border-bottom: 1px solid var(--p8-bg-secondary); font-size: 11px; display: flex; align-items: center; gap: 4px; transition: background-color var(--p8-transition-fast); }
+                    .sfx-item:hover { background: var(--p8-bg-surface); }
                     .sfx-item.active { background: #3a3a5a; }
                     .sfx-item.empty { opacity: 0.4; }
-                    .sfx-item .play-btn { background: #4a4; border: none; color: #fff; padding: 1px 5px; border-radius: 3px; cursor: pointer; font-size: 9px; }
+                    .sfx-item .play-btn { background: #4a4; border: none; color: var(--p8-text-primary); padding: 1px 5px; border-radius: var(--p8-radius-sm); cursor: pointer; font-size: 9px; transition: background-color var(--p8-transition-fast); }
                     .sfx-item .play-btn:hover { background: #5b5; }
                     .sfx-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
                     .sfx-canvas-wrap { flex: 1; position: relative; overflow: hidden; cursor: crosshair; }
@@ -164,7 +213,7 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     .sfx-tracker { font-family: monospace; font-size: 11px; background: #1a1a1a; border: 1px solid #333; }
                     .sfx-tracker-header { display: flex; background: #252525; border-bottom: 1px solid #333; padding: 4px; }
                     .sfx-tracker-header span { flex: 1; text-align: center; font-weight: bold; font-size: 10px; color: #888; }
-                    .sfx-note { display: flex; border-bottom: 1px solid #222; cursor: pointer; }
+                    .sfx-note { display: flex; border-bottom: 1px solid var(--p8-bg-secondary); cursor: pointer; transition: background-color var(--p8-transition-fast); }
                     .sfx-note:hover { background: #252530; }
                     .sfx-note.playing { background: #3a4a3a; }
                     .sfx-note.selected { background: #3a3a5a; }
@@ -174,41 +223,48 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     .sfx-note .note-wave { color: #fc6; }
                     .sfx-note .note-vol { color: #6f6; }
                     .sfx-note .note-fx { color: #f6c; }
-                    .sfx-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+                    .sfx-note .col-active { background: rgba(255,255,255,0.15); border-radius: 2px; }
+                    .sfx-status { display: flex; align-items: center; padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+                    .sfx-clr-btn { background: #5a2a2a; border: 1px solid #844; color: #f88; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast); }
+                    .sfx-clr-btn:hover { background: #6a3a3a; }
+                    .music-clr-btn { background: #5a2a2a; border: 1px solid #844; color: #f88; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast); }
+                    .music-clr-btn:hover { background: #6a3a3a; }
+                    .sfx-speed-input { background: var(--p8-bg-secondary); border: 1px solid #555; color: var(--p8-text-primary); font-family: monospace; font-size: 11px; width: 36px; text-align: center; padding: 2px; border-radius: var(--p8-radius-sm); }
+                    .sfx-speed-input:focus { border-color: var(--p8-accent); outline: none; }
 
                     /* Music Editor Styles */
                     .music-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
                     .music-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #1e1e1e; border-bottom: 1px solid #333; flex-shrink: 0; flex-wrap: wrap; }
-                    .music-toolbar .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 12px; min-width: 24px; text-align: center; }
-                    .music-toolbar .tool-btn:hover { background: #444; }
-                    .music-toolbar .tool-btn.active { background: #29adff; color: #fff; border-color: #29adff; }
-                    .music-toolbar .sep { width: 1px; height: 20px; background: #444; flex-shrink: 0; }
+                    .music-toolbar .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 4px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 12px; min-width: 24px; text-align: center; transition: background-color var(--p8-transition-fast); }
+                    .music-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .music-toolbar .tool-btn.active { background: var(--p8-accent); color: var(--p8-text-primary); border-color: var(--p8-accent); }
+                    .music-toolbar .sep { width: 1px; height: 20px; background: var(--p8-border); flex-shrink: 0; }
                     .music-toolbar .label { color: #888; font-size: 11px; }
-                    .music-toolbar .value { color: #fff; font-size: 12px; min-width: 20px; text-align: center; }
+                    .music-toolbar .value { color: var(--p8-text-primary); font-size: 12px; min-width: 20px; text-align: center; }
                     .music-pattern-editor { padding: 12px 10px; background: #1a1a1a; border-bottom: 1px solid #333; flex-shrink: 0; }
                     .music-channels { display: flex; gap: 8px; margin-bottom: 10px; }
-                    .music-ch { flex: 1; background: #222; border: 1px solid #444; border-radius: 4px; padding: 8px; text-align: center; }
+                    .music-ch { flex: 1; background: var(--p8-bg-secondary); border: 1px solid var(--p8-border); border-radius: var(--p8-radius-md); padding: 8px; text-align: center; transition: border-color var(--p8-transition-fast), background-color var(--p8-transition-fast); }
                     .music-ch.disabled { opacity: 0.4; }
-                    .music-ch.ch-selected { border-color: #29adff; background: #1a2a3a; }
+                    .music-ch.ch-selected { border-color: var(--p8-accent); background: #1a2a3a; }
                     .music-ch-label { font-size: 11px; color: #888; margin-bottom: 6px; }
                     .music-ch-toggle { cursor: pointer; margin-right: 4px; }
                     .music-ch-sfx { display: flex; align-items: center; justify-content: center; gap: 4px; }
-                    .music-ch-sfx .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; }
-                    .music-ch-sfx .tool-btn:hover { background: #444; }
+                    .music-ch-sfx .tool-btn { background: #333; border: 1px solid #555; color: #ccc; padding: 2px 6px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast); }
+                    .music-ch-sfx .tool-btn:hover { background: var(--p8-border); }
                     .music-ch-sfx .sfx-val { color: #6cf; font-size: 14px; font-weight: bold; min-width: 24px; text-align: center; cursor: pointer; }
                     .music-ch-sfx .sfx-val:hover { text-decoration: underline; }
                     .music-ch-sfx .sfx-val.muted { color: #555; }
                     .music-flags { display: flex; gap: 8px; align-items: center; }
-                    .music-flags .flag-btn { background: #222; border: 2px solid #555; color: #888; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; }
-                    .music-flags .flag-btn:hover { background: #2a2a2a; }
+                    .music-flags .flag-btn { background: var(--p8-bg-secondary); border: 2px solid #555; color: #888; padding: 4px 12px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast), border-color var(--p8-transition-fast); }
+                    .music-flags .flag-btn:hover { background: var(--p8-bg-surface); }
                     .music-flags .flag-btn.loop-start-on { border-color: #00e436; color: #00e436; background: #0a2a0a; }
                     .music-flags .flag-btn.loop-end-on { border-color: #ff004d; color: #ff004d; background: #2a0a0a; }
                     .music-flags .flag-btn.stop-on { border-color: #ffec27; color: #ffec27; background: #2a2a0a; }
                     .music-navigator { flex: 1; overflow: auto; padding: 8px 10px; background: #111; }
                     .music-nav-grid { display: flex; flex-wrap: wrap; gap: 2px; }
-                    .music-nav-cell { width: 36px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #888; background: #1a1a1a; border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; }
+                    .music-nav-cell { width: 36px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #888; background: #1a1a1a; border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; transition: background-color var(--p8-transition-fast); }
                     .music-nav-cell:hover { background: #252525; }
-                    .music-nav-cell.selected { background: #29adff; color: #fff; border-color: #29adff; }
+                    .music-nav-cell.selected { background: var(--p8-accent); color: var(--p8-text-primary); border-color: var(--p8-accent); }
                     .music-nav-cell.non-empty { color: #ccc; }
                     .music-nav-cell.empty { opacity: 0.35; }
                     .music-nav-cell.loop-start { border-left: 3px solid #00e436; }
@@ -220,17 +276,65 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     .music-sfx-picker-label { font-size: 11px; color: #888; margin-bottom: 6px; flex-shrink: 0; }
                     .music-sfx-picker-label .ch-num { color: #6cf; font-weight: bold; }
                     .music-sfx-grid { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); gap: 2px; flex: 1; min-height: 0; }
-                    .music-sfx-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; color: #888; background: #222; border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; min-height: 0; position: relative; gap: 2px; }
+                    .music-sfx-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; color: #888; background: var(--p8-bg-secondary); border: 1px solid #333; border-radius: 2px; cursor: pointer; box-sizing: border-box; min-height: 0; position: relative; gap: 2px; transition: background-color var(--p8-transition-fast); }
                     .music-sfx-cell:hover { background: #333; }
                     .music-sfx-cell.non-empty { color: #ccc; }
-                    .music-sfx-cell.selected { background: #29adff; color: #fff; border-color: #29adff; }
+                    .music-sfx-cell.selected { background: var(--p8-accent); color: var(--p8-text-primary); border-color: var(--p8-accent); }
                     .music-sfx-cell .sfx-play-btn { display: none; font-size: 9px; color: #888; cursor: pointer; padding: 0 2px; }
                     .music-sfx-cell.non-empty .sfx-play-btn { display: block; }
-                    .music-sfx-cell .sfx-play-btn:hover { color: #fff; }
+                    .music-sfx-cell .sfx-play-btn:hover { color: var(--p8-text-primary); }
                     .music-sfx-cell.selected .sfx-play-btn { color: rgba(255,255,255,0.6); }
-                    .music-sfx-cell.selected .sfx-play-btn:hover { color: #fff; }
+                    .music-sfx-cell.selected .sfx-play-btn:hover { color: var(--p8-text-primary); }
                     .music-sfx-cell.sfx-playing { background: #2a3a2a; border-color: #4a4; }
-                    .music-status { display: flex; align-items: center; padding: 2px 8px; background: #1a1a1a; border-top: 1px solid #333; color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+                    .music-status { display: flex; align-items: center; padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+
+                    /* i18n Editor */
+                    .i18n-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
+                    .i18n-toolbar { display: flex; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+                    .i18n-toolbar .tool-btn { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 4px 10px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast); }
+                    .i18n-toolbar .tool-btn:hover { background: var(--p8-border); }
+                    .i18n-toolbar .tool-btn.active { background: #5a5a8a; border-color: #7a7aaa; color: var(--p8-text-primary); }
+                    .i18n-toolbar .tool-sep { width: 1px; height: 20px; background: var(--p8-border); margin: 0 2px; }
+                    .i18n-toolbar select { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 3px 6px; border-radius: var(--p8-radius-sm); font-family: inherit; font-size: 11px; }
+                    .i18n-toolbar input[type="text"] { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 3px 6px; border-radius: var(--p8-radius-sm); font-family: inherit; font-size: 11px; width: 80px; }
+                    .i18n-toolbar input[type="text"]:focus { border-color: var(--p8-accent); outline: none; }
+                    .i18n-table-wrap { flex: 1; overflow: auto; min-height: 0; padding: 0; }
+                    .i18n-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                    .i18n-table-wrap th { background: #252525; color: var(--p8-text-secondary); padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--p8-border); position: sticky; top: 0; z-index: 1; font-weight: normal; }
+                    .i18n-table-wrap td { padding: 4px 8px; border-bottom: 1px solid var(--p8-bg-secondary); vertical-align: top; }
+                    .i18n-table-wrap td.key-cell { color: #ff004d; font-family: monospace; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+                    .i18n-table-wrap td input { background: var(--p8-bg-secondary); border: 1px solid #333; color: #ccc; padding: 3px 6px; width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px; border-radius: var(--p8-radius-sm); transition: border-color var(--p8-transition-fast); }
+                    .i18n-table-wrap td input:focus { border-color: var(--p8-accent); outline: none; box-shadow: 0 0 0 1px rgba(41,173,255,0.25); }
+                    .i18n-table-wrap td input.empty { border-color: #5a3a00; }
+                    .i18n-codegen { border-top: 1px solid #333; max-height: 200px; overflow: auto; flex-shrink: 0; }
+                    .i18n-codegen pre { margin: 0; padding: 8px; font-size: 11px; color: #8f8; background: #0a0a0a; white-space: pre-wrap; word-break: break-all; }
+                    .i18n-codegen .codegen-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: #1e1e1e; border-bottom: 1px solid #333; }
+                    .i18n-codegen .codegen-header span { color: #888; font-size: 11px; }
+                    .i18n-codegen .codegen-header button { background: #333; border: 1px solid var(--p8-border); color: #ccc; padding: 2px 8px; border-radius: var(--p8-radius-sm); cursor: pointer; font-family: inherit; font-size: 11px; transition: background-color var(--p8-transition-fast); }
+                    .i18n-codegen .codegen-header button:hover { background: var(--p8-border); }
+                    .i18n-status { display: flex; align-items: center; padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; gap: 16px; flex-shrink: 0; }
+
+                    /* Export Editor */
+                    .export-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #1a1a1a; }
+                    .export-body { display: flex; flex: 1; min-height: 0; gap: 16px; padding: 16px; overflow: auto; }
+                    .export-form { flex: 1; min-width: 200px; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
+                    .export-form label { color: var(--p8-text-secondary); font-size: 11px; display: block; margin-bottom: 2px; }
+                    .export-form input[type="text"] { background: var(--p8-bg-secondary); border: 1px solid var(--p8-border); color: #ccc; padding: 6px 8px; border-radius: var(--p8-radius-sm); font-family: inherit; font-size: 12px; width: 100%; box-sizing: border-box; transition: border-color var(--p8-transition-fast); }
+                    .export-form input[type="text"]:focus { border-color: var(--p8-accent); outline: none; box-shadow: 0 0 0 1px rgba(41,173,255,0.25); }
+                    .template-picker { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+                    .template-option { cursor: pointer; border: 2px solid var(--p8-border); border-radius: var(--p8-radius-md); overflow: hidden; text-align: center; padding: 4px; background: var(--p8-bg-secondary); transition: border-color var(--p8-transition-fast), background-color var(--p8-transition-fast); }
+                    .template-option:hover { border-color: #888; }
+                    .template-option.selected { border-color: var(--p8-accent); background: #1a2a3a; }
+                    .template-option img { width: 80px; height: auto; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+                    .template-option span { font-size: 10px; color: var(--p8-text-secondary); }
+                    .export-buttons { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+                    .export-buttons button { background: var(--p8-accent); border: none; color: var(--p8-text-primary); padding: 8px 16px; border-radius: var(--p8-radius-md); cursor: pointer; font-family: inherit; font-size: 12px; transition: background-color var(--p8-transition-fast); }
+                    .export-buttons button:hover { background: var(--p8-accent-hover); }
+                    .export-buttons button.secondary { background: transparent; border: 1px solid var(--p8-border); color: #ccc; }
+                    .export-buttons button.secondary:hover { background: var(--p8-bg-surface); border-color: #666; }
+                    .export-preview { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+                    .export-preview canvas { image-rendering: pixelated; border: 1px solid #333; background: #000; border-radius: var(--p8-radius-sm); }
+                    .export-status { padding: 4px 8px; background: #1a1a1a; border-top: 1px solid var(--p8-border); color: #666; font-size: 11px; flex-shrink: 0; }
                 </style>
             </head>
             <body>
@@ -241,11 +345,20 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     <div class="tab" data-tab="map">${locale.tabMap}</div>
                     <div class="tab" data-tab="sfx">${locale.tabSfx}</div>
                     <div class="tab" data-tab="music">${locale.tabMusic}</div>
+                    ${i18nTabHtml}
+                    ${exportTabHtml}
                     ${runButtonHtml}
                 </div>
 
+                <div id="shortcuts-overlay" class="shortcuts-overlay"></div>
+
                 <div id="tab-code" class="content active">
                     <div id="monaco-container"></div>
+                    <div class="code-stats" id="code-stats">
+                        <span id="code-tokens">TOKENS: 0/8192</span>
+                        <span id="code-chars">CHARS: 0/65535</span>
+                        <button class="shortcuts-help-btn" id="code-help-btn">?</button>
+                    </div>
                 </div>
 
                 <div id="tab-gfx" class="content">
@@ -296,6 +409,25 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         <div class="music-status" id="music-status-bar"></div>
                     </div>
                  </div>
+                 ${editable ? `<div id="tab-i18n" class="content">
+                    <div class="i18n-editor" id="i18n-editor">
+                        <div class="i18n-toolbar" id="i18n-toolbar"></div>
+                        <div class="i18n-table-wrap" id="i18n-table-wrap"></div>
+                        <div class="i18n-codegen" id="i18n-codegen"></div>
+                        <div class="i18n-status" id="i18n-status-bar"></div>
+                    </div>
+                 </div>` : ''}
+                 ${editable ? `<div id="tab-export" class="content">
+                    <div class="export-editor" id="export-editor">
+                        <div class="export-body">
+                            <div class="export-form" id="export-form"></div>
+                            <div class="export-preview" id="export-preview">
+                                <canvas id="cvs-export" width="160" height="205"></canvas>
+                            </div>
+                        </div>
+                        <div class="export-status" id="export-status-bar"></div>
+                    </div>
+                 </div>` : ''}
 
                 <script nonce="${nonce}">
                     const vscodeApi = acquireVsCodeApi();
@@ -311,6 +443,14 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     const SFX = ${sfxJson};
                     const MUSIC = ${musicJson};
                     const PAL = ${palJson};
+                    const EDITOR_FONT_SIZE = ${editorFontSize};
+                    const EDITOR_FONT_FAMILY = ${JSON.stringify(editorFontFamily)};
+                    const EDITOR_LINE_HEIGHT = ${editorLineHeight};
+                    const I18N_DATA = ${JSON.stringify(i18nData || null)};
+                    const META_DATA = ${JSON.stringify(metaData || null)};
+                    const TEMPLATE_PREVIEWS = ${JSON.stringify(templatePreviews || {})};
+                    const LABEL_DATA_URL = ${JSON.stringify(cartData.label)};
+                    const FONT_URI = "${fontUri}";
 
                     const LOCALE = {
                         play: "${locale.play}",
@@ -341,7 +481,17 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         flagLabel: "${locale.flagLabel}",
                         flagsLabel: "${locale.flagsLabel}",
                         tileLabel: "${locale.tileLabel}",
-                        tilePicker: "${locale.tilePicker}"
+                        tilePicker: "${locale.tilePicker}",
+                        tabI18n: "${locale.tabI18n}",
+                        tabExport: "${locale.tabExport}",
+                        exportTitle: "${locale.exportTitle}",
+                        exportAuthor: "${locale.exportAuthor}",
+                        exportTemplate: "${locale.exportTemplate}",
+                        exportButton: "${locale.exportButton}",
+                        exportSuccess: "${locale.exportSuccess}",
+                        exportError: "${locale.exportError}",
+                        exportLocaleVariant: "${locale.exportLocaleVariant}",
+                        exportCodeTooLarge: "${locale.exportCodeTooLarge}"
                     };
 
                     const NOTE_NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
@@ -350,9 +500,13 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
 
                     // ============ MONACO EDITOR ============
                     var monacoEditor = null;
+                    var monacoReady = false;
+                    var i18nVisitedBeforeMonaco = false;
 
                     // ============ TAB SWITCHING ============
+                    var currentTab = 'code';
                     function showTab(id, el) {
+                        currentTab = id;
                         document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
                         document.querySelectorAll('.content').forEach(function(c) { c.classList.remove('active'); });
                         el.classList.add('active');
@@ -368,6 +522,13 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                             initSfxEditor();
                         } else if (id === 'music') {
                             initMusicEditor();
+                        } else if (id === 'i18n') {
+                            if (!monacoReady) {
+                                i18nVisitedBeforeMonaco = true;
+                            }
+                            initI18nEditor();
+                        } else if (id === 'export') {
+                            initExportEditor();
                         }
                     }
 
@@ -393,6 +554,151 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                             toggleRunPico8();
                         });
                     }
+
+                    // ============ KEYBOARD SHORTCUTS OVERLAY ============
+                    var SHORTCUTS = {
+                        code: [
+                            ['Ctrl+Z', 'Undo'],
+                            ['Ctrl+Shift+Z', 'Redo'],
+                            ['Ctrl+Space', 'Trigger autocomplete'],
+                            ['Ctrl+F', 'Find'],
+                            ['Ctrl+H', 'Find and replace'],
+                            ['Ctrl+D', 'Select next occurrence'],
+                            ['Ctrl+/', 'Toggle line comment'],
+                            ['Ctrl+Shift+K', 'Delete line'],
+                            ['Alt+Up/Down', 'Move line up/down'],
+                            ['Ctrl+Shift+F', 'Format document']
+                        ],
+                        gfx: [
+                            ['D', 'Pencil tool'],
+                            ['F', 'Fill tool'],
+                            ['R', 'Rectangle tool'],
+                            ['C', 'Circle/Ellipse tool'],
+                            ['L', 'Line tool'],
+                            ['S', 'Select tool'],
+                            ['P', 'Hand/Pan tool'],
+                            ['T', 'Rotate 90\u00b0 (selection)'],
+                            ['H', 'Flip horizontal (selection)'],
+                            ['V', 'Flip vertical (selection)'],
+                            ['X', 'Quick palette'],
+                            ['Tab', 'Swap fg/bg colors'],
+                            ['Space', 'Temporary hand tool'],
+                            ['Ctrl+A', 'Select all'],
+                            ['Ctrl+C/X/V', 'Copy/Cut/Paste'],
+                            ['Ctrl+Z', 'Undo'],
+                            ['Ctrl+Shift+Z', 'Redo'],
+                            ['+/-', 'Zoom in/out'],
+                            ['0', 'Fit to view'],
+                            ['Arrows', 'Move selection 1px'],
+                            ['Del', 'Delete selection'],
+                            ['Esc', 'Deselect'],
+                            ['Dbl-click', 'Select 8x8 sprite cell'],
+                            ['Right-click', 'Eyedropper'],
+                            ['Ctrl+click', 'Search-replace color']
+                        ],
+                        map: [
+                            ['D', 'Pencil tool'],
+                            ['L', 'Line tool'],
+                            ['R', 'Rectangle fill tool'],
+                            ['F', 'Flood fill tool'],
+                            ['S', 'Select tool'],
+                            ['P', 'Hand/Pan tool'],
+                            ['X', 'Toggle tile picker'],
+                            ['Q/W', 'Previous/Next tile'],
+                            ['B', 'Toggle screen boundary'],
+                            ['Space', 'Temporary hand tool'],
+                            ['Ctrl+C/X/V', 'Copy/Cut/Paste'],
+                            ['Ctrl+Z', 'Undo'],
+                            ['Ctrl+Shift+Z', 'Redo'],
+                            ['+/-', 'Zoom in/out'],
+                            ['0', 'Fit to view'],
+                            ['Del', 'Delete selection'],
+                            ['Esc', 'Deselect / Close picker'],
+                            ['Right-click', 'Eyedropper (pick tile)']
+                        ],
+                        sfx: [
+                            ['Space', 'Play/Stop'],
+                            ['Tab', 'Toggle bar/tracker view'],
+                            ['-/+', 'Previous/Next SFX'],
+                            ['Q/W', 'Previous/Next waveform'],
+                            ['A/S', 'Previous/Next effect'],
+                            ['1-8', 'Select waveform directly'],
+                            ['Ctrl+C', 'Copy SFX slot'],
+                            ['Ctrl+V', 'Paste SFX slot'],
+                            ['Ctrl+Z', 'Undo'],
+                            ['Ctrl+Shift+Z', 'Redo'],
+                            ['\\u2014 Tracker mode \\u2014', ''],
+                            ['Tab', 'Cycle column (pitch/wave/vol/fx)'],
+                            ['Left/Right', 'Move between columns'],
+                            ['Up/Down', 'Adjust column value'],
+                            ['0-7', 'Direct numeric entry'],
+                            ['Z-M / Q-I', 'Piano keys (pitch entry)'],
+                            ['Shift', 'Raise octave'],
+                            ['Backspace', 'Clear note'],
+                            ['Arrows', 'Navigate notes']
+                        ],
+                        music: [
+                            ['Space', 'Play/Stop'],
+                            ['Left/- Right/+', 'Previous/Next pattern'],
+                            ['1/2/3/4', 'Toggle channel 1-4'],
+                            ['Ctrl+C', 'Copy pattern'],
+                            ['Ctrl+V', 'Paste pattern'],
+                            ['Ctrl+Z', 'Undo'],
+                            ['Ctrl+Shift+Z', 'Redo'],
+                            ['Del', 'Clear pattern']
+                        ]
+                    };
+                    var SHORTCUTS_TITLES = { gfx: 'Sprite Editor', map: 'Map Editor', sfx: 'SFX Editor', music: 'Music Editor', code: 'Code Editor' };
+
+                    function showShortcuts() {
+                        var shortcuts = SHORTCUTS[currentTab];
+                        if (!shortcuts) return;
+                        var overlay = document.getElementById('shortcuts-overlay');
+                        var title = SHORTCUTS_TITLES[currentTab] || currentTab;
+                        var html = '<div class="shortcuts-panel"><h3>' + title + ' Shortcuts</h3><table>';
+                        for (var i = 0; i < shortcuts.length; i++) {
+                            var s = shortcuts[i];
+                            if (s[1] === '') {
+                                html += '<tr><td colspan="2" style="padding-top:8px;color:var(--p8-text-secondary);text-align:center;font-style:italic">' + s[0] + '</td></tr>';
+                            } else {
+                                html += '<tr><td>' + s[0] + '</td><td>' + s[1] + '</td></tr>';
+                            }
+                        }
+                        html += '</table></div>';
+                        overlay.innerHTML = html;
+                        overlay.classList.add('visible');
+                    }
+
+                    function hideShortcuts() {
+                        var overlay = document.getElementById('shortcuts-overlay');
+                        overlay.classList.remove('visible');
+                        overlay.innerHTML = '';
+                    }
+
+                    // Click-outside dismiss for shortcuts overlay
+                    document.getElementById('shortcuts-overlay').addEventListener('click', function(e) {
+                        if (e.target === this) hideShortcuts();
+                    });
+
+                    // Global ? key and Escape for shortcuts overlay
+                    window.addEventListener('keydown', function(e) {
+                        var overlay = document.getElementById('shortcuts-overlay');
+                        if (overlay.classList.contains('visible')) {
+                            if (e.key === 'Escape') { e.preventDefault(); hideShortcuts(); }
+                            return;
+                        }
+                        if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+                            var tag = document.activeElement ? document.activeElement.tagName : '';
+                            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+                            if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('monaco-editor')) return;
+                            e.preventDefault();
+                            showShortcuts();
+                        }
+                    });
+
+                    // Wire up code tab help button
+                    var codeHelpBtn = document.getElementById('code-help-btn');
+                    if (codeHelpBtn) codeHelpBtn.addEventListener('click', function() { showShortcuts(); });
 
                     // ============ SPRITES / MAP / SFX / MUSIC RENDERING ============
                     function setPixel(imgData, x, y, c) {
@@ -470,6 +776,17 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     var sfxChangedTimer = null;
                     var sfxTrackerRow = -1;
                     var sfxTrackerCol = 0;
+                    var sfxClipboard = null;
+                    var musicClipboard = null;
+                    var sfxStatusMsg = '';
+                    var sfxStatusTimer = null;
+
+                    function sfxShowStatus(msg) {
+                        sfxStatusMsg = msg;
+                        if (sfxStatusTimer) clearTimeout(sfxStatusTimer);
+                        sfxStatusTimer = setTimeout(function() { sfxStatusMsg = ''; sfxUpdateStatus(); }, 1500);
+                        sfxUpdateStatus();
+                    }
 
                     var WAVE_COLORS = ['#ff77a8', '#29adff', '#00e436', '#ffec27', '#ff6c24', '#a8e6cf', '#83769c', '#fff1e8'];
                     var FX_COLORS = ['#333', '#29adff', '#ff77a8', '#ff004d', '#00e436', '#ffa300', '#ffec27', '#a8e6cf'];
@@ -638,6 +955,7 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     }
 
                     // ---- Render tracker mode ----
+                    var COL_CLASSES = ['note-pitch', 'note-wave', 'note-vol', 'note-fx'];
                     function sfxRenderTracker() {
                         var wrap = document.getElementById('sfx-tracker-wrap');
                         if (!wrap) return;
@@ -649,19 +967,26 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                             if (i === sfxTrackerRow) cls += ' selected';
                             html += '<div class="' + cls + '" data-idx="' + i + '">';
                             html += '<span class="note-idx">' + i.toString().padStart(2, '0') + '</span>';
-                            html += '<span class="note-pitch">' + pitchToNote(n.pitch) + '</span>';
-                            html += '<span class="note-wave">' + (n.customWave ? 'C' + n.waveform : WAVEFORMS[n.waveform]) + '</span>';
-                            html += '<span class="note-vol">' + n.volume + '</span>';
-                            html += '<span class="note-fx">' + EFFECTS[n.effect] + '</span>';
+                            var colHL = (i === sfxTrackerRow);
+                            html += '<span class="note-pitch' + (colHL && sfxTrackerCol === 0 ? ' col-active' : '') + '">' + pitchToNote(n.pitch) + '</span>';
+                            html += '<span class="note-wave' + (colHL && sfxTrackerCol === 1 ? ' col-active' : '') + '">' + (n.customWave ? 'C' + n.waveform : WAVEFORMS[n.waveform]) + '</span>';
+                            html += '<span class="note-vol' + (colHL && sfxTrackerCol === 2 ? ' col-active' : '') + '">' + n.volume + '</span>';
+                            html += '<span class="note-fx' + (colHL && sfxTrackerCol === 3 ? ' col-active' : '') + '">' + EFFECTS[n.effect] + '</span>';
                             html += '</div>';
                         }
                         html += '</div>';
                         wrap.innerHTML = html;
 
-                        // Click to select row
+                        // Click to select row and column
                         wrap.querySelectorAll('.sfx-note').forEach(function(el) {
-                            el.addEventListener('mousedown', function() {
+                            el.addEventListener('mousedown', function(ev) {
                                 sfxTrackerRow = parseInt(el.dataset.idx);
+                                // Detect which column was clicked
+                                var target = ev.target;
+                                if (target.classList.contains('note-pitch')) sfxTrackerCol = 0;
+                                else if (target.classList.contains('note-wave')) sfxTrackerCol = 1;
+                                else if (target.classList.contains('note-vol')) sfxTrackerCol = 2;
+                                else if (target.classList.contains('note-fx')) sfxTrackerCol = 3;
                                 sfxRenderTracker();
                             });
                         });
@@ -763,12 +1088,37 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
 
                         var sep1 = document.createElement('span'); sep1.className = 'tool-sep'; tb.appendChild(sep1);
 
-                        // Speed
+                        // Speed with direct input
                         var spdLabel = document.createElement('span'); spdLabel.className = 'sfx-label'; spdLabel.textContent = 'SPD'; tb.appendChild(spdLabel);
                         var spdDown = document.createElement('button'); spdDown.className = 'tool-btn'; spdDown.textContent = '\\u25c0';
                         spdDown.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetSpeed(sfxCurrentId, sfxGetSpeed(sfxCurrentId) - 1); sfxRenderToolbar(); notifySfxChanged(); };
                         tb.appendChild(spdDown);
-                        var spdVal = document.createElement('span'); spdVal.className = 'sfx-val'; spdVal.textContent = sfxGetSpeed(sfxCurrentId).toString(); tb.appendChild(spdVal);
+                        var spdVal = document.createElement('span'); spdVal.className = 'sfx-val'; spdVal.style.cursor = 'pointer'; spdVal.textContent = sfxGetSpeed(sfxCurrentId).toString(); tb.appendChild(spdVal);
+                        spdVal.title = 'Click to edit, scroll to adjust';
+                        if (EDITABLE) {
+                            spdVal.onclick = function() {
+                                var inp = document.createElement('input');
+                                inp.type = 'number'; inp.min = '1'; inp.max = '255';
+                                inp.value = sfxGetSpeed(sfxCurrentId).toString();
+                                inp.className = 'sfx-speed-input';
+                                spdVal.replaceWith(inp);
+                                inp.focus(); inp.select();
+                                function applyVal() {
+                                    var v = parseInt(inp.value);
+                                    if (v >= 1 && v <= 255) { sfxPushUndo(); sfxSetSpeed(sfxCurrentId, v); notifySfxChanged(); }
+                                    sfxRenderToolbar();
+                                }
+                                inp.addEventListener('keydown', function(ie) { if (ie.key === 'Enter') { ie.preventDefault(); applyVal(); } if (ie.key === 'Escape') sfxRenderToolbar(); });
+                                inp.addEventListener('blur', applyVal);
+                            };
+                            spdVal.addEventListener('wheel', function(we) {
+                                we.preventDefault();
+                                sfxPushUndo();
+                                sfxSetSpeed(sfxCurrentId, sfxGetSpeed(sfxCurrentId) + (we.deltaY < 0 ? 1 : -1));
+                                sfxRenderToolbar();
+                                notifySfxChanged();
+                            }, { passive: false });
+                        }
                         var spdUp = document.createElement('button'); spdUp.className = 'tool-btn'; spdUp.textContent = '\\u25b6';
                         spdUp.onclick = function() { if (!EDITABLE) return; sfxPushUndo(); sfxSetSpeed(sfxCurrentId, sfxGetSpeed(sfxCurrentId) + 1); sfxRenderToolbar(); notifySfxChanged(); };
                         tb.appendChild(spdUp);
@@ -828,6 +1178,26 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                             })(fi);
                         }
 
+                        if (EDITABLE) {
+                            var sepClr = document.createElement('span'); sepClr.className = 'tool-sep'; tb.appendChild(sepClr);
+                            var clrBtn = document.createElement('button');
+                            clrBtn.className = 'sfx-clr-btn';
+                            clrBtn.textContent = 'CLR';
+                            clrBtn.title = 'Clear current SFX';
+                            clrBtn.onclick = function() {
+                                sfxPushUndo();
+                                var offset = sfxCurrentId * 68;
+                                for (var ci = 0; ci < 64; ci++) SFX[offset + ci] = 0;
+                                SFX[offset + 65] = 16; // speed default
+                                SFX[offset + 66] = 0;  // loop start
+                                SFX[offset + 67] = 0;  // loop end
+                                sfxRenderAll();
+                                notifySfxChanged();
+                                sfxShowStatus('SFX ' + sfxCurrentId + ' cleared');
+                            };
+                            tb.appendChild(clrBtn);
+                        }
+
                         ${showAudio ? `
                         var sep5 = document.createElement('span'); sep5.className = 'tool-sep'; tb.appendChild(sep5);
                         var playBtn = document.createElement('button');
@@ -838,6 +1208,13 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         playBtn.onclick = function() { sfxTogglePlay(); };
                         tb.appendChild(playBtn);
                         ` : ''}
+
+                        var helpBtn = document.createElement('button');
+                        helpBtn.className = 'shortcuts-help-btn';
+                        helpBtn.textContent = '?';
+                        helpBtn.title = 'Keyboard shortcuts';
+                        helpBtn.addEventListener('click', function() { showShortcuts(); });
+                        tb.appendChild(helpBtn);
                     }
 
                     ${showAudio ? `
@@ -860,7 +1237,9 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                     function sfxUpdateStatus() {
                         var st = document.getElementById('sfx-status');
                         if (!st) return;
-                        if (sfxHoverNote >= 0 && sfxHoverNote < 32) {
+                        if (sfxStatusMsg) {
+                            st.textContent = sfxStatusMsg;
+                        } else if (sfxHoverNote >= 0 && sfxHoverNote < 32) {
                             var sfx = parseSfx(sfxCurrentId);
                             var n = sfx.notes[sfxHoverNote];
                             st.textContent = 'Note: ' + sfxHoverNote + ' | ' + pitchToNote(n.pitch) + ' | ' + WAVEFORMS[n.waveform] + ' | Vol: ' + n.volume + ' | FX: ' + EFFECTS[n.effect];
@@ -1008,6 +1387,14 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
 
                         var key = e.key.toLowerCase();
 
+                        // Tab in tracker: cycle columns; otherwise toggle mode
+                        if (key === 'tab' && !e.ctrlKey && !e.metaKey && sfxMode === 'tracker' && sfxTrackerRow >= 0) {
+                            e.preventDefault();
+                            sfxTrackerCol = e.shiftKey ? (sfxTrackerCol - 1 + 4) % 4 : (sfxTrackerCol + 1) % 4;
+                            sfxRenderTracker();
+                            return;
+                        }
+
                         // Tab: toggle mode
                         if (key === 'tab' && !e.ctrlKey && !e.metaKey) {
                             e.preventDefault();
@@ -1029,52 +1416,102 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         if (key === '-' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxCurrentId = (sfxCurrentId - 1 + 64) % 64; sfxRenderAll(); return; }
                         if (key === '=' || key === '+') { e.preventDefault(); sfxCurrentId = (sfxCurrentId + 1) % 64; sfxRenderAll(); return; }
 
-                        // Waveform prev/next
-                        if (key === 'q' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushWave = (sfxBrushWave - 1 + 8) % 8; sfxRenderToolbar(); return; }
-                        if (key === 'w' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushWave = (sfxBrushWave + 1) % 8; sfxRenderToolbar(); return; }
+                        // Waveform prev/next (skip in tracker with active column editing)
+                        var inTrkEdit = (sfxMode === 'tracker' && sfxTrackerRow >= 0);
+                        if (key === 'q' && !e.ctrlKey && !e.metaKey && (!inTrkEdit || sfxTrackerCol === 0)) { e.preventDefault(); sfxBrushWave = (sfxBrushWave - 1 + 8) % 8; sfxRenderToolbar(); return; }
+                        if (key === 'w' && !e.ctrlKey && !e.metaKey && (!inTrkEdit || sfxTrackerCol === 0)) { e.preventDefault(); sfxBrushWave = (sfxBrushWave + 1) % 8; sfxRenderToolbar(); return; }
 
                         // Effect prev/next
-                        if (key === 'a' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect - 1 + 8) % 8; sfxRenderToolbar(); return; }
-                        if (key === 's' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect + 1) % 8; sfxRenderToolbar(); return; }
+                        if (key === 'a' && !e.ctrlKey && !e.metaKey && !inTrkEdit) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect - 1 + 8) % 8; sfxRenderToolbar(); return; }
+                        if (key === 's' && !e.ctrlKey && !e.metaKey && !inTrkEdit) { e.preventDefault(); sfxBrushEffect = (sfxBrushEffect + 1) % 8; sfxRenderToolbar(); return; }
 
                         // Direct waveform selection 1-8
-                        if (!e.ctrlKey && !e.metaKey && key >= '1' && key <= '8') { e.preventDefault(); sfxBrushWave = parseInt(key) - 1; sfxRenderToolbar(); return; }
+                        if (!e.ctrlKey && !e.metaKey && key >= '1' && key <= '8' && (!inTrkEdit || sfxTrackerCol === 0)) { e.preventDefault(); sfxBrushWave = parseInt(key) - 1; sfxRenderToolbar(); return; }
 
                         // Undo/redo
                         if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && EDITABLE) { e.preventDefault(); sfxDoUndo(); return; }
                         if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey && EDITABLE) { e.preventDefault(); sfxDoRedo(); return; }
                         if ((e.ctrlKey || e.metaKey) && key === 'y' && EDITABLE) { e.preventDefault(); sfxDoRedo(); return; }
 
-                        // Tracker mode: keyboard note entry
+                        // Copy SFX slot (Ctrl+C)
+                        if ((e.ctrlKey || e.metaKey) && key === 'c') {
+                            e.preventDefault();
+                            var cpOff = sfxCurrentId * 68;
+                            sfxClipboard = SFX.slice(cpOff, cpOff + 68);
+                            sfxShowStatus('Copied SFX ' + sfxCurrentId);
+                            return;
+                        }
+                        // Paste SFX slot (Ctrl+V)
+                        if ((e.ctrlKey || e.metaKey) && key === 'v' && EDITABLE) {
+                            e.preventDefault();
+                            if (!sfxClipboard) { sfxShowStatus('Nothing to paste'); return; }
+                            sfxPushUndo();
+                            var psOff = sfxCurrentId * 68;
+                            for (var pi = 0; pi < 68; pi++) SFX[psOff + pi] = sfxClipboard[pi];
+                            sfxRenderAll(); notifySfxChanged();
+                            sfxShowStatus('Pasted to SFX ' + sfxCurrentId);
+                            return;
+                        }
+
+                        // Tracker mode: keyboard note entry and column editing
                         if (sfxMode === 'tracker' && sfxTrackerRow >= 0 && EDITABLE) {
-                            var pianoMap = {
-                                'z': 0, 's': 1, 'x': 2, 'd': 3, 'c': 4,
-                                'v': 5, 'g': 6, 'b': 7, 'h': 8, 'n': 9, 'j': 10, 'm': 11
-                            };
-                            var pianoMap2 = {
-                                'q': 12, '2': 13, 'w': 14, '3': 15, 'e': 16,
-                                'r': 17, '5': 18, 't': 19, '6': 20, 'y': 21, '7': 22, 'u': 23, 'i': 24
-                            };
-                            // Skip piano input if Q/W would conflict with waveform nav (only use piano in tracker with note entry)
-                            var pitch = -1;
-                            if (pianoMap[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap[key] + 24;
-                            if (pianoMap2[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap2[key] + 24;
-                            if (e.shiftKey && pitch >= 0) pitch += 12;
-                            if (pitch >= 0 && pitch <= 63) {
-                                e.preventDefault();
-                                sfxPushUndo();
-                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'pitch', pitch);
-                                sfxSetNote(sfxCurrentId, sfxTrackerRow, 'waveform', sfxBrushWave);
-                                if (parseSfx(sfxCurrentId).notes[sfxTrackerRow].volume === 0) {
-                                    sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', 5);
-                                }
+                            // Left/Right: move between columns
+                            if (key === 'arrowleft') { e.preventDefault(); sfxTrackerCol = Math.max(0, sfxTrackerCol - 1); sfxRenderTracker(); return; }
+                            if (key === 'arrowright') { e.preventDefault(); sfxTrackerCol = Math.min(3, sfxTrackerCol + 1); sfxRenderTracker(); return; }
+
+                            // Column-specific value editing with Up/Down for non-pitch columns
+                            if (sfxTrackerCol > 0 && (key === 'arrowup' || key === 'arrowdown')) {
+                                e.preventDefault(); sfxPushUndo();
+                                var cn = parseSfx(sfxCurrentId).notes[sfxTrackerRow];
+                                var cd = (key === 'arrowup') ? 1 : -1;
+                                if (sfxTrackerCol === 1) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'waveform', Math.max(0, Math.min(7, cn.waveform + cd)));
+                                else if (sfxTrackerCol === 2) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', Math.max(0, Math.min(7, cn.volume + cd)));
+                                else if (sfxTrackerCol === 3) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'effect', Math.max(0, Math.min(7, cn.effect + cd)));
+                                sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
+                                return;
+                            }
+
+                            // Direct numeric entry for non-pitch columns (0-7)
+                            if (sfxTrackerCol > 0 && !e.ctrlKey && !e.metaKey && key >= '0' && key <= '7') {
+                                e.preventDefault(); sfxPushUndo();
+                                var dv = parseInt(key);
+                                if (sfxTrackerCol === 1) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'waveform', dv);
+                                else if (sfxTrackerCol === 2) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', dv);
+                                else if (sfxTrackerCol === 3) sfxSetNote(sfxCurrentId, sfxTrackerRow, 'effect', dv);
                                 sfxTrackerRow = Math.min(31, sfxTrackerRow + 1);
                                 sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
                                 return;
                             }
-                            if (key === 'backspace') {
-                                e.preventDefault();
-                                sfxPushUndo();
+
+                            // Piano key entry only for pitch column (col 0)
+                            if (sfxTrackerCol === 0) {
+                                var pianoMap = {
+                                    'z': 0, 's': 1, 'x': 2, 'd': 3, 'c': 4,
+                                    'v': 5, 'g': 6, 'b': 7, 'h': 8, 'n': 9, 'j': 10, 'm': 11
+                                };
+                                var pianoMap2 = {
+                                    'q': 12, '2': 13, 'w': 14, '3': 15, 'e': 16,
+                                    'r': 17, '5': 18, 't': 19, '6': 20, 'y': 21, '7': 22, 'u': 23, 'i': 24
+                                };
+                                var pitch = -1;
+                                if (pianoMap[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap[key] + 24;
+                                if (pianoMap2[key] !== undefined && !e.ctrlKey && !e.metaKey) pitch = pianoMap2[key] + 24;
+                                if (e.shiftKey && pitch >= 0) pitch += 12;
+                                if (pitch >= 0 && pitch <= 63) {
+                                    e.preventDefault(); sfxPushUndo();
+                                    sfxSetNote(sfxCurrentId, sfxTrackerRow, 'pitch', pitch);
+                                    sfxSetNote(sfxCurrentId, sfxTrackerRow, 'waveform', sfxBrushWave);
+                                    if (parseSfx(sfxCurrentId).notes[sfxTrackerRow].volume === 0) {
+                                        sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', 5);
+                                    }
+                                    sfxTrackerRow = Math.min(31, sfxTrackerRow + 1);
+                                    sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
+                                    return;
+                                }
+                            }
+
+                            if (key === 'backspace' || key === 'delete') {
+                                e.preventDefault(); sfxPushUndo();
                                 sfxSetNote(sfxCurrentId, sfxTrackerRow, 'volume', 0);
                                 sfxSetNote(sfxCurrentId, sfxTrackerRow, 'pitch', 0);
                                 sfxRenderTracker(); sfxRenderBars(); sfxRenderList(); notifySfxChanged();
@@ -1237,6 +1674,29 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         playBtn.addEventListener('click', function() { musicTogglePlay(); });
                         tb.appendChild(playBtn);
                         ` : ''}
+
+                        if (EDITABLE) {
+                            var mClrSep = document.createElement('span'); mClrSep.className = 'sep'; tb.appendChild(mClrSep);
+                            var mClrBtn = document.createElement('button');
+                            mClrBtn.className = 'music-clr-btn';
+                            mClrBtn.textContent = 'CLR';
+                            mClrBtn.title = 'Clear current pattern';
+                            mClrBtn.addEventListener('click', function() {
+                                musicPushUndo();
+                                var offset = musicCurrentPattern * 4;
+                                for (var ci = 0; ci < 4; ci++) MUSIC[offset + ci] = 0x40;
+                                musicRenderAll();
+                                notifyMusicChanged();
+                            });
+                            tb.appendChild(mClrBtn);
+                        }
+
+                        var helpBtn = document.createElement('button');
+                        helpBtn.className = 'shortcuts-help-btn';
+                        helpBtn.textContent = '?';
+                        helpBtn.title = 'Keyboard shortcuts';
+                        helpBtn.addEventListener('click', function() { showShortcuts(); });
+                        tb.appendChild(helpBtn);
                     }
 
                     ${showAudio ? `
@@ -1580,6 +2040,28 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                         } else if (e.ctrlKey && e.key === 'y') {
                             e.preventDefault();
                             musicRedo();
+                        } else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                            // Copy pattern
+                            e.preventDefault();
+                            var cpOff = musicCurrentPattern * 4;
+                            musicClipboard = [MUSIC[cpOff], MUSIC[cpOff+1], MUSIC[cpOff+2], MUSIC[cpOff+3]];
+                        } else if ((e.ctrlKey || e.metaKey) && e.key === 'v' && EDITABLE) {
+                            // Paste pattern
+                            e.preventDefault();
+                            if (!musicClipboard) return;
+                            musicPushUndo();
+                            var psOff = musicCurrentPattern * 4;
+                            for (var mi = 0; mi < 4; mi++) MUSIC[psOff + mi] = musicClipboard[mi];
+                            musicRenderAll();
+                            notifyMusicChanged();
+                        } else if ((e.key === 'Delete' || e.key === 'Backspace') && EDITABLE) {
+                            // Clear pattern
+                            e.preventDefault();
+                            musicPushUndo();
+                            var clOff = musicCurrentPattern * 4;
+                            for (var ci = 0; ci < 4; ci++) MUSIC[clOff + ci] = 0x40;
+                            musicRenderAll();
+                            notifyMusicChanged();
                         }
                     }
 
@@ -1735,6 +2217,110 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                                         }
                                     });
 
+                                    // PICO-8 API autocompletion
+                                    var pico8Api = [
+                                        { label: 'cls', insertText: 'cls(\${1:col})', doc: 'Clear screen with color' },
+                                        { label: 'pset', insertText: 'pset(\${1:x}, \${2:y}, \${3:col})', doc: 'Set pixel color' },
+                                        { label: 'pget', insertText: 'pget(\${1:x}, \${2:y})', doc: 'Get pixel color' },
+                                        { label: 'line', insertText: 'line(\${1:x0}, \${2:y0}, \${3:x1}, \${4:y1}, \${5:col})', doc: 'Draw line' },
+                                        { label: 'rect', insertText: 'rect(\${1:x0}, \${2:y0}, \${3:x1}, \${4:y1}, \${5:col})', doc: 'Draw rectangle outline' },
+                                        { label: 'rectfill', insertText: 'rectfill(\${1:x0}, \${2:y0}, \${3:x1}, \${4:y1}, \${5:col})', doc: 'Draw filled rectangle' },
+                                        { label: 'circ', insertText: 'circ(\${1:x}, \${2:y}, \${3:r}, \${4:col})', doc: 'Draw circle outline' },
+                                        { label: 'circfill', insertText: 'circfill(\${1:x}, \${2:y}, \${3:r}, \${4:col})', doc: 'Draw filled circle' },
+                                        { label: 'print', insertText: 'print(\${1:str}, \${2:x}, \${3:y}, \${4:col})', doc: 'Print string' },
+                                        { label: 'spr', insertText: 'spr(\${1:n}, \${2:x}, \${3:y}, \${4:w}, \${5:h}, \${6:flip_x}, \${7:flip_y})', doc: 'Draw sprite' },
+                                        { label: 'sspr', insertText: 'sspr(\${1:sx}, \${2:sy}, \${3:sw}, \${4:sh}, \${5:dx}, \${6:dy}, \${7:dw}, \${8:dh}, \${9:flip_x}, \${10:flip_y})', doc: 'Draw texture from spritesheet' },
+                                        { label: 'map', insertText: 'map(\${1:cel_x}, \${2:cel_y}, \${3:sx}, \${4:sy}, \${5:cel_w}, \${6:cel_h}, \${7:layer})', doc: 'Draw map' },
+                                        { label: 'camera', insertText: 'camera(\${1:x}, \${2:y})', doc: 'Set camera offset' },
+                                        { label: 'clip', insertText: 'clip(\${1:x}, \${2:y}, \${3:w}, \${4:h})', doc: 'Set clipping region' },
+                                        { label: 'pal', insertText: 'pal(\${1:c0}, \${2:c1}, \${3:p})', doc: 'Swap color / reset palette' },
+                                        { label: 'palt', insertText: 'palt(\${1:col}, \${2:transparent})', doc: 'Set transparency for color' },
+                                        { label: 'color', insertText: 'color(\${1:col})', doc: 'Set default color' },
+                                        { label: 'fillp', insertText: 'fillp(\${1:pat})', doc: 'Set fill pattern' },
+                                        { label: 'flip', insertText: 'flip()', doc: 'Flip screen buffer' },
+                                        { label: 'btn', insertText: 'btn(\${1:i}, \${2:p})', doc: 'Button state (0..5=directions+OX, p=player)' },
+                                        { label: 'btnp', insertText: 'btnp(\${1:i}, \${2:p})', doc: 'Button pressed this frame' },
+                                        { label: 'rnd', insertText: 'rnd(\${1:x})', doc: 'Random number 0..x (exclusive)' },
+                                        { label: 'flr', insertText: 'flr(\${1:x})', doc: 'Floor' },
+                                        { label: 'ceil', insertText: 'ceil(\${1:x})', doc: 'Ceiling' },
+                                        { label: 'abs', insertText: 'abs(\${1:x})', doc: 'Absolute value' },
+                                        { label: 'sgn', insertText: 'sgn(\${1:x})', doc: 'Sign (-1 or 1)' },
+                                        { label: 'sqrt', insertText: 'sqrt(\${1:x})', doc: 'Square root' },
+                                        { label: 'sin', insertText: 'sin(\${1:x})', doc: 'Sine (0..1 turns)' },
+                                        { label: 'cos', insertText: 'cos(\${1:x})', doc: 'Cosine (0..1 turns)' },
+                                        { label: 'atan2', insertText: 'atan2(\${1:dx}, \${2:dy})', doc: 'Arctangent (0..1 turns)' },
+                                        { label: 'max', insertText: 'max(\${1:x}, \${2:y})', doc: 'Maximum' },
+                                        { label: 'min', insertText: 'min(\${1:x}, \${2:y})', doc: 'Minimum' },
+                                        { label: 'mid', insertText: 'mid(\${1:x}, \${2:y}, \${3:z})', doc: 'Middle value' },
+                                        { label: 'band', insertText: 'band(\${1:x}, \${2:y})', doc: 'Bitwise AND' },
+                                        { label: 'bor', insertText: 'bor(\${1:x}, \${2:y})', doc: 'Bitwise OR' },
+                                        { label: 'bxor', insertText: 'bxor(\${1:x}, \${2:y})', doc: 'Bitwise XOR' },
+                                        { label: 'bnot', insertText: 'bnot(\${1:x})', doc: 'Bitwise NOT' },
+                                        { label: 'shl', insertText: 'shl(\${1:x}, \${2:n})', doc: 'Shift left' },
+                                        { label: 'shr', insertText: 'shr(\${1:x}, \${2:n})', doc: 'Shift right (arithmetic)' },
+                                        { label: 'lshr', insertText: 'lshr(\${1:x}, \${2:n})', doc: 'Shift right (logical)' },
+                                        { label: 'rotl', insertText: 'rotl(\${1:x}, \${2:n})', doc: 'Rotate left' },
+                                        { label: 'rotr', insertText: 'rotr(\${1:x}, \${2:n})', doc: 'Rotate right' },
+                                        { label: 'peek', insertText: 'peek(\${1:addr})', doc: 'Read byte from memory' },
+                                        { label: 'poke', insertText: 'poke(\${1:addr}, \${2:val})', doc: 'Write byte to memory' },
+                                        { label: 'peek2', insertText: 'peek2(\${1:addr})', doc: 'Read 16-bit value' },
+                                        { label: 'poke2', insertText: 'poke2(\${1:addr}, \${2:val})', doc: 'Write 16-bit value' },
+                                        { label: 'peek4', insertText: 'peek4(\${1:addr})', doc: 'Read 32-bit fixed-point value' },
+                                        { label: 'poke4', insertText: 'poke4(\${1:addr}, \${2:val})', doc: 'Write 32-bit fixed-point value' },
+                                        { label: 'memcpy', insertText: 'memcpy(\${1:dest}, \${2:src}, \${3:len})', doc: 'Copy memory' },
+                                        { label: 'memset', insertText: 'memset(\${1:dest}, \${2:val}, \${3:len})', doc: 'Set memory' },
+                                        { label: 'fget', insertText: 'fget(\${1:n}, \${2:f})', doc: 'Get sprite flag' },
+                                        { label: 'fset', insertText: 'fset(\${1:n}, \${2:f}, \${3:v})', doc: 'Set sprite flag' },
+                                        { label: 'mget', insertText: 'mget(\${1:x}, \${2:y})', doc: 'Get map tile' },
+                                        { label: 'mset', insertText: 'mset(\${1:x}, \${2:y}, \${3:v})', doc: 'Set map tile' },
+                                        { label: 'sfx', insertText: 'sfx(\${1:n}, \${2:ch}, \${3:off}, \${4:len})', doc: 'Play sound effect' },
+                                        { label: 'music', insertText: 'music(\${1:n}, \${2:fade}, \${3:mask})', doc: 'Play music pattern' },
+                                        { label: 'tostr', insertText: 'tostr(\${1:val}, \${2:hex})', doc: 'Convert to string' },
+                                        { label: 'tonum', insertText: 'tonum(\${1:str})', doc: 'Convert to number' },
+                                        { label: 'chr', insertText: 'chr(\${1:n})', doc: 'Character from ordinal' },
+                                        { label: 'ord', insertText: 'ord(\${1:str}, \${2:i})', doc: 'Ordinal of character' },
+                                        { label: 'sub', insertText: 'sub(\${1:str}, \${2:i}, \${3:j})', doc: 'Substring' },
+                                        { label: 'split', insertText: 'split(\${1:str}, \${2:sep}, \${3:convert})', doc: 'Split string into table' },
+                                        { label: 'add', insertText: 'add(\${1:tbl}, \${2:val}, \${3:i})', doc: 'Add value to table' },
+                                        { label: 'del', insertText: 'del(\${1:tbl}, \${2:val})', doc: 'Delete first occurrence from table' },
+                                        { label: 'deli', insertText: 'deli(\${1:tbl}, \${2:i})', doc: 'Delete by index from table' },
+                                        { label: 'count', insertText: 'count(\${1:tbl}, \${2:val})', doc: 'Count occurrences in table' },
+                                        { label: 'all', insertText: 'all(\${1:tbl})', doc: 'Iterator for table values' },
+                                        { label: 'foreach', insertText: 'foreach(\${1:tbl}, \${2:func})', doc: 'Call func for each table value' },
+                                        { label: 'pairs', insertText: 'pairs(\${1:tbl})', doc: 'Iterator for key-value pairs' },
+                                        { label: 'stat', insertText: 'stat(\${1:x})', doc: 'Get system status' },
+                                        { label: 'menuitem', insertText: 'menuitem(\${1:i}, \${2:label}, \${3:callback})', doc: 'Add pause menu item' },
+                                        { label: 'time', insertText: 'time()', doc: 'Seconds since program start' },
+                                        { label: 't', insertText: 't()', doc: 'Alias for time()' },
+                                        { label: 'cocreate', insertText: 'cocreate(\${1:func})', doc: 'Create coroutine' },
+                                        { label: 'coresume', insertText: 'coresume(\${1:cor})', doc: 'Resume coroutine' },
+                                        { label: 'costatus', insertText: 'costatus(\${1:cor})', doc: 'Get coroutine status' },
+                                        { label: 'yield', insertText: 'yield()', doc: 'Yield from coroutine' },
+                                    ];
+
+                                    monaco.languages.registerCompletionItemProvider('pico8-lua', {
+                                        provideCompletionItems: function(model, position) {
+                                            var word = model.getWordUntilPosition(position);
+                                            var range = {
+                                                startLineNumber: position.lineNumber,
+                                                endLineNumber: position.lineNumber,
+                                                startColumn: word.startColumn,
+                                                endColumn: word.endColumn
+                                            };
+                                            var suggestions = pico8Api.map(function(item) {
+                                                return {
+                                                    label: item.label,
+                                                    kind: monaco.languages.CompletionItemKind.Function,
+                                                    insertText: item.insertText,
+                                                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                                    documentation: item.doc,
+                                                    range: range
+                                                };
+                                            });
+                                            return { suggestions: suggestions };
+                                        }
+                                    });
+
                                     var container = document.getElementById('monaco-container');
                                     monacoEditor = monaco.editor.create(container, {
                                         value: CODE,
@@ -1742,9 +2328,9 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                                         theme: 'pico8-dark',
                                         readOnly: !EDITABLE,
                                         minimap: { enabled: false },
-                                        fontSize: 13,
-                                        lineHeight: 20,
-                                        fontFamily: "'Courier New', monospace",
+                                        fontSize: EDITOR_FONT_SIZE,
+                                        lineHeight: EDITOR_LINE_HEIGHT || 0,
+                                        fontFamily: EDITOR_FONT_FAMILY,
                                         scrollBeyondLastLine: false,
                                         automaticLayout: false,
                                         tabSize: 2,
@@ -1759,6 +2345,118 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                                         stickyScroll: { enabled: false },
                                     });
 
+                                    // Token/character counting for PICO-8
+                                    function countTokens(code) {
+                                        var tokens = 0;
+                                        var i = 0;
+                                        var len = code.length;
+                                        var freeKeywords = { 'end': true, 'local': true };
+                                        var opKeywords = { 'not': true, 'and': true, 'or': true };
+                                        var twoCharOps = { '==':1, '~=':1, '<=':1, '>=':1, '..':1, '+=':1, '-=':1, '*=':1, '/=':1, '%=':1, '^=':1, '!=':1 };
+                                        while (i < len) {
+                                            var ch = code[i];
+                                            if (ch === ' ' || ch === '\\t' || ch === '\\r' || ch === '\\n') { i++; continue; }
+                                            if (ch === '-' && i + 1 < len && code[i+1] === '-') {
+                                                i += 2;
+                                                if (i + 1 < len && code[i] === '[' && code[i+1] === '[') {
+                                                    i += 2;
+                                                    while (i + 1 < len && !(code[i] === ']' && code[i+1] === ']')) i++;
+                                                    if (i + 1 < len) i += 2;
+                                                } else {
+                                                    while (i < len && code[i] !== '\\n') i++;
+                                                }
+                                                continue;
+                                            }
+                                            if (ch === ',' || ch === ';' || ch === '(' || ch === ')' || ch === '[' || ch === ']' || ch === '{' || ch === '}') { i++; continue; }
+                                            if (ch === '.') {
+                                                if (i + 1 < len && code[i+1] === '.') {
+                                                    tokens++;
+                                                    i += (i + 2 < len && code[i+2] === '.') ? 3 : 2;
+                                                    continue;
+                                                }
+                                                i++; continue;
+                                            }
+                                            if (ch === ':') { i++; continue; }
+                                            if (ch === '"' || ch === "'") {
+                                                tokens++;
+                                                var q = ch;
+                                                i++;
+                                                while (i < len && code[i] !== q) {
+                                                    if (code[i] === '\\\\') i++;
+                                                    i++;
+                                                }
+                                                if (i < len) i++;
+                                                continue;
+                                            }
+                                            if (ch === '[' && i + 1 < len && code[i+1] === '[') {
+                                                tokens++;
+                                                i += 2;
+                                                while (i + 1 < len && !(code[i] === ']' && code[i+1] === ']')) i++;
+                                                if (i + 1 < len) i += 2;
+                                                continue;
+                                            }
+                                            if ((ch >= '0' && ch <= '9') || (ch === '.' && i + 1 < len && code[i+1] >= '0' && code[i+1] <= '9')) {
+                                                tokens++;
+                                                if (ch === '0' && i + 1 < len && (code[i+1] === 'x' || code[i+1] === 'X')) {
+                                                    i += 2;
+                                                    while (i < len && /[0-9a-fA-F_]/.test(code[i])) i++;
+                                                    if (i < len && code[i] === '.') { i++; while (i < len && /[0-9a-fA-F_]/.test(code[i])) i++; }
+                                                } else if (ch === '0' && i + 1 < len && (code[i+1] === 'b' || code[i+1] === 'B')) {
+                                                    i += 2;
+                                                    while (i < len && /[01_]/.test(code[i])) i++;
+                                                } else {
+                                                    while (i < len && ((code[i] >= '0' && code[i] <= '9') || code[i] === '.')) i++;
+                                                }
+                                                continue;
+                                            }
+                                            if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
+                                                var start = i;
+                                                while (i < len && ((code[i] >= 'a' && code[i] <= 'z') || (code[i] >= 'A' && code[i] <= 'Z') || (code[i] >= '0' && code[i] <= '9') || code[i] === '_')) i++;
+                                                var word = code.substring(start, i);
+                                                if (freeKeywords[word]) continue;
+                                                if (opKeywords[word]) { tokens++; continue; }
+                                                tokens++;
+                                                continue;
+                                            }
+                                            if (i + 1 < len && twoCharOps[code[i] + code[i+1]]) {
+                                                tokens++;
+                                                i += 2;
+                                                continue;
+                                            }
+                                            tokens++;
+                                            i++;
+                                        }
+                                        return tokens;
+                                    }
+
+                                    function countChars(code) {
+                                        return code.length;
+                                    }
+
+                                    var codeStatsEl = document.getElementById('code-stats');
+                                    var codeTokensEl = document.getElementById('code-tokens');
+                                    var codeCharsEl = document.getElementById('code-chars');
+                                    var statsDebounceTimer = null;
+
+                                    function updateCodeStats() {
+                                        var code = monacoEditor.getValue();
+                                        var tk = countTokens(code);
+                                        var ch = countChars(code);
+                                        codeTokensEl.textContent = 'TOKENS: ' + tk + '/8192';
+                                        codeCharsEl.textContent = 'CHARS: ' + ch + '/65535';
+                                        var tkPct = tk / 8192;
+                                        var chPct = ch / 65535;
+                                        codeTokensEl.style.color = (tkPct >= 0.95) ? '#ff004d' : (tkPct >= 0.80) ? '#ffec27' : '#c2c3c7';
+                                        codeCharsEl.style.color = (chPct >= 0.95) ? '#ff004d' : (chPct >= 0.80) ? '#ffec27' : '#c2c3c7';
+                                    }
+
+                                    updateCodeStats();
+
+                                    monacoEditor.onDidChangeModelContent(function() {
+                                        if (statsDebounceTimer) clearTimeout(statsDebounceTimer);
+                                        statsDebounceTimer = setTimeout(updateCodeStats, 300);
+                                    });
+
                                     if (EDITABLE) {
                                         monacoEditor.onDidChangeModelContent(function() {
                                             vscodeApi.postMessage({
@@ -1769,6 +2467,12 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
                                     }
 
                                     monacoEditor.layout();
+
+                                    monacoReady = true;
+                                    if (i18nVisitedBeforeMonaco) {
+                                        i18nScanCode();
+                                        i18nRenderCodegen();
+                                    }
                                 });
                             } catch (e) {
                                 console.error('Monaco init error:', e);
@@ -1813,6 +2517,7 @@ function getSpriteEditorScript(): string {
                     var seSelDragging = false;
                     var seSelDragStart = null;
                     var seGfxChangedTimer = null;
+                    var sePrevPx = -1, sePrevPy = -1; // previous pencil pixel for Bresenham interpolation
                     var seMarchingAntsOffset = 0;
                     var seMarchingAntsTimer = null;
                     var seQuickPaletteVisible = false;
@@ -2056,6 +2761,36 @@ function getSpriteEditorScript(): string {
                             ctx.setLineDash([]);
                         }
 
+                        // Show lifted selection pixels during drag
+                        if (seSelection && seSelDragging && seSelection.data) {
+                            ctx.globalAlpha = 0.7;
+                            var sw = seSelection.w, sh = seSelection.h;
+                            for (var dy = 0; dy < sh; dy++) {
+                                for (var dx = 0; dx < sw; dx++) {
+                                    var c = seSelection.data[dy * sw + dx];
+                                    ctx.fillStyle = PAL[c];
+                                    ctx.fillRect(
+                                        (seSelection.x + dx) * seZoom,
+                                        (seSelection.y + dy) * seZoom,
+                                        seZoom, seZoom
+                                    );
+                                }
+                            }
+                            ctx.globalAlpha = 1.0;
+                            // Marching ants around dragged selection
+                            ctx.strokeStyle = '#fff';
+                            ctx.lineWidth = 1;
+                            ctx.setLineDash([4, 4]);
+                            ctx.lineDashOffset = seMarchingAntsOffset;
+                            ctx.strokeRect(
+                                seSelection.x * seZoom + 0.5,
+                                seSelection.y * seZoom + 0.5,
+                                seSelection.w * seZoom,
+                                seSelection.h * seZoom
+                            );
+                            ctx.setLineDash([]);
+                        }
+
                         // Shape preview while dragging
                         if (seIsDrawing && seDrawStart && (seTool === 'rectangle' || seTool === 'circle' || seTool === 'line')) {
                             seRenderShapePreview(ctx);
@@ -2242,6 +2977,21 @@ function getSpriteEditorScript(): string {
                         seRenderCanvas(); notifyGfxChanged();
                     }
 
+                    function seRotate90() {
+                        if (!seSelection) return;
+                        pushUndo();
+                        var data = seGetSelectionPixels();
+                        var w = seSelection.w, h = seSelection.h;
+                        seClearRect(seSelection.x, seSelection.y, w, h, seBgColor);
+                        var nw = h, nh = w;
+                        for (var y = 0; y < h; y++)
+                            for (var x = 0; x < w; x++)
+                                setGfxPixel(seSelection.x + (h - 1 - y), seSelection.y + x, data[y * w + x]);
+                        seSelection.w = nw;
+                        seSelection.h = nh;
+                        seRenderCanvas(); notifyGfxChanged();
+                    }
+
                     function seShiftSelection(dx, dy) {
                         if (!seSelection) return;
                         pushUndo();
@@ -2399,6 +3149,7 @@ function getSpriteEditorScript(): string {
                         // Flag editor circles (per hovered sprite)
                         var flagEditGrp = document.createElement('span');
                         flagEditGrp.className = 'flag-group';
+                        flagEditGrp.id = 'se-flag-dots';
                         var sprIdx = -1;
                         if (seMouseX >= 0 && seMouseX < 128 && seMouseY >= 0 && seMouseY < 128) {
                             sprIdx = Math.floor(seMouseY / 8) * 16 + Math.floor(seMouseX / 8);
@@ -2450,11 +3201,52 @@ function getSpriteEditorScript(): string {
                         zfit.onclick = function() { seFitCanvas(); seUpdateCanvasTransform(); seRenderOverlay(); seUpdateZoomLabel(); };
                         zg.appendChild(zminus); zg.appendChild(zlabel); zg.appendChild(zplus); zg.appendChild(zfit);
                         tb.appendChild(zg);
+
+                        var helpBtn = document.createElement('button');
+                        helpBtn.className = 'shortcuts-help-btn';
+                        helpBtn.textContent = '?';
+                        helpBtn.title = 'Keyboard shortcuts';
+                        helpBtn.addEventListener('click', function() { showShortcuts(); });
+                        tb.appendChild(helpBtn);
                     }
 
                     function seRenderPalette() {
                         // Palette is now part of the toolbar; delegate to seRenderToolbar
                         seRenderToolbar();
+                    }
+
+                    function seRenderFlagDots() {
+                        var container = document.getElementById('se-flag-dots');
+                        if (!container) return;
+                        container.innerHTML = '';
+                        var sprIdx = -1;
+                        if (seMouseX >= 0 && seMouseX < 128 && seMouseY >= 0 && seMouseY < 128) {
+                            sprIdx = Math.floor(seMouseY / 8) * 16 + Math.floor(seMouseX / 8);
+                        }
+                        var flagByte = sprIdx >= 0 ? (FLAGS[sprIdx] || 0) : 0;
+                        for (var fi2 = 0; fi2 < 8; fi2++) {
+                            (function(idx) {
+                                var dot = document.createElement('button');
+                                dot.className = 'flag-dot';
+                                if (sprIdx >= 0 && (flagByte & (1 << idx))) {
+                                    dot.className += ' set';
+                                    dot.style.background = seFlagColors[idx];
+                                } else {
+                                    dot.style.background = 'transparent';
+                                }
+                                dot.style.borderColor = (sprIdx >= 0 && (flagByte & (1 << idx))) ? '#fff' : seFlagColors[idx];
+                                dot.title = LOCALE.flagLabel + ' ' + idx;
+                                if (EDITABLE && sprIdx >= 0) {
+                                    dot.onclick = function() {
+                                        FLAGS[sprIdx] ^= (1 << idx);
+                                        seRenderFlagDots();
+                                        seRenderOverlay();
+                                        notifyFlagsChanged();
+                                    };
+                                }
+                                container.appendChild(dot);
+                            })(fi2);
+                        }
                     }
 
                     function seUpdateStatus() {
@@ -2545,6 +3337,8 @@ function getSpriteEditorScript(): string {
                             seIsDrawing = true;
                             if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
                                 setGfxPixel(pos.px, pos.py, seFgColor);
+                                sePrevPx = pos.px;
+                                sePrevPy = pos.py;
                                 seRenderCanvas();
                             }
                         } else if (seTool === 'fill') {
@@ -2587,7 +3381,7 @@ function getSpriteEditorScript(): string {
                             ? Math.floor(seMouseY / 8) * 16 + Math.floor(seMouseX / 8) : -1;
                         if (curSpr !== seLastHoveredSprite) {
                             seLastHoveredSprite = curSpr;
-                            seRenderPalette();
+                            seRenderFlagDots();
                         }
 
                         if (seIsPanning && sePanStart) {
@@ -2603,7 +3397,13 @@ function getSpriteEditorScript(): string {
 
                         if (seIsDrawing && seTool === 'pencil') {
                             if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
-                                setGfxPixel(pos.px, pos.py, seFgColor);
+                                if (sePrevPx >= 0 && sePrevPy >= 0) {
+                                    drawBresenhamLine(sePrevPx, sePrevPy, pos.px, pos.py, seFgColor);
+                                } else {
+                                    setGfxPixel(pos.px, pos.py, seFgColor);
+                                }
+                                sePrevPx = pos.px;
+                                sePrevPy = pos.py;
                                 seRenderCanvas();
                             }
                         } else if (seIsDrawing && (seTool === 'rectangle' || seTool === 'circle' || seTool === 'line')) {
@@ -2644,6 +3444,8 @@ function getSpriteEditorScript(): string {
 
                         if (seIsDrawing && seTool === 'pencil') {
                             seIsDrawing = false;
+                            sePrevPx = -1;
+                            sePrevPy = -1;
                             notifyGfxChanged();
                         } else if (seIsDrawing && seDrawStart) {
                             var pos = seScreenToPixel(e.clientX, e.clientY);
@@ -2781,6 +3583,25 @@ function getSpriteEditorScript(): string {
                         if ((e.ctrlKey || e.metaKey) && key === 'x' && seTool === 'select' && EDITABLE) { e.preventDefault(); seCutSelection(); return; }
                         if ((e.ctrlKey || e.metaKey) && key === 'v' && EDITABLE) { e.preventDefault(); sePasteClipboard(); return; }
 
+                        // Ctrl+A select all
+                        if ((e.ctrlKey || e.metaKey) && key === 'a' && seTool === 'select' && EDITABLE) {
+                            e.preventDefault();
+                            seSelection = { x: 0, y: 0, w: 128, h: 128 };
+                            seRenderOverlay();
+                            return;
+                        }
+
+                        // Tab = swap fg/bg colors
+                        if (key === 'tab' && !e.ctrlKey && !e.metaKey) {
+                            e.preventDefault();
+                            var tmp = seFgColor;
+                            seFgColor = seBgColor;
+                            seBgColor = tmp;
+                            seRenderPalette();
+                            seUpdateStatus();
+                            return;
+                        }
+
                         if (!EDITABLE) return;
 
                         // Tool shortcuts
@@ -2796,6 +3617,7 @@ function getSpriteEditorScript(): string {
                         if (seTool === 'select' && seSelection) {
                             if (key === 'h') { seFlipH(); return; }
                             if (key === 'v' && !e.ctrlKey) { seFlipV(); return; }
+                            if (key === 't') { seRotate90(); return; }
                             if (key === 'arrowleft') { e.preventDefault(); seShiftSelection(-1, 0); return; }
                             if (key === 'arrowright') { e.preventDefault(); seShiftSelection(1, 0); return; }
                             if (key === 'arrowup') { e.preventDefault(); seShiftSelection(0, -1); return; }
@@ -2832,6 +3654,16 @@ function getSpriteEditorScript(): string {
                         var wrap = document.getElementById('sprite-canvas-wrap');
                         wrap.addEventListener('mousedown', seOnMouseDown);
                         wrap.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+                        wrap.addEventListener('dblclick', function(e) {
+                            if (!EDITABLE || seTool !== 'select') return;
+                            var pos = seScreenToPixel(e.clientX, e.clientY);
+                            if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
+                                var cx = Math.floor(pos.px / 8) * 8;
+                                var cy = Math.floor(pos.py / 8) * 8;
+                                seSelection = { x: cx, y: cy, w: 8, h: 8 };
+                                seRenderOverlay();
+                            }
+                        });
                         window.addEventListener('mousemove', seOnMouseMove);
                         window.addEventListener('mouseup', seOnMouseUp);
                         wrap.addEventListener('wheel', seOnWheel, { passive: false });
@@ -2885,12 +3717,47 @@ function getMapEditorScript(): string {
                     var meMarchingAntsOffset = 0;
                     var meMarchingAntsTimer = null;
                     var meTilePickerVisible = false;
+                    var meDrawStart = null;
+                    var meShowScreenBounds = false;
+                    var meStampTiles = null;
+                    var meStampW = 1;
+                    var meStampH = 1;
+                    var meDirtyTiles = null;
+                    var meForceFullRedraw = true;
+                    var meLastImgData = null;
                     var tpZoom = 4;
                     var tpPanX = 0, tpPanY = 0;
                     var tpIsPanning = false;
                     var tpPanStart = null;
                     var tpCvs = null;
                     var tpHoverTile = -1;
+                    var tpDragStart = null;
+                    var tpDragEnd = null;
+                    var tpIsDragging = false;
+
+                    // Pre-computed palette RGBA
+                    var PALETTE_RGBA = null;
+                    function meBuildPaletteRGBA() {
+                        PALETTE_RGBA = new Uint8Array(16 * 4);
+                        for (var i = 0; i < 16; i++) {
+                            var hex = PAL[i];
+                            PALETTE_RGBA[i * 4]     = parseInt(hex.substr(1, 2), 16);
+                            PALETTE_RGBA[i * 4 + 1] = parseInt(hex.substr(3, 2), 16);
+                            PALETTE_RGBA[i * 4 + 2] = parseInt(hex.substr(5, 2), 16);
+                            PALETTE_RGBA[i * 4 + 3] = 255;
+                        }
+                    }
+
+                    function meMarkDirty(tx, ty) {
+                        if (meDirtyTiles) meDirtyTiles.add(tx + ',' + ty);
+                    }
+
+                    function meMarkDirtyRect(x, y, w, h) {
+                        if (!meDirtyTiles) return;
+                        for (var dy = 0; dy < h; dy++)
+                            for (var dx = 0; dx < w; dx++)
+                                meDirtyTiles.add((x + dx) + ',' + (y + dy));
+                    }
 
                     // ---- Tile get/set ----
 
@@ -2905,6 +3772,7 @@ function getMapEditorScript(): string {
 
                     function meSetTile(tx, ty, sprIdx) {
                         if (tx < 0 || tx >= 128 || ty < 0 || ty >= 64) return;
+                        meMarkDirty(tx, ty);
                         if (ty < 32) {
                             MAP[ty * 128 + tx] = sprIdx;
                         } else {
@@ -2926,6 +3794,7 @@ function getMapEditorScript(): string {
                         var prev = meUndoStack.pop();
                         for (var i = 0; i < prev.map.length; i++) MAP[i] = prev.map[i];
                         for (var j = 0; j < prev.gfx.length; j++) GFX[j] = prev.gfx[j];
+                        meForceFullRedraw = true;
                         meRenderCanvas();
                         notifyMapChanged();
                     }
@@ -2936,6 +3805,7 @@ function getMapEditorScript(): string {
                         var next = meRedoStack.pop();
                         for (var i = 0; i < next.map.length; i++) MAP[i] = next.map[i];
                         for (var j = 0; j < next.gfx.length; j++) GFX[j] = next.gfx[j];
+                        meForceFullRedraw = true;
                         meRenderCanvas();
                         notifyMapChanged();
                     }
@@ -2944,7 +3814,7 @@ function getMapEditorScript(): string {
                         if (!EDITABLE) return;
                         if (meMapChangedTimer) clearTimeout(meMapChangedTimer);
                         meMapChangedTimer = setTimeout(function() {
-                            vscodeApi.postMessage({ type: 'mapChanged', map: MAP.slice() });
+                            vscodeApi.postMessage({ type: 'mapChanged', map: MAP.slice(), gfx: GFX.slice() });
                         }, 100);
                     }
 
@@ -3023,6 +3893,45 @@ function getMapEditorScript(): string {
                         }
                     }
 
+                    // ---- Line tool (Bresenham for tile coordinates) ----
+
+                    function meBresenhamLine(x0, y0, x1, y1, tile) {
+                        var dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+                        var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+                        var err = dx - dy;
+                        while (true) {
+                            meSetTile(x0, y0, tile);
+                            if (x0 === x1 && y0 === y1) break;
+                            var e2 = 2 * err;
+                            if (e2 > -dy) { err -= dy; x0 += sx; }
+                            if (e2 < dx) { err += dx; y0 += sy; }
+                        }
+                    }
+
+                    // ---- Rectangle fill tool ----
+
+                    function meRectFill(x0, y0, x1, y1, tile) {
+                        var rx = Math.max(0, Math.min(x0, x1));
+                        var ry = Math.max(0, Math.min(y0, y1));
+                        var rx2 = Math.min(127, Math.max(x0, x1));
+                        var ry2 = Math.min(63, Math.max(y0, y1));
+                        for (var yy = ry; yy <= ry2; yy++)
+                            for (var xx = rx; xx <= rx2; xx++)
+                                meSetTile(xx, yy, tile);
+                    }
+
+                    // ---- Multi-tile stamp helpers ----
+
+                    function meStampAt(tx, ty) {
+                        if (meStampTiles && meStampW > 1 || meStampH > 1) {
+                            for (var sy = 0; sy < meStampH; sy++)
+                                for (var sx = 0; sx < meStampW; sx++)
+                                    meSetTile(tx + sx, ty + sy, meStampTiles[sy][sx]);
+                        } else {
+                            meSetTile(tx, ty, meFgTile);
+                        }
+                    }
+
                     // ---- Selection helpers ----
 
                     function meGetSelectionTiles() {
@@ -3081,30 +3990,62 @@ function getMapEditorScript(): string {
 
                     // ---- Rendering ----
 
-                    function meRenderCanvas() {
-                        var cvs = document.getElementById('cvs-map');
-                        var ctx = cvs.getContext('2d');
-                        var imgData = ctx.createImageData(1024, 512);
-                        for (var ty = 0; ty < 64; ty++) {
-                            for (var tx = 0; tx < 128; tx++) {
-                                var spriteIdx = meGetTile(tx, ty);
-                                if (spriteIdx === 0) continue;
-                                var spritePixels = getSprite(spriteIdx);
-                                var baseX = tx * 8, baseY = ty * 8;
-                                for (var py = 0; py < 8; py++) {
-                                    for (var px = 0; px < 8; px++) {
-                                        var color = spritePixels[py * 8 + px];
-                                        var hex = PAL[color & 15];
-                                        var r = parseInt(hex.substr(1,2), 16);
-                                        var g = parseInt(hex.substr(3,2), 16);
-                                        var bVal = parseInt(hex.substr(5,2), 16);
-                                        var idx = ((baseY + py) * 1024 + baseX + px) * 4;
-                                        imgData.data[idx] = r; imgData.data[idx+1] = g; imgData.data[idx+2] = bVal; imgData.data[idx+3] = 255;
-                                    }
+                    function meRenderTile(imgData, tx, ty) {
+                        var spriteIdx = meGetTile(tx, ty);
+                        var baseX = tx * 8, baseY = ty * 8;
+                        if (spriteIdx === 0) {
+                            for (var py = 0; py < 8; py++) {
+                                var rowOff = ((baseY + py) * 1024 + baseX) * 4;
+                                for (var px = 0; px < 8; px++) {
+                                    var idx = rowOff + px * 4;
+                                    imgData.data[idx] = 0; imgData.data[idx+1] = 0; imgData.data[idx+2] = 0; imgData.data[idx+3] = 0;
                                 }
                             }
+                            return;
                         }
-                        ctx.putImageData(imgData, 0, 0);
+                        var spritePixels = getSprite(spriteIdx);
+                        for (var py = 0; py < 8; py++) {
+                            for (var px = 0; px < 8; px++) {
+                                var color = spritePixels[py * 8 + px];
+                                var ci = (color & 15) * 4;
+                                var idx = ((baseY + py) * 1024 + baseX + px) * 4;
+                                imgData.data[idx] = PALETTE_RGBA[ci];
+                                imgData.data[idx+1] = PALETTE_RGBA[ci+1];
+                                imgData.data[idx+2] = PALETTE_RGBA[ci+2];
+                                imgData.data[idx+3] = 255;
+                            }
+                        }
+                    }
+
+                    function meRenderCanvas() {
+                        if (!PALETTE_RGBA) meBuildPaletteRGBA();
+                        var cvs = document.getElementById('cvs-map');
+                        var ctx = cvs.getContext('2d');
+
+                        if (meForceFullRedraw || !meLastImgData) {
+                            var imgData = ctx.createImageData(1024, 512);
+                            for (var ty = 0; ty < 64; ty++) {
+                                for (var tx = 0; tx < 128; tx++) {
+                                    meRenderTile(imgData, tx, ty);
+                                }
+                            }
+                            ctx.putImageData(imgData, 0, 0);
+                            meLastImgData = imgData;
+                            meForceFullRedraw = false;
+                            meDirtyTiles = new Set();
+                        } else if (meDirtyTiles && meDirtyTiles.size > 0) {
+                            var imgData = meLastImgData;
+                            meDirtyTiles.forEach(function(key) {
+                                var parts = key.split(',');
+                                var dtx = parseInt(parts[0], 10);
+                                var dty = parseInt(parts[1], 10);
+                                if (dtx >= 0 && dtx < 128 && dty >= 0 && dty < 64) {
+                                    meRenderTile(imgData, dtx, dty);
+                                }
+                            });
+                            ctx.putImageData(imgData, 0, 0);
+                            meDirtyTiles = new Set();
+                        }
                         meUpdateCanvasTransform();
                         meRenderOverlay();
                     }
@@ -3132,16 +4073,52 @@ function getMapEditorScript(): string {
                             ctx.stroke();
                         }
 
-                        // Hover tile highlight
+                        // Row 32 visual divider (shared with sprites)
+                        var row32y = 32 * 8 * meZoom;
+                        ctx.save();
+                        ctx.strokeStyle = 'rgba(255, 0, 77, 0.5)';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 4]);
+                        ctx.beginPath();
+                        ctx.moveTo(0, row32y);
+                        ctx.lineTo(sw, row32y);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        if (meZoom >= 0.5) {
+                            ctx.fillStyle = 'rgba(255, 0, 77, 0.5)';
+                            ctx.font = Math.max(9, Math.min(12, 10 * meZoom)) + 'px monospace';
+                            ctx.fillText('shared with sprites', 4, row32y + Math.max(10, 12 * meZoom));
+                        }
+                        ctx.restore();
+
+                        // Screen boundary overlay (16x16 tiles = 128x128 px)
+                        if (meShowScreenBounds) {
+                            ctx.save();
+                            ctx.strokeStyle = 'rgba(41, 173, 255, 0.4)';
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([8, 4]);
+                            ctx.strokeRect(0.5, 0.5, 128 * meZoom, 128 * meZoom);
+                            ctx.setLineDash([]);
+                            ctx.restore();
+                        }
+
+                        // Hover tile highlight (show stamp size if multi-tile)
                         if (meMouseTX >= 0 && meMouseTX < 128 && meMouseTY >= 0 && meMouseTY < 64) {
+                            var hoverW = (meTool === 'pencil' && meStampTiles) ? meStampW : 1;
+                            var hoverH = (meTool === 'pencil' && meStampTiles) ? meStampH : 1;
                             ctx.strokeStyle = 'rgba(255,255,255,0.6)';
                             ctx.lineWidth = 1;
                             ctx.strokeRect(
                                 meMouseTX * 8 * meZoom + 0.5,
                                 meMouseTY * 8 * meZoom + 0.5,
-                                8 * meZoom - 1,
-                                8 * meZoom - 1
+                                8 * hoverW * meZoom - 1,
+                                8 * hoverH * meZoom - 1
                             );
+                        }
+
+                        // Line/rect tool preview while dragging
+                        if (meIsDrawing && meDrawStart && (meTool === 'line' || meTool === 'rect')) {
+                            meRenderShapePreview(ctx);
                         }
 
                         // Selection marching ants
@@ -3160,29 +4137,81 @@ function getMapEditorScript(): string {
                         }
                     }
 
+                    function meRenderShapePreview(ctx) {
+                        if (!meDrawStart) return;
+                        var x0 = meDrawStart.tx, y0 = meDrawStart.ty;
+                        var x1 = meMouseTX, y1 = meMouseTY;
+                        ctx.save();
+                        ctx.globalAlpha = 0.5;
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = Math.max(1, meZoom);
+                        if (meTool === 'line') {
+                            ctx.beginPath();
+                            ctx.moveTo(x0 * 8 * meZoom + 4 * meZoom, y0 * 8 * meZoom + 4 * meZoom);
+                            ctx.lineTo(x1 * 8 * meZoom + 4 * meZoom, y1 * 8 * meZoom + 4 * meZoom);
+                            ctx.stroke();
+                        } else if (meTool === 'rect') {
+                            var rx = Math.min(x0, x1), ry = Math.min(y0, y1);
+                            var rw = Math.abs(x1 - x0) + 1, rh = Math.abs(y1 - y0) + 1;
+                            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                            ctx.fillRect(rx * 8 * meZoom, ry * 8 * meZoom, rw * 8 * meZoom, rh * 8 * meZoom);
+                            ctx.strokeRect(rx * 8 * meZoom + 0.5, ry * 8 * meZoom + 0.5, rw * 8 * meZoom - 1, rh * 8 * meZoom - 1);
+                        }
+                        ctx.restore();
+                    }
+
                     function meRenderTilePreview() {
                         var pc = document.getElementById('me-tile-preview');
                         if (!pc) return;
+                        if (!PALETTE_RGBA) meBuildPaletteRGBA();
                         var ctx = pc.getContext('2d');
-                        ctx.clearRect(0, 0, 8, 8);
-                        if (meFgTile === 0) return;
-                        var spritePixels = getSprite(meFgTile);
-                        var imgData = ctx.createImageData(8, 8);
-                        for (var i = 0; i < 64; i++) {
-                            var color = spritePixels[i];
-                            var hex = PAL[color & 15];
-                            var r = parseInt(hex.substr(1,2), 16);
-                            var g = parseInt(hex.substr(3,2), 16);
-                            var bVal = parseInt(hex.substr(5,2), 16);
-                            imgData.data[i*4] = r; imgData.data[i*4+1] = g; imgData.data[i*4+2] = bVal; imgData.data[i*4+3] = 255;
+                        // If multi-tile stamp, resize canvas to show it
+                        var pw = meStampTiles ? meStampW * 8 : 8;
+                        var ph = meStampTiles ? meStampH * 8 : 8;
+                        pc.width = pw; pc.height = ph;
+                        ctx.clearRect(0, 0, pw, ph);
+                        if (meStampTiles) {
+                            var imgData = ctx.createImageData(pw, ph);
+                            for (var sy = 0; sy < meStampH; sy++) {
+                                for (var sx = 0; sx < meStampW; sx++) {
+                                    var sprIdx = meStampTiles[sy][sx];
+                                    if (sprIdx === 0) continue;
+                                    var spritePixels = getSprite(sprIdx);
+                                    for (var py = 0; py < 8; py++) {
+                                        for (var px = 0; px < 8; px++) {
+                                            var color = spritePixels[py * 8 + px];
+                                            var ci = (color & 15) * 4;
+                                            var idx = ((sy * 8 + py) * pw + sx * 8 + px) * 4;
+                                            imgData.data[idx] = PALETTE_RGBA[ci];
+                                            imgData.data[idx+1] = PALETTE_RGBA[ci+1];
+                                            imgData.data[idx+2] = PALETTE_RGBA[ci+2];
+                                            imgData.data[idx+3] = 255;
+                                        }
+                                    }
+                                }
+                            }
+                            ctx.putImageData(imgData, 0, 0);
+                        } else {
+                            if (meFgTile === 0) return;
+                            var spritePixels = getSprite(meFgTile);
+                            var imgData = ctx.createImageData(8, 8);
+                            for (var i = 0; i < 64; i++) {
+                                var color = spritePixels[i];
+                                var ci = (color & 15) * 4;
+                                imgData.data[i*4] = PALETTE_RGBA[ci];
+                                imgData.data[i*4+1] = PALETTE_RGBA[ci+1];
+                                imgData.data[i*4+2] = PALETTE_RGBA[ci+2];
+                                imgData.data[i*4+3] = 255;
+                            }
+                            ctx.putImageData(imgData, 0, 0);
                         }
-                        ctx.putImageData(imgData, 0, 0);
                     }
 
-                    // ---- Tile Picker (zoomable/pannable) ----
+                    // ---- Tile Picker (zoomable/pannable with multi-tile selection) ----
 
                     function tpRenderCanvas() {
                         if (!tpCvs) return;
+                        if (!PALETTE_RGBA) meBuildPaletteRGBA();
                         var ctx = tpCvs.getContext('2d');
                         var imgData = ctx.createImageData(128, 128);
                         for (var si = 0; si < 256; si++) {
@@ -3192,30 +4221,50 @@ function getMapEditorScript(): string {
                             for (var py = 0; py < 8; py++) {
                                 for (var px = 0; px < 8; px++) {
                                     var color = sprPixels[py * 8 + px];
-                                    var hex = PAL[color & 15];
-                                    var r = parseInt(hex.substr(1,2), 16);
-                                    var g = parseInt(hex.substr(3,2), 16);
-                                    var bVal = parseInt(hex.substr(5,2), 16);
+                                    var ci = (color & 15) * 4;
                                     var idx = ((sy + py) * 128 + sx + px) * 4;
-                                    imgData.data[idx] = r; imgData.data[idx+1] = g; imgData.data[idx+2] = bVal; imgData.data[idx+3] = 255;
+                                    imgData.data[idx] = PALETTE_RGBA[ci];
+                                    imgData.data[idx+1] = PALETTE_RGBA[ci+1];
+                                    imgData.data[idx+2] = PALETTE_RGBA[ci+2];
+                                    imgData.data[idx+3] = 255;
                                 }
                             }
                         }
                         ctx.putImageData(imgData, 0, 0);
-                        // Highlight hovered tile
-                        if (tpHoverTile >= 0 && tpHoverTile < 256 && tpHoverTile !== meFgTile) {
-                            var hhx = (tpHoverTile % 16) * 8;
-                            var hhy = Math.floor(tpHoverTile / 16) * 8;
-                            ctx.strokeStyle = '#ff0';
+
+                        // Highlight drag selection region
+                        if (tpIsDragging && tpDragStart && tpDragEnd) {
+                            var x0 = Math.min(tpDragStart.tx, tpDragEnd.tx);
+                            var y0 = Math.min(tpDragStart.ty, tpDragEnd.ty);
+                            var x1 = Math.max(tpDragStart.tx, tpDragEnd.tx);
+                            var y1 = Math.max(tpDragStart.ty, tpDragEnd.ty);
+                            ctx.strokeStyle = '#29adff';
                             ctx.lineWidth = 1;
-                            ctx.strokeRect(hhx + 0.5, hhy + 0.5, 7, 7);
+                            ctx.strokeRect(x0 * 8 + 0.5, y0 * 8 + 0.5, (x1 - x0 + 1) * 8 - 1, (y1 - y0 + 1) * 8 - 1);
+                        } else {
+                            // Highlight hovered tile
+                            if (tpHoverTile >= 0 && tpHoverTile < 256 && tpHoverTile !== meFgTile) {
+                                var hhx = (tpHoverTile % 16) * 8;
+                                var hhy = Math.floor(tpHoverTile / 16) * 8;
+                                ctx.strokeStyle = '#ff0';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(hhx + 0.5, hhy + 0.5, 7, 7);
+                            }
+                            // Highlight current tile (or stamp region)
+                            if (meStampTiles && meStampW > 1 || meStampH > 1) {
+                                var stx = meFgTile % 16;
+                                var sty = Math.floor(meFgTile / 16);
+                                ctx.strokeStyle = '#fff';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(stx * 8 + 0.5, sty * 8 + 0.5, meStampW * 8 - 1, meStampH * 8 - 1);
+                            } else {
+                                var hx = (meFgTile % 16) * 8;
+                                var hy = Math.floor(meFgTile / 16) * 8;
+                                ctx.strokeStyle = '#fff';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(hx + 0.5, hy + 0.5, 7, 7);
+                            }
                         }
-                        // Highlight current tile
-                        var hx = (meFgTile % 16) * 8;
-                        var hy = Math.floor(meFgTile / 16) * 8;
-                        ctx.strokeStyle = '#fff';
-                        ctx.lineWidth = 1;
-                        ctx.strokeRect(hx + 0.5, hy + 0.5, 7, 7);
                     }
 
                     function tpUpdateTransform() {
@@ -3253,6 +4302,20 @@ function getMapEditorScript(): string {
                         tpPanY = Math.floor((wh - 128 * tpZoom) / 2);
                     }
 
+                    function tpScreenToTile(clientX, clientY) {
+                        if (!tpCvs) return null;
+                        var rect = tpCvs.getBoundingClientRect();
+                        var mx = clientX - rect.left;
+                        var my = clientY - rect.top;
+                        if (mx < 0 || my < 0 || mx >= rect.width || my >= rect.height) return null;
+                        var scaleX = 128 / rect.width;
+                        var scaleY = 128 / rect.height;
+                        return {
+                            tx: Math.max(0, Math.min(15, Math.floor(mx * scaleX / 8))),
+                            ty: Math.max(0, Math.min(15, Math.floor(my * scaleY / 8)))
+                        };
+                    }
+
                     function meShowTilePicker() {
                         var picker = document.getElementById('map-tile-picker');
                         picker.innerHTML = '';
@@ -3261,6 +4324,9 @@ function getMapEditorScript(): string {
                         picker.appendChild(tpCvs);
                         picker.style.display = 'block';
                         meTilePickerVisible = true;
+                        tpIsDragging = false;
+                        tpDragStart = null;
+                        tpDragEnd = null;
 
                         tpFitAndCenter();
                         tpRenderCanvas();
@@ -3275,11 +4341,19 @@ function getMapEditorScript(): string {
                         tpPanStart = null;
                         tpCvs = null;
                         tpHoverTile = -1;
+                        tpIsDragging = false;
+                        tpDragStart = null;
+                        tpDragEnd = null;
                     }
 
                     function meUpdateTileLabel() {
                         var lbl = document.getElementById('me-tile-label');
-                        if (lbl) lbl.textContent = LOCALE.tileLabel + ': #' + meFgTile;
+                        if (!lbl) return;
+                        if (meStampTiles && (meStampW > 1 || meStampH > 1)) {
+                            lbl.textContent = LOCALE.tileLabel + ': #' + meFgTile + ' (' + meStampW + 'x' + meStampH + ')';
+                        } else {
+                            lbl.textContent = LOCALE.tileLabel + ': #' + meFgTile;
+                        }
                     }
 
                     // ---- Toolbar ----
@@ -3290,10 +4364,12 @@ function getMapEditorScript(): string {
 
                         if (EDITABLE) {
                             var tools = [
-                                { id: 'pencil', label: LOCALE.toolPencil, key: 'D', icon: '\\u270e' },
-                                { id: 'fill', label: LOCALE.toolFill, key: 'F', icon: '\\u25a7' },
-                                { id: 'select', label: LOCALE.toolSelect, key: 'S', icon: '\\u25a1' },
-                                { id: 'hand', label: LOCALE.toolHand, key: 'P', icon: '\\u270b' }
+                                { id: 'pencil', label: LOCALE.toolPencil, key: 'D', icon: '\u270e' },
+                                { id: 'line', label: LOCALE.toolLine, key: 'L', icon: '\u2571' },
+                                { id: 'rect', label: LOCALE.toolRectangle, key: 'R', icon: '\u25ad' },
+                                { id: 'fill', label: LOCALE.toolFill, key: 'F', icon: '\u25a7' },
+                                { id: 'select', label: LOCALE.toolSelect, key: 'S', icon: '\u25a1' },
+                                { id: 'hand', label: LOCALE.toolHand, key: 'P', icon: '\u270b' }
                             ];
                             tools.forEach(function(t) {
                                 var btn = document.createElement('button');
@@ -3323,12 +4399,27 @@ function getMapEditorScript(): string {
                             var tileLabel = document.createElement('span');
                             tileLabel.id = 'me-tile-label';
                             tileLabel.className = 'tile-info';
-                            tileLabel.textContent = LOCALE.tileLabel + ': #' + meFgTile;
                             tb.appendChild(tileLabel);
 
                             var sep2 = document.createElement('span');
                             sep2.className = 'tool-sep';
                             tb.appendChild(sep2);
+
+                            // Screen boundary toggle
+                            var screenBtn = document.createElement('button');
+                            screenBtn.className = 'tool-btn' + (meShowScreenBounds ? ' active' : '');
+                            screenBtn.textContent = '\u25a3';
+                            screenBtn.title = 'Screen boundary (B)';
+                            screenBtn.onclick = function() {
+                                meShowScreenBounds = !meShowScreenBounds;
+                                meRenderToolbar();
+                                meRenderOverlay();
+                            };
+                            tb.appendChild(screenBtn);
+
+                            var sep3 = document.createElement('span');
+                            sep3.className = 'tool-sep';
+                            tb.appendChild(sep3);
                         }
 
                         // Zoom controls
@@ -3349,7 +4440,15 @@ function getMapEditorScript(): string {
                         zg.appendChild(zminus); zg.appendChild(zlabel); zg.appendChild(zplus); zg.appendChild(zfit);
                         tb.appendChild(zg);
 
+                        var helpBtn = document.createElement('button');
+                        helpBtn.className = 'shortcuts-help-btn';
+                        helpBtn.textContent = '?';
+                        helpBtn.title = 'Keyboard shortcuts';
+                        helpBtn.addEventListener('click', function() { showShortcuts(); });
+                        tb.appendChild(helpBtn);
+
                         meRenderTilePreview();
+                        meUpdateTileLabel();
                     }
 
                     function meUpdateStatus() {
@@ -3417,22 +4516,14 @@ function getMapEditorScript(): string {
                                 tpPanStart = { mx: e.clientX, my: e.clientY, px: tpPanX, py: tpPanY };
                                 return;
                             }
-                            // Left click = pick a tile (if on the canvas)
+                            // Left click = start drag selection in tile picker
                             if (e.button === 0 && tpCvs) {
-                                var rect = tpCvs.getBoundingClientRect();
-                                var mx = e.clientX - rect.left;
-                                var my = e.clientY - rect.top;
-                                if (mx >= 0 && my >= 0 && mx < rect.width && my < rect.height) {
-                                    var scaleX = 128 / rect.width;
-                                    var scaleY = 128 / rect.height;
-                                    var tileX = Math.floor(mx * scaleX / 8);
-                                    var tileY = Math.floor(my * scaleY / 8);
-                                    meFgTile = Math.max(0, Math.min(255, tileY * 16 + tileX));
-                                    meHideTilePicker();
-                                    meRenderTilePreview();
-                                    meUpdateTileLabel();
+                                var tpos = tpScreenToTile(e.clientX, e.clientY);
+                                if (tpos) {
+                                    tpDragStart = { tx: tpos.tx, ty: tpos.ty };
+                                    tpDragEnd = { tx: tpos.tx, ty: tpos.ty };
+                                    tpIsDragging = true;
                                 } else {
-                                    // Clicked outside the sprite canvas = close
                                     meHideTilePicker();
                                 }
                             }
@@ -3453,6 +4544,7 @@ function getMapEditorScript(): string {
                             e.preventDefault();
                             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
                                 meFgTile = meGetTile(pos.tx, pos.ty);
+                                meStampTiles = null; meStampW = 1; meStampH = 1;
                                 meRenderTilePreview();
                                 meUpdateTileLabel();
                             }
@@ -3473,8 +4565,14 @@ function getMapEditorScript(): string {
                             mePushUndo();
                             meIsDrawing = true;
                             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
-                                meSetTile(pos.tx, pos.ty, meFgTile);
+                                meStampAt(pos.tx, pos.ty);
                                 meRenderCanvas();
+                            }
+                        } else if (meTool === 'line' || meTool === 'rect') {
+                            if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
+                                mePushUndo();
+                                meIsDrawing = true;
+                                meDrawStart = { tx: pos.tx, ty: pos.ty };
                             }
                         } else if (meTool === 'fill') {
                             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
@@ -3508,21 +4606,21 @@ function getMapEditorScript(): string {
                             return;
                         }
 
+                        // Tile picker drag selection
+                        if (tpIsDragging && tpDragStart && tpCvs) {
+                            var tpos = tpScreenToTile(e.clientX, e.clientY);
+                            if (tpos) {
+                                tpDragEnd = { tx: tpos.tx, ty: tpos.ty };
+                                tpRenderCanvas();
+                            }
+                            return;
+                        }
+
                         // Tile picker hover
                         if (meTilePickerVisible && tpCvs) {
-                            var rect = tpCvs.getBoundingClientRect();
-                            var mx = e.clientX - rect.left;
-                            var my = e.clientY - rect.top;
+                            var tpos = tpScreenToTile(e.clientX, e.clientY);
                             var prevHover = tpHoverTile;
-                            if (mx >= 0 && my >= 0 && mx < rect.width && my < rect.height) {
-                                var scaleX = 128 / rect.width;
-                                var scaleY = 128 / rect.height;
-                                var tileX = Math.floor(mx * scaleX / 8);
-                                var tileY = Math.floor(my * scaleY / 8);
-                                tpHoverTile = Math.max(0, Math.min(255, tileY * 16 + tileX));
-                            } else {
-                                tpHoverTile = -1;
-                            }
+                            tpHoverTile = tpos ? tpos.ty * 16 + tpos.tx : -1;
                             if (tpHoverTile !== prevHover) tpRenderCanvas();
                             return;
                         }
@@ -3544,9 +4642,11 @@ function getMapEditorScript(): string {
 
                         if (meIsDrawing && meTool === 'pencil') {
                             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
-                                meSetTile(pos.tx, pos.ty, meFgTile);
+                                meStampAt(pos.tx, pos.ty);
                                 meRenderCanvas();
                             }
+                        } else if (meIsDrawing && (meTool === 'line' || meTool === 'rect')) {
+                            meRenderOverlay();
                         } else if (meIsDrawing && meTool === 'select' && meSelDragStart) {
                             var x0 = Math.min(meSelDragStart.tx, pos.tx);
                             var y0 = Math.min(meSelDragStart.ty, pos.ty);
@@ -3570,6 +4670,37 @@ function getMapEditorScript(): string {
                     }
 
                     function meOnMouseUp(e) {
+                        // Tile picker drag selection complete
+                        if (tpIsDragging && tpDragStart) {
+                            tpIsDragging = false;
+                            var endPos = tpDragEnd || tpDragStart;
+                            var x0 = Math.min(tpDragStart.tx, endPos.tx);
+                            var y0 = Math.min(tpDragStart.ty, endPos.ty);
+                            var x1 = Math.max(tpDragStart.tx, endPos.tx);
+                            var y1 = Math.max(tpDragStart.ty, endPos.ty);
+                            var sw = x1 - x0 + 1;
+                            var sh = y1 - y0 + 1;
+                            meFgTile = y0 * 16 + x0;
+                            if (sw === 1 && sh === 1) {
+                                meStampTiles = null; meStampW = 1; meStampH = 1;
+                            } else {
+                                meStampW = sw; meStampH = sh;
+                                meStampTiles = [];
+                                for (var ty = 0; ty < sh; ty++) {
+                                    var row = [];
+                                    for (var tx = 0; tx < sw; tx++) {
+                                        row.push((y0 + ty) * 16 + (x0 + tx));
+                                    }
+                                    meStampTiles.push(row);
+                                }
+                            }
+                            tpDragStart = null; tpDragEnd = null;
+                            meHideTilePicker();
+                            meRenderTilePreview();
+                            meUpdateTileLabel();
+                            return;
+                        }
+
                         if (tpIsPanning) {
                             tpIsPanning = false;
                             tpPanStart = null;
@@ -3588,6 +4719,26 @@ function getMapEditorScript(): string {
                         if (meIsDrawing && meTool === 'pencil') {
                             meIsDrawing = false;
                             notifyMapChanged();
+                        } else if (meIsDrawing && meTool === 'line' && meDrawStart) {
+                            meIsDrawing = false;
+                            var x1 = Math.max(0, Math.min(127, meMouseTX));
+                            var y1 = Math.max(0, Math.min(63, meMouseTY));
+                            meBresenhamLine(meDrawStart.tx, meDrawStart.ty, x1, y1, meFgTile);
+                            meDrawStart = null;
+                            meRenderCanvas(); notifyMapChanged();
+                        } else if (meIsDrawing && meTool === 'rect' && meDrawStart) {
+                            meIsDrawing = false;
+                            var rx1 = Math.max(0, Math.min(127, meMouseTX));
+                            var ry1 = Math.max(0, Math.min(63, meMouseTY));
+                            // Shift constrains to square
+                            if (e.shiftKey) {
+                                var side = Math.max(Math.abs(rx1 - meDrawStart.tx), Math.abs(ry1 - meDrawStart.ty));
+                                rx1 = meDrawStart.tx + (rx1 >= meDrawStart.tx ? side : -side);
+                                ry1 = meDrawStart.ty + (ry1 >= meDrawStart.ty ? side : -side);
+                            }
+                            meRectFill(meDrawStart.tx, meDrawStart.ty, rx1, ry1, meFgTile);
+                            meDrawStart = null;
+                            meRenderCanvas(); notifyMapChanged();
                         } else if (meIsDrawing && meTool === 'select') {
                             meIsDrawing = false;
                             meSelDragStart = null;
@@ -3668,12 +4819,14 @@ function getMapEditorScript(): string {
                             if (key === 'q' && !e.ctrlKey && !e.metaKey) {
                                 e.preventDefault();
                                 meFgTile = (meFgTile - 1 + 256) % 256;
+                                meStampTiles = null; meStampW = 1; meStampH = 1;
                                 tpRenderCanvas(); meRenderTilePreview(); meUpdateTileLabel();
                                 return;
                             }
                             if (key === 'w' && !e.ctrlKey && !e.metaKey) {
                                 e.preventDefault();
                                 meFgTile = (meFgTile + 1) % 256;
+                                meStampTiles = null; meStampW = 1; meStampH = 1;
                                 tpRenderCanvas(); meRenderTilePreview(); meUpdateTileLabel();
                                 return;
                             }
@@ -3712,12 +4865,14 @@ function getMapEditorScript(): string {
                         if (key === 'q' && !e.ctrlKey && !e.metaKey) {
                             e.preventDefault();
                             meFgTile = (meFgTile - 1 + 256) % 256;
+                            meStampTiles = null; meStampW = 1; meStampH = 1;
                             meRenderTilePreview(); meUpdateTileLabel();
                             return;
                         }
                         if (key === 'w' && !e.ctrlKey && !e.metaKey) {
                             e.preventDefault();
                             meFgTile = (meFgTile + 1) % 256;
+                            meStampTiles = null; meStampW = 1; meStampH = 1;
                             meRenderTilePreview(); meUpdateTileLabel();
                             return;
                         }
@@ -3741,9 +4896,12 @@ function getMapEditorScript(): string {
 
                         // Tool shortcuts
                         if (key === 'd' && !e.ctrlKey) { meTool = 'pencil'; meRenderToolbar(); meUpdateCursor(); return; }
+                        if (key === 'l' && !e.ctrlKey) { meTool = 'line'; meRenderToolbar(); meUpdateCursor(); return; }
+                        if (key === 'r' && !e.ctrlKey) { meTool = 'rect'; meRenderToolbar(); meUpdateCursor(); return; }
                         if (key === 'f' && !e.ctrlKey) { meTool = 'fill'; meRenderToolbar(); meUpdateCursor(); return; }
                         if (key === 's' && !e.ctrlKey && !e.metaKey) { meTool = 'select'; meRenderToolbar(); meUpdateCursor(); return; }
                         if (key === 'p' && !e.ctrlKey) { meTool = 'hand'; meRenderToolbar(); meUpdateCursor(); return; }
+                        if (key === 'b' && !e.ctrlKey) { meShowScreenBounds = !meShowScreenBounds; meRenderToolbar(); meRenderOverlay(); return; }
 
                         // Selection operations
                         if (meTool === 'select' && meSelection) {
@@ -3766,10 +4924,15 @@ function getMapEditorScript(): string {
 
                     function initMapEditor() {
                         if (mapEditorInited) {
+                            meForceFullRedraw = true;
                             meRenderCanvas();
                             return;
                         }
                         mapEditorInited = true;
+
+                        meBuildPaletteRGBA();
+                        meDirtyTiles = new Set();
+                        meForceFullRedraw = true;
 
                         meRenderToolbar();
                         meUpdateStatus();
@@ -3802,7 +4965,7 @@ function getAudioEngineScript(): string {
                     var currentSfxPlayer = null;
                     var currentMusicPlayer = null;
                     var allActiveSfxPlayers = [];
-                    var BASE_FREQ = 16.35;
+                    var BASE_FREQ = 65.41;
 
                     function pitchToFreq(pitch) {
                         return BASE_FREQ * Math.pow(2, pitch / 12);
@@ -3905,6 +5068,24 @@ function getAudioEngineScript(): string {
                                     break;
                                 case 5:
                                     gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + noteDuration);
+                                    break;
+                                case 6:
+                                case 7:
+                                    // Arpeggio: alternate between current and next note frequency
+                                    if (oscillator.frequency) {
+                                        var arpInterval = (note.effect === 6) ? 16 : 33; // fast=16ms, slow=33ms
+                                        var arpFreqA = pitchToFreq(note.pitch);
+                                        var arpFreqB = pitchToFreq(nextNote.pitch);
+                                        var arpToggle = false;
+                                        var arpEnd = audioCtx.currentTime + noteDuration;
+                                        var arpTimer = setInterval(function() {
+                                            if (!isPlaying || audioCtx.currentTime >= arpEnd) { clearInterval(arpTimer); return; }
+                                            try {
+                                                arpToggle = !arpToggle;
+                                                oscillator.frequency.setValueAtTime(arpToggle ? arpFreqB : arpFreqA, audioCtx.currentTime);
+                                            } catch(ae) { clearInterval(arpTimer); }
+                                        }, arpInterval);
+                                    }
                                     break;
                             }
                             oscillator.connect(gainNode);
@@ -4034,7 +5215,840 @@ function getAudioEngineScript(): string {
                         var btn = document.getElementById('music-play-btn');
                         if (btn) { btn.textContent = '\\u25b6 ' + LOCALE.play; btn.classList.remove('active'); }
                     }
-                    // ============ END AUDIO ENGINE ============`;
+                    // ============ END AUDIO ENGINE ============
+
+                    // ============ I18N EDITOR ============
+                    var i18nInited = false;
+                    var i18nData = (META_DATA && META_DATA.i18n) || I18N_DATA || { locales: [], entries: [], outputLocale: "" };
+                    var metaObj = META_DATA || { meta: { title: '', author: '', template: 'default' }, i18n: i18nData };
+                    // entries: [{key: string, translations: {locale: string}}]
+                    // locales: string[]
+                    var i18nFontLoaded = false;
+                    var i18nFontCanvas = null;
+                    var i18nFontCtx = null;
+
+                    function initI18nEditor() {
+                        if (!i18nData.locales) i18nData.locales = [];
+                        if (!i18nData.entries) i18nData.entries = [];
+                        if (!i18nData.outputLocale) i18nData.outputLocale = "";
+                        // Auto-scan code for tx() calls every time the tab is shown
+                        i18nScanCode();
+                        if (!i18nInited) {
+                            i18nInited = true;
+                            loadI18nFont(function() {
+                                i18nRenderToolbar();
+                                i18nRenderTable();
+                                i18nRenderCodegen();
+                                i18nRenderStatus();
+                            });
+                        } else {
+                            i18nRenderToolbar();
+                            i18nRenderTable();
+                            i18nRenderCodegen();
+                            i18nRenderStatus();
+                        }
+                    }
+
+                    function loadI18nFont(cb) {
+                        if (i18nFontLoaded) { cb(); return; }
+                        var f = new FontFace('BoutiqueBitmap7x7', 'url(' + FONT_URI + ')');
+                        f.load().then(function(loaded) {
+                            document.fonts.add(loaded);
+                            i18nFontLoaded = true;
+                            i18nFontCanvas = document.createElement('canvas');
+                            i18nFontCanvas.width = 8;
+                            i18nFontCanvas.height = 8;
+                            i18nFontCtx = i18nFontCanvas.getContext('2d', { willReadFrequently: true });
+                            cb();
+                        }).catch(function(e) {
+                            console.warn('Failed to load i18n font:', e);
+                            i18nFontLoaded = true;
+                            i18nFontCanvas = document.createElement('canvas');
+                            i18nFontCanvas.width = 8;
+                            i18nFontCanvas.height = 8;
+                            i18nFontCtx = i18nFontCanvas.getContext('2d', { willReadFrequently: true });
+                            cb();
+                        });
+                    }
+
+                    function isAscii(ch) {
+                        return ch.charCodeAt(0) < 128;
+                    }
+
+                    // Render a single character to 8 bytes (LSB=leftmost pixel)
+                    function renderGlyphBytes(ch) {
+                        if (!i18nFontCtx) return [0,0,0,0,0,0,0,0];
+                        var ctx = i18nFontCtx;
+                        ctx.clearRect(0, 0, 8, 8);
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(0, 0, 8, 8);
+                        ctx.fillStyle = '#fff';
+                        ctx.font = '8px BoutiqueBitmap7x7';
+                        ctx.textBaseline = 'top';
+                        ctx.fillText(ch, 0, 0);
+                        var imgData = ctx.getImageData(0, 0, 8, 8);
+                        var bytes = [];
+                        for (var row = 0; row < 8; row++) {
+                            var b = 0;
+                            for (var col = 0; col < 8; col++) {
+                                var idx = (row * 8 + col) * 4;
+                                // If pixel is bright (white), set bit. LSB = leftmost pixel.
+                                if (imgData.data[idx] > 128) {
+                                    b |= (1 << col);
+                                }
+                            }
+                            bytes.push(b);
+                        }
+                        return bytes;
+                    }
+
+                    function i18nScanCode() {
+                        if (!monacoEditor) return;
+                        var code = monacoEditor.getValue();
+                        var re = /tx\\s*\\(\\s*"([^"]+)"/g;
+                        var m;
+                        var foundKeys = {};
+                        while ((m = re.exec(code)) !== null) {
+                            foundKeys[m[1]] = true;
+                        }
+                        // Remove entries whose keys no longer exist in code
+                        i18nData.entries = i18nData.entries.filter(function(e) { return foundKeys[e.key]; });
+                        // Add new keys
+                        var existingKeys = {};
+                        i18nData.entries.forEach(function(e) { existingKeys[e.key] = true; });
+                        Object.keys(foundKeys).forEach(function(k) {
+                            if (!existingKeys[k]) {
+                                var trans = {};
+                                i18nData.locales.forEach(function(loc) { trans[loc] = ""; });
+                                i18nData.entries.push({ key: k, translations: trans });
+                            }
+                        });
+                    }
+
+                    function i18nAddLocale(loc) {
+                        loc = loc.trim();
+                        if (!loc || i18nData.locales.indexOf(loc) >= 0) return;
+                        i18nData.locales.push(loc);
+                        i18nData.entries.forEach(function(e) {
+                            if (!e.translations) e.translations = {};
+                            e.translations[loc] = "";
+                        });
+                        if (!i18nData.outputLocale) i18nData.outputLocale = loc;
+                        i18nRenderToolbar();
+                        i18nRenderTable();
+                        i18nRenderCodegen();
+                        i18nRenderStatus();
+                        notifyI18nChanged();
+                    }
+
+                    function i18nRemoveLocale(loc) {
+                        var idx = i18nData.locales.indexOf(loc);
+                        if (idx < 0) return;
+                        i18nData.locales.splice(idx, 1);
+                        i18nData.entries.forEach(function(e) {
+                            if (e.translations) delete e.translations[loc];
+                        });
+                        if (i18nData.outputLocale === loc) {
+                            i18nData.outputLocale = i18nData.locales[0] || "";
+                        }
+                        i18nRenderToolbar();
+                        i18nRenderTable();
+                        i18nRenderCodegen();
+                        i18nRenderStatus();
+                        notifyI18nChanged();
+                    }
+
+                    function i18nRenderToolbar() {
+                        var tb = document.getElementById('i18n-toolbar');
+                        if (!tb) return;
+                        var html = '';
+                        html += '<span style="color:#888;font-size:11px;">Locales:</span> ';
+                        i18nData.locales.forEach(function(loc) {
+                            html += '<span style="color:#29adff;font-size:11px;margin:0 2px;">' + loc;
+                            html += ' <span class="i18n-remove-locale" data-loc="' + loc + '" style="color:#f66;cursor:pointer;font-size:9px;" title="Remove">x</span>';
+                            html += '</span>';
+                        });
+                        html += '<div class="tool-sep"></div>';
+                        html += '<input type="text" id="i18n-new-locale" placeholder="e.g. zh_CN" style="width:70px;">';
+                        html += '<button class="tool-btn" id="i18n-add-locale-btn">+ Locale</button>';
+                        html += '<div class="tool-sep"></div>';
+                        html += '<span style="color:#888;font-size:11px;">Output:</span> ';
+                        html += '<select id="i18n-output-locale">';
+                        i18nData.locales.forEach(function(loc) {
+                            html += '<option value="' + loc + '"' + (loc === i18nData.outputLocale ? ' selected' : '') + '>' + loc + '</option>';
+                        });
+                        html += '</select>';
+                        tb.innerHTML = html;
+
+                        // Wire events
+                        var addBtn = document.getElementById('i18n-add-locale-btn');
+                        if (addBtn) addBtn.addEventListener('click', function() {
+                            var inp = document.getElementById('i18n-new-locale');
+                            if (inp) { i18nAddLocale(inp.value); inp.value = ''; }
+                        });
+
+                        var newLocInput = document.getElementById('i18n-new-locale');
+                        if (newLocInput) newLocInput.addEventListener('keydown', function(ev) {
+                            if (ev.key === 'Enter') {
+                                i18nAddLocale(newLocInput.value);
+                                newLocInput.value = '';
+                            }
+                        });
+
+                        var outputSel = document.getElementById('i18n-output-locale');
+                        if (outputSel) outputSel.addEventListener('change', function() {
+                            i18nData.outputLocale = outputSel.value;
+                            i18nRenderCodegen();
+                            notifyI18nChanged();
+                        });
+
+                        document.querySelectorAll('.i18n-remove-locale').forEach(function(el) {
+                            el.addEventListener('click', function() {
+                                i18nRemoveLocale(el.getAttribute('data-loc'));
+                            });
+                        });
+                    }
+
+                    function i18nRenderTable() {
+                        var wrap = document.getElementById('i18n-table-wrap');
+                        if (!wrap) return;
+                        if (i18nData.entries.length === 0 && i18nData.locales.length === 0) {
+                            wrap.innerHTML = '<div style="padding:20px;color:#666;text-align:center;">No i18n entries yet. Add a locale and click "Scan Code" to find tx() calls.</div>';
+                            return;
+                        }
+                        var html = '<table><thead><tr><th>Key</th>';
+                        i18nData.locales.forEach(function(loc) {
+                            html += '<th>' + loc + '</th>';
+                        });
+                        html += '</tr></thead><tbody>';
+                        i18nData.entries.forEach(function(entry, idx) {
+                            html += '<tr>';
+                            html += '<td class="key-cell" title="' + entry.key + '">' + entry.key + '</td>';
+                            i18nData.locales.forEach(function(loc) {
+                                var val = (entry.translations && entry.translations[loc]) || '';
+                                var emptyClass = !val ? ' empty' : '';
+                                html += '<td><input class="i18n-trans-input' + emptyClass + '" data-idx="' + idx + '" data-loc="' + loc + '" value="' + escHtml(val) + '"></td>';
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        wrap.innerHTML = html;
+
+                        // Wire input events
+                        wrap.querySelectorAll('.i18n-trans-input').forEach(function(inp) {
+                            inp.addEventListener('input', function() {
+                                var idx = parseInt(inp.getAttribute('data-idx'));
+                                var loc = inp.getAttribute('data-loc');
+                                if (!i18nData.entries[idx].translations) i18nData.entries[idx].translations = {};
+                                i18nData.entries[idx].translations[loc] = inp.value;
+                                inp.classList.toggle('empty', !inp.value);
+                                i18nRenderCodegenDebounced();
+                                i18nRenderStatus();
+                                notifyI18nChanged();
+                            });
+                        });
+                    }
+
+                    function escHtml(s) {
+                        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    }
+
+                    var codegenTimer = null;
+                    function i18nRenderCodegenDebounced() {
+                        if (codegenTimer) clearTimeout(codegenTimer);
+                        codegenTimer = setTimeout(function() { i18nRenderCodegen(); }, 200);
+                    }
+
+                    function i18nRenderCodegen() {
+                        var el = document.getElementById('i18n-codegen');
+                        if (!el) return;
+                        var loc = i18nData.outputLocale;
+                        if (!loc) {
+                            el.innerHTML = '<div class="codegen-header"><span>No output locale selected</span></div>';
+                            return;
+                        }
+
+                        // Collect all unique non-ASCII chars across all translations for this locale
+                        var uniqueChars = {};
+                        var charList = [];
+                        i18nData.entries.forEach(function(entry) {
+                            var text = (entry.translations && entry.translations[loc]) || '';
+                            for (var i = 0; i < text.length; i++) {
+                                var ch = text[i];
+                                if (!isAscii(ch) && !uniqueChars[ch]) {
+                                    uniqueChars[ch] = charList.length;
+                                    charList.push(ch);
+                                }
+                            }
+                        });
+
+                        // Render glyph data (8 bytes per char, as hex string)
+                        var glyphHex = '';
+                        charList.forEach(function(ch) {
+                            var bytes = renderGlyphBytes(ch);
+                            bytes.forEach(function(b) {
+                                glyphHex += ('0' + b.toString(16)).slice(-2);
+                            });
+                        });
+
+                        // Build _gd as a Lua hex string literal
+                        var gdStr = '';
+                        var bslash = String.fromCharCode(92);
+                        for (var i = 0; i < glyphHex.length; i += 2) {
+                            gdStr += bslash + 'x' + glyphHex.substr(i, 2);
+                        }
+
+                        // Build _td (text data table)
+                        var tdLines = [];
+                        i18nData.entries.forEach(function(entry) {
+                            var text = (entry.translations && entry.translations[loc]) || '';
+                            if (!text) return;
+                            var mapped = '';
+                            var width = 0;
+                            for (var i = 0; i < text.length; i++) {
+                                var ch = text[i];
+                                if (isAscii(ch)) {
+                                    if (ch === '"') mapped += bslash + '"';
+                                    else if (ch === bslash) mapped += bslash + bslash;
+                                    else mapped += ch;
+                                    width += 4;
+                                } else {
+                                    var idx = uniqueChars[ch];
+                                    // Map to char code 128+
+                                    var code = 128 + idx;
+                                    mapped += bslash + code.toString();
+                                    width += 8;
+                                }
+                            }
+                            tdLines.push(' ' + entry.key + '={w=' + width + ',s="' + mapped + '"}');
+                        });
+
+                        var useSwap = charList.length > 128;
+                        var nl = String.fromCharCode(10);
+                        var p014 = bslash + '014';
+
+                        // Generate Lua code
+                        var lua = '';
+                        lua += '-- i18n runtime (generated by pico8ide)' + nl;
+                        lua += '-- locale: ' + loc + ', ' + charList.length + ' unique glyphs' + nl;
+                        if (glyphHex.length > 0) {
+                            lua += '_gd="' + gdStr + '"' + nl;
+                        }
+                        lua += '_td={' + nl;
+                        tdLines.forEach(function(l) { lua += l + ',' + nl; });
+                        lua += '}' + nl + nl;
+
+                        if (!useSwap) {
+                            // Simple mode: all glyphs fit in slots 128-255
+                            lua += 'function _txi()' + nl;
+                            lua += ' poke(0x5600,4)' + nl;
+                            lua += ' poke(0x5601,8)' + nl;
+                            lua += ' poke(0x5602,8)' + nl;
+                            if (glyphHex.length > 0) {
+                                lua += ' for i=1,#_gd do poke(0x59ff+i,ord(_gd,i)) end' + nl;
+                            }
+                            lua += 'end' + nl + nl;
+                            lua += 'function tx(k,x,y,c)' + nl;
+                            lua += ' local d=_td[k]' + nl;
+                            lua += ' if(d)print("' + p014 + '"..d.s,x,y,c)' + nl;
+                            lua += 'end' + nl + nl;
+                        } else {
+                            // Swap mode: >128 unique chars, need per-text poke
+                            lua += '_gi={}' + nl + nl;
+                            lua += 'function _txi()' + nl;
+                            lua += ' poke(0x5600,4)' + nl;
+                            lua += ' poke(0x5601,8)' + nl;
+                            lua += ' poke(0x5602,8)' + nl;
+                            lua += 'end' + nl + nl;
+                            lua += 'function _txl(s)' + nl;
+                            lua += ' for i=1,#s do' + nl;
+                            lua += '  local c=ord(s,i)' + nl;
+                            lua += '  if c>=128 and not _gi[c] then' + nl;
+                            lua += '   local o=(c-128)*8+1' + nl;
+                            lua += '   for j=0,7 do poke(0x5a00+(c-128)*8+j,ord(_gd,o+j)) end' + nl;
+                            lua += '   _gi[c]=true' + nl;
+                            lua += '  end' + nl;
+                            lua += ' end' + nl;
+                            lua += 'end' + nl + nl;
+                            lua += 'function tx(k,x,y,c)' + nl;
+                            lua += ' local d=_td[k]' + nl;
+                            lua += ' if not d then return end' + nl;
+                            lua += ' _txl(d.s)' + nl;
+                            lua += ' print("' + p014 + '"..d.s,x,y,c)' + nl;
+                            lua += 'end' + nl + nl;
+                        }
+                        lua += 'function txw(k)' + nl;
+                        lua += ' local d=_td[k]' + nl;
+                        lua += ' return d and d.w or 0' + nl;
+                        lua += 'end' + nl;
+
+                        // Display
+                        var headerNote = charList.length + ' unique glyphs';
+                        if (useSwap) headerNote += ' (swap mode)';
+                        var html = '<div class="codegen-header">';
+                        html += '<span>Generated Lua (' + headerNote + ')</span>';
+                        html += '<button id="i18n-copy-btn">Copy</button>';
+                        html += '</div>';
+                        html += '<pre id="i18n-codegen-pre">' + escHtml(lua) + '</pre>';
+                        el.innerHTML = html;
+
+                        var copyBtn = document.getElementById('i18n-copy-btn');
+                        if (copyBtn) {
+                            copyBtn.addEventListener('click', function() {
+                                var pre = document.getElementById('i18n-codegen-pre');
+                                if (pre) {
+                                    navigator.clipboard.writeText(pre.textContent || '').then(function() {
+                                        copyBtn.textContent = 'Copied!';
+                                        setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+                                    });
+                                }
+                            });
+                        }
+                    }
+
+                    function i18nRenderStatus() {
+                        var el = document.getElementById('i18n-status-bar');
+                        if (!el) return;
+                        var totalEntries = i18nData.entries.length;
+                        var totalLocales = i18nData.locales.length;
+                        var filled = 0;
+                        var total = totalEntries * totalLocales;
+                        i18nData.entries.forEach(function(e) {
+                            i18nData.locales.forEach(function(loc) {
+                                if (e.translations && e.translations[loc]) filled++;
+                            });
+                        });
+                        var pct = total > 0 ? Math.round(filled / total * 100) : 0;
+                        el.textContent = totalEntries + ' keys | ' + totalLocales + ' locales | ' + filled + '/' + total + ' translations (' + pct + '%)';
+                    }
+
+                    var i18nNotifyTimer = null;
+                    function notifyI18nChanged() {
+                        if (i18nNotifyTimer) clearTimeout(i18nNotifyTimer);
+                        i18nNotifyTimer = setTimeout(function() {
+                            // Only persist when there are tx() entries
+                            if (i18nData.entries.length === 0) return;
+                            metaObj.i18n = {
+                                locales: i18nData.locales,
+                                entries: i18nData.entries,
+                                outputLocale: i18nData.outputLocale
+                            };
+                            vscodeApi.postMessage({
+                                type: 'metaChanged',
+                                metaData: metaObj
+                            });
+                        }, 300);
+                    }
+                    // ============ END I18N EDITOR ============
+
+                    // ============ EXPORT EDITOR ============
+                    var exportInited = false;
+                    var exportPreviewImg = null;
+
+                    function notifyMetaChanged() {
+                        vscodeApi.postMessage({
+                            type: 'metaChanged',
+                            metaData: metaObj
+                        });
+                    }
+
+                    function initExportEditor() {
+                        if (!metaObj.meta) metaObj.meta = { title: '', author: '', template: 'default' };
+                        if (!exportInited) {
+                            exportInited = true;
+                            loadI18nFont(function() {
+                                exportRenderForm();
+                                exportRenderPreview();
+                            });
+                        } else {
+                            exportRenderForm();
+                            exportRenderPreview();
+                        }
+                    }
+
+                    function exportRenderForm() {
+                        var form = document.getElementById('export-form');
+                        if (!form) return;
+                        var html = '';
+
+                        // Title
+                        html += '<div>';
+                        html += '<label>' + LOCALE.exportTitle + '</label>';
+                        html += '<input type="text" id="export-title" value="' + escHtml(metaObj.meta.title || '') + '" placeholder="Game Title">';
+                        html += '</div>';
+
+                        // Author
+                        html += '<div>';
+                        html += '<label>' + LOCALE.exportAuthor + '</label>';
+                        html += '<input type="text" id="export-author" value="' + escHtml(metaObj.meta.author || '') + '" placeholder="Author">';
+                        html += '</div>';
+
+                        // Template picker
+                        html += '<div>';
+                        html += '<label>' + LOCALE.exportTemplate + '</label>';
+                        html += '<div class="template-picker" id="template-picker">';
+                        var templates = ['default', 'cyan', 'e-zombie', 'e-zombie16'];
+                        templates.forEach(function(name) {
+                            var sel = (metaObj.meta.template === name) ? ' selected' : '';
+                            var preview = TEMPLATE_PREVIEWS[name] || '';
+                            html += '<div class="template-option' + sel + '" data-template="' + name + '">';
+                            if (preview) {
+                                html += '<img src="' + preview + '" alt="' + name + '">';
+                            }
+                            html += '<span>' + name + '</span>';
+                            html += '</div>';
+                        });
+                        html += '</div>';
+                        html += '</div>';
+
+                        // Export buttons
+                        html += '<div class="export-buttons">';
+                        html += '<button id="export-base-btn">' + LOCALE.exportButton + '</button>';
+                        // Per-locale variant buttons
+                        if (i18nData.locales && i18nData.locales.length > 0) {
+                            i18nData.locales.forEach(function(loc) {
+                                html += '<button class="secondary export-locale-btn" data-locale="' + loc + '">' + LOCALE.exportLocaleVariant + ' ' + loc + '.p8.png</button>';
+                            });
+                            html += '<button class="secondary" id="export-all-btn">' + LOCALE.exportAll + '</button>';
+                        }
+                        html += '</div>';
+
+                        // Status
+                        html += '<div id="export-msg" style="margin-top:8px;font-size:11px;color:#888;"></div>';
+
+                        form.innerHTML = html;
+
+                        // Wire events
+                        var titleInp = document.getElementById('export-title');
+                        if (titleInp) titleInp.addEventListener('input', function() {
+                            metaObj.meta.title = titleInp.value;
+                            notifyMetaChanged();
+                            exportRenderPreviewDebounced();
+                        });
+
+                        var authorInp = document.getElementById('export-author');
+                        if (authorInp) authorInp.addEventListener('input', function() {
+                            metaObj.meta.author = authorInp.value;
+                            notifyMetaChanged();
+                            exportRenderPreviewDebounced();
+                        });
+
+                        document.querySelectorAll('.template-option').forEach(function(el) {
+                            el.addEventListener('click', function() {
+                                document.querySelectorAll('.template-option').forEach(function(o) { o.classList.remove('selected'); });
+                                el.classList.add('selected');
+                                metaObj.meta.template = el.getAttribute('data-template');
+                                notifyMetaChanged();
+                                exportRenderPreview();
+                            });
+                        });
+
+                        var baseBtn = document.getElementById('export-base-btn');
+                        if (baseBtn) baseBtn.addEventListener('click', function() {
+                            exportDoExport('base');
+                        });
+
+                        document.querySelectorAll('.export-locale-btn').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                exportDoExport(btn.getAttribute('data-locale'));
+                            });
+                        });
+
+                        var allBtn = document.getElementById('export-all-btn');
+                        if (allBtn) allBtn.addEventListener('click', function() { exportDoExportAll(); });
+                    }
+
+                    var exportPreviewTimer = null;
+                    function exportRenderPreviewDebounced() {
+                        if (exportPreviewTimer) clearTimeout(exportPreviewTimer);
+                        exportPreviewTimer = setTimeout(function() { exportRenderPreview(); }, 150);
+                    }
+
+                    function exportRenderPreview() {
+                        var cvs = document.getElementById('cvs-export');
+                        if (!cvs) return;
+                        var ctx = cvs.getContext('2d');
+                        ctx.clearRect(0, 0, 160, 205);
+
+                        // Draw template
+                        var templateName = metaObj.meta.template || 'default';
+                        var templateSrc = TEMPLATE_PREVIEWS[templateName];
+                        if (templateSrc) {
+                            var tplImg = new Image();
+                            tplImg.onload = function() {
+                                ctx.drawImage(tplImg, 0, 0, 160, 205);
+                                // Composite label at (16, 24)
+                                if (LABEL_DATA_URL) {
+                                    var labelImg = new Image();
+                                    labelImg.onload = function() {
+                                        ctx.drawImage(labelImg, 16, 24, 128, 128);
+                                        exportDrawText(ctx);
+                                    };
+                                    labelImg.src = LABEL_DATA_URL;
+                                } else {
+                                    exportDrawText(ctx);
+                                }
+                            };
+                            tplImg.src = templateSrc;
+                        }
+                    }
+
+                    function exportDrawText(ctx) {
+                        var title = metaObj.meta.title || '';
+                        var author = metaObj.meta.author || '';
+
+                        // Use BoutiqueBitmap7x7 if loaded
+                        if (i18nFontLoaded) {
+                            ctx.font = '8px BoutiqueBitmap7x7';
+                            ctx.fillStyle = '#fff';
+                            ctx.textBaseline = 'top';
+
+                            // Render title at (18, 166)
+                            var tx = 18;
+                            for (var i = 0; i < title.length; i++) {
+                                var ch = title[i];
+                                var isA = ch.charCodeAt(0) < 128;
+                                ctx.fillText(ch, tx, 166);
+                                tx += isA ? 4 : 8;
+                            }
+
+                            // Render author at (18, 176)
+                            var ax = 18;
+                            for (var j = 0; j < author.length; j++) {
+                                var ch2 = author[j];
+                                var isA2 = ch2.charCodeAt(0) < 128;
+                                ctx.fillText(ch2, ax, 176);
+                                ax += isA2 ? 4 : 8;
+                            }
+                        }
+                    }
+
+                    function exportDoExport(variant) {
+                        var msg = document.getElementById('export-msg');
+                        if (msg) msg.textContent = 'Exporting...';
+                        if (msg) msg.style.color = '#888';
+
+                        // Collect glyph bitmaps for title/author chars
+                        var title = metaObj.meta.title || '';
+                        var author = metaObj.meta.author || '';
+                        var glyphs = {};
+                        var allText = title + author;
+
+                        // For locale variant, use locale-specific title/author if available
+                        var localeMeta = null;
+                        if (variant !== 'base' && variant) {
+                            // Check for locale-specific title/author in i18n entries
+                            var locTitle = '';
+                            var locAuthor = '';
+                            i18nData.entries.forEach(function(e) {
+                                if (e.key === '_title' && e.translations && e.translations[variant]) locTitle = e.translations[variant];
+                                if (e.key === '_author' && e.translations && e.translations[variant]) locAuthor = e.translations[variant];
+                            });
+                            if (locTitle || locAuthor) {
+                                localeMeta = { title: locTitle || title, author: locAuthor || author };
+                                allText = localeMeta.title + localeMeta.author;
+                            }
+                        }
+
+                        for (var i = 0; i < allText.length; i++) {
+                            var ch = allText[i];
+                            if (!glyphs[ch]) {
+                                glyphs[ch] = renderGlyphBytes(ch);
+                            }
+                        }
+
+                        // For locale variant, generate i18n Lua runtime
+                        var i18nLuaCode = null;
+                        if (variant !== 'base' && variant) {
+                            i18nLuaCode = exportGenerateI18nLua(variant);
+                        }
+
+                        vscodeApi.postMessage({
+                            type: 'exportCart',
+                            variant: variant,
+                            glyphs: glyphs,
+                            i18nLuaCode: i18nLuaCode,
+                            localeMeta: localeMeta
+                        });
+                    }
+
+                    function exportDoExportAll() {
+                        var msg = document.getElementById('export-msg');
+                        if (msg) { msg.textContent = 'Exporting all...'; msg.style.color = '#888'; }
+
+                        var variants = ['base'];
+                        if (i18nData.locales) {
+                            i18nData.locales.forEach(function(loc) { variants.push(loc); });
+                        }
+
+                        var items = [];
+                        variants.forEach(function(variant) {
+                            var title = metaObj.meta.title || '';
+                            var author = metaObj.meta.author || '';
+                            var glyphs = {};
+                            var allText = title + author;
+                            var localeMeta = null;
+                            var i18nLuaCode = null;
+
+                            if (variant !== 'base') {
+                                var locTitle = '';
+                                var locAuthor = '';
+                                i18nData.entries.forEach(function(e) {
+                                    if (e.key === '_title' && e.translations && e.translations[variant]) locTitle = e.translations[variant];
+                                    if (e.key === '_author' && e.translations && e.translations[variant]) locAuthor = e.translations[variant];
+                                });
+                                if (locTitle || locAuthor) {
+                                    localeMeta = { title: locTitle || title, author: locAuthor || author };
+                                    allText = localeMeta.title + localeMeta.author;
+                                }
+                                i18nLuaCode = exportGenerateI18nLua(variant);
+                            }
+
+                            for (var i = 0; i < allText.length; i++) {
+                                var ch = allText[i];
+                                if (!glyphs[ch]) glyphs[ch] = renderGlyphBytes(ch);
+                            }
+
+                            items.push({ variant: variant, glyphs: glyphs, i18nLuaCode: i18nLuaCode, localeMeta: localeMeta });
+                        });
+
+                        vscodeApi.postMessage({ type: 'exportCartBatch', items: items });
+                    }
+
+                    function exportGenerateI18nLua(loc) {
+                        // Same logic as i18nRenderCodegen but returns the Lua string
+                        var uniqueChars = {};
+                        var charList = [];
+                        i18nData.entries.forEach(function(entry) {
+                            var text = (entry.translations && entry.translations[loc]) || '';
+                            for (var i = 0; i < text.length; i++) {
+                                var ch = text[i];
+                                if (!isAscii(ch) && !uniqueChars[ch]) {
+                                    uniqueChars[ch] = charList.length;
+                                    charList.push(ch);
+                                }
+                            }
+                        });
+
+                        var glyphHex = '';
+                        charList.forEach(function(ch) {
+                            var bytes = renderGlyphBytes(ch);
+                            bytes.forEach(function(b) {
+                                glyphHex += ('0' + b.toString(16)).slice(-2);
+                            });
+                        });
+
+                        var gdStr = '';
+                        var bslash = String.fromCharCode(92);
+                        for (var i = 0; i < glyphHex.length; i += 2) {
+                            gdStr += bslash + 'x' + glyphHex.substr(i, 2);
+                        }
+
+                        var tdLines = [];
+                        i18nData.entries.forEach(function(entry) {
+                            var text = (entry.translations && entry.translations[loc]) || '';
+                            if (!text) return;
+                            var mapped = '';
+                            var width = 0;
+                            for (var j = 0; j < text.length; j++) {
+                                var ch = text[j];
+                                if (isAscii(ch)) {
+                                    if (ch === '"') mapped += bslash + '"';
+                                    else if (ch === bslash) mapped += bslash + bslash;
+                                    else mapped += ch;
+                                    width += 4;
+                                } else {
+                                    var idx = uniqueChars[ch];
+                                    var code = 128 + idx;
+                                    mapped += bslash + code.toString();
+                                    width += 8;
+                                }
+                            }
+                            tdLines.push(' ' + entry.key + '={w=' + width + ',s="' + mapped + '"}');
+                        });
+
+                        var useSwap = charList.length > 128;
+                        var nl = String.fromCharCode(10);
+                        var p014 = bslash + '014';
+
+                        var lua = '';
+                        lua += '-- i18n runtime (generated by pico8ide)' + nl;
+                        lua += '-- locale: ' + loc + ', ' + charList.length + ' unique glyphs' + nl;
+                        if (glyphHex.length > 0) {
+                            lua += '_gd="' + gdStr + '"' + nl;
+                        }
+                        lua += '_td={' + nl;
+                        tdLines.forEach(function(l) { lua += l + ',' + nl; });
+                        lua += '}' + nl + nl;
+
+                        if (!useSwap) {
+                            lua += 'function _txi()' + nl;
+                            lua += ' poke(0x5600,4)' + nl;
+                            lua += ' poke(0x5601,8)' + nl;
+                            lua += ' poke(0x5602,8)' + nl;
+                            if (glyphHex.length > 0) {
+                                lua += ' for i=1,#_gd do poke(0x59ff+i,ord(_gd,i)) end' + nl;
+                            }
+                            lua += 'end' + nl + nl;
+                            lua += 'function tx(k,x,y,c)' + nl;
+                            lua += ' local d=_td[k]' + nl;
+                            lua += ' if(d)print("' + p014 + '"..d.s,x,y,c)' + nl;
+                            lua += 'end' + nl + nl;
+                        } else {
+                            lua += '_gi={}' + nl + nl;
+                            lua += 'function _txi()' + nl;
+                            lua += ' poke(0x5600,4)' + nl;
+                            lua += ' poke(0x5601,8)' + nl;
+                            lua += ' poke(0x5602,8)' + nl;
+                            lua += 'end' + nl + nl;
+                            lua += 'function _txl(s)' + nl;
+                            lua += ' for i=1,#s do' + nl;
+                            lua += '  local c=ord(s,i)' + nl;
+                            lua += '  if c>=128 and not _gi[c] then' + nl;
+                            lua += '   local o=(c-128)*8+1' + nl;
+                            lua += '   for j=0,7 do poke(0x5a00+(c-128)*8+j,ord(_gd,o+j)) end' + nl;
+                            lua += '   _gi[c]=true' + nl;
+                            lua += '  end' + nl;
+                            lua += ' end' + nl;
+                            lua += 'end' + nl + nl;
+                            lua += 'function tx(k,x,y,c)' + nl;
+                            lua += ' local d=_td[k]' + nl;
+                            lua += ' if not d then return end' + nl;
+                            lua += ' _txl(d.s)' + nl;
+                            lua += ' print("' + p014 + '"..d.s,x,y,c)' + nl;
+                            lua += 'end' + nl + nl;
+                        }
+                        lua += 'function txw(k)' + nl;
+                        lua += ' local d=_td[k]' + nl;
+                        lua += ' return d and d.w or 0' + nl;
+                        lua += 'end' + nl;
+
+                        return lua;
+                    }
+
+                    // Listen for export results from extension
+                    window.addEventListener('message', function(event) {
+                        var msg = event.data;
+                        var statusEl = document.getElementById('export-msg');
+                        if (msg.type === 'exportComplete' && statusEl) {
+                            statusEl.textContent = LOCALE.exportSuccess + ': ' + msg.path.split('/').pop().split(String.fromCharCode(92)).pop();
+                            statusEl.style.color = '#8f8';
+                        }
+                        if (msg.type === 'exportError' && statusEl) {
+                            statusEl.textContent = LOCALE.exportError + ': ' + msg.error;
+                            statusEl.style.color = '#f66';
+                        }
+                        if (msg.type === 'exportBatchComplete' && statusEl) {
+                            if (msg.errors && msg.errors.length > 0) {
+                                statusEl.textContent = msg.paths.length + ' exported, ' + msg.errors.length + ' failed: ' + msg.errors.join(', ');
+                                statusEl.style.color = '#fa0';
+                            } else {
+                                statusEl.textContent = LOCALE.exportSuccess + ': ' + msg.paths.length + ' files (' + msg.paths.join(', ') + ')';
+                                statusEl.style.color = '#8f8';
+                            }
+                        }
+                    });
+                    // ============ END EXPORT EDITOR ============`;
 }
 
 function getRunButtonScript(): string {
