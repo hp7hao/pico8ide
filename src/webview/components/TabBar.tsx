@@ -1,4 +1,5 @@
 import { useUIStore, type TabId } from '../store/uiStore';
+import { getVscodeApi } from '../vscodeApi';
 import type { LocaleStrings } from '../types';
 
 interface TabBarProps {
@@ -47,7 +48,6 @@ export function TabBar({ locale }: TabBarProps) {
 
 function RunButton({ locale, running }: { locale: LocaleStrings; running: boolean }) {
     const handleClick = () => {
-        const { getVscodeApi } = require('../vscodeApi');
         if (running) {
             getVscodeApi().postMessage({ type: 'stop' });
         } else {

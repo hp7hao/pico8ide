@@ -111,7 +111,7 @@ export function SfxTab({ locale }: SfxTabProps) {
         setHoverNote(-1);
     }, []);
 
-    const playSfxAudio = useCallback((sfxIdToPlay: number, onNoteChange?: (noteIdx: number) => void, skipStop?: boolean): SfxPlayer | null => {
+    const playSfxAudio = useCallback((sfxIdToPlay: number, onNoteChange?: (noteIdx: number) => void, skipStop?: boolean, onComplete?: () => void): SfxPlayer | null => {
         if (!audioCtxRef.current) {
             audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         }
@@ -134,6 +134,7 @@ export function SfxTab({ locale }: SfxTabProps) {
                 } else {
                     isPlaying = false;
                     if (oscillator) { try { oscillator.stop(); } catch (_) { } }
+                    if (onComplete) onComplete();
                     return;
                 }
             }
@@ -243,6 +244,11 @@ export function SfxTab({ locale }: SfxTabProps) {
         } else {
             const player = playSfxAudio(sfxId, (noteIdx) => {
                 setHoverNote(noteIdx);
+            }, false, () => {
+                // Playback completed naturally
+                currentPlayerRef.current = null;
+                setIsMainPlaying(false);
+                setHoverNote(-1);
             });
             if (player) {
                 currentPlayerRef.current = player;
@@ -256,19 +262,16 @@ export function SfxTab({ locale }: SfxTabProps) {
         setPlayingSfxId(id);
         const player = playSfxAudio(id, (noteIdx) => {
             setHoverNote(noteIdx);
+        }, false, () => {
+            // Playback completed naturally
+            currentPlayerRef.current = null;
+            setPlayingSfxId((current) => current === id ? -1 : current);
+            setHoverNote(-1);
         });
         if (player) {
             currentPlayerRef.current = player;
-            // Auto-stop after duration
-            const parsed = parseSfxNotes(sfx, id);
-            if (!parsed.isEmpty) {
-                const dur = (parsed.speed || 1) * 183 / 22050 * 32;
-                setTimeout(() => {
-                    setPlayingSfxId((current) => current === id ? -1 : current);
-                }, dur * 1000 + 200);
-            }
         }
-    }, [sfx, playSfxAudio, stopAllSfx]);
+    }, [playSfxAudio, stopAllSfx]);
 
     // Keyboard shortcuts
     useEffect(() => {

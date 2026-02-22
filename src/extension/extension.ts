@@ -1045,6 +1045,23 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('vscode.openWith', uri, Pico8P8EditorProvider.viewType);
     });
 
+    // Use Text Editor for .p8 Files Command
+    vscode.commands.registerCommand('pico8ide.useTextEditorForP8', async () => {
+        const config = vscode.workspace.getConfiguration('workbench');
+        const assoc: Record<string, string> = { ...config.get<Record<string, string>>('editorAssociations') };
+        assoc['*.p8'] = 'default';
+        await config.update('editorAssociations', assoc, vscode.ConfigurationTarget.Global);
+        const action = await vscode.window.showInformationMessage(
+            locale.useTextEditorForP8Success,
+            locale.undo
+        );
+        if (action === locale.undo) {
+            const updated: Record<string, string> = { ...config.get<Record<string, string>>('editorAssociations') };
+            delete updated['*.p8'];
+            await config.update('editorAssociations', updated, vscode.ConfigurationTarget.Global);
+        }
+    });
+
     // Initial Load
     listsProvider.load();
 }

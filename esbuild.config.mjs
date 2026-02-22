@@ -21,6 +21,7 @@ const buildOptions = {
     // Monaco is loaded separately via AMD, not bundled
     define: {
         'process.env.NODE_ENV': isWatch ? '"development"' : '"production"',
+        '__HOST_MODE__': '"vscode"',
     },
 };
 

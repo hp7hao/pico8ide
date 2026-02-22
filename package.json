@@ -16,7 +16,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:pico8ide.pngViewer",
+    "onCustomEditor:pico8ide.p8Editor"
+  ],
   "main": "./out/extension/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -61,15 +64,12 @@
             "filenamePattern": "*.p8"
           }
         ],
-        "priority": "option"
+        "priority": "default"
       }
     ],
     "languages": [
       {
         "id": "pico8",
-        "extensions": [
-          ".p8"
-        ],
         "aliases": [
           "PICO-8",
           "pico8"
@@ -129,6 +129,10 @@
       {
         "command": "pico8ide.previewP8Cart",
         "title": "%command.previewP8Cart.title%"
+      },
+      {
+        "command": "pico8ide.useTextEditorForP8",
+        "title": "%command.useTextEditorForP8.title%"
       }
     ],
     "menus": {
@@ -226,9 +230,15 @@
     "build:webview": "node esbuild.config.mjs",
     "watch": "tsc -watch -p ./",
     "watch:webview": "node esbuild.config.mjs --watch",
+    "dev:standalone": "node src/webview/standalone/devServer.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "package": "vsce package"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/adm-zip": "^0.5.5",
     "@types/node": "^16.x",
     "@types/pngjs": "^6.0.5",
@@ -237,7 +247,9 @@
     "@types/vscode": "^1.80.0",
     "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.27.3",
-    "typescript": "^5.0.0"
+    "jsdom": "^26.1.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",

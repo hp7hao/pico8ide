@@ -19,5 +19,6 @@
   "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode).",
   "config.language.description": "Override display language. Leave empty to use VS Code's language setting.",
   "config.language.auto": "Auto (use VS Code language)",
-  "config.pico8Path.description": "Absolute path to the PICO-8 executable. On macOS you can point to the .app bundle."
+  "config.pico8Path.description": "Absolute path to the PICO-8 executable. On macOS you can point to the .app bundle.",
+  "command.useTextEditorForP8.title": "PICO-8: Use Text Editor for .p8 Files"
 }

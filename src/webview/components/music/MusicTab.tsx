@@ -3,8 +3,9 @@ import { useCartStore } from '../../store/cartStore';
 import { useUIStore } from '../../store/uiStore';
 import { useUndoRedo } from '../../hooks/useUndoRedo';
 import { MusicToolbar } from './MusicToolbar';
-import { PatternEditor } from './PatternEditor';
+import { PatternEditor, getEffectiveChannel } from './PatternEditor';
 import { PatternNavigator, parsePattern } from './PatternNavigator';
+import { SfxPicker } from './SfxPicker';
 import { MusicStatusBar } from './MusicStatusBar';
 import { parseSfxNotes } from '../sfx/SfxStatusBar';
 import type { LocaleStrings } from '../../types';
@@ -54,6 +55,7 @@ export function MusicTab({ locale }: MusicTabProps) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [playingPattern, setPlayingPattern] = useState(0);
     const [playingSfxId, setPlayingSfxId] = useState(-1);
+    const [selectedChannel, setSelectedChannel] = useState(0);
 
     const audioCtxRef = useRef<AudioContext | null>(null);
     const musicPlayerRef = useRef<MusicPlayer | null>(null);
@@ -413,6 +415,12 @@ export function MusicTab({ locale }: MusicTabProps) {
         };
     }, [stopMusic]);
 
+    const effectiveChannel = getEffectiveChannel(music, patternIndex, selectedChannel);
+    const pat = parsePattern(music, patternIndex);
+    const currentSfxId = effectiveChannel >= 0 && effectiveChannel <= 3 && !pat.disabled[effectiveChannel]
+        ? pat.sfxIds[effectiveChannel]
+        : -1;
+
     return (
         <div className="music-editor">
             <MusicToolbar
@@ -429,15 +437,12 @@ export function MusicTab({ locale }: MusicTabProps) {
             <div className="music-content">
                 <PatternEditor
                     music={music}
-                    sfxData={sfxData}
                     currentPattern={patternIndex}
                     editable={editable}
-                    showAudio={showAudio}
+                    selectedChannel={selectedChannel}
+                    onSelectChannel={setSelectedChannel}
                     onPushUndo={pushUndo}
                     onMusicChange={handleMusicChange}
-                    onPlaySfx={handlePlaySfxInPicker}
-                    onStopSfx={stopAllSfx}
-                    playingSfxId={playingSfxId}
                 />
                 <PatternNavigator
                     music={music}
@@ -445,6 +450,20 @@ export function MusicTab({ locale }: MusicTabProps) {
                     playingPattern={playingPattern}
                     isPlaying={isPlaying}
                     onSelectPattern={setPatternIndex}
+                />
+                <SfxPicker
+                    music={music}
+                    sfxData={sfxData}
+                    currentPattern={patternIndex}
+                    effectiveChannel={effectiveChannel}
+                    currentSfxId={currentSfxId}
+                    editable={editable}
+                    showAudio={showAudio}
+                    onPushUndo={pushUndo}
+                    onMusicChange={handleMusicChange}
+                    onPlaySfx={handlePlaySfxInPicker}
+                    onStopSfx={stopAllSfx}
+                    playingSfxId={playingSfxId}
                 />
             </div>
             <MusicStatusBar

@@ -1,19 +1,8 @@
-// Singleton wrapper for VS Code webview API
-// acquireVsCodeApi() can only be called once
+// Re-export bridge as getVscodeApi() for backward compatibility.
+// All VS Code coupling now flows through the bridge abstraction.
 
-interface VsCodeApi {
-    postMessage(message: any): void;
-    getState(): any;
-    setState(state: any): void;
-}
+import { bridge } from './bridge';
 
-declare function acquireVsCodeApi(): VsCodeApi;
-
-let api: VsCodeApi | null = null;
-
-export function getVscodeApi(): VsCodeApi {
-    if (!api) {
-        api = acquireVsCodeApi();
-    }
-    return api;
+export function getVscodeApi() {
+    return bridge;
 }

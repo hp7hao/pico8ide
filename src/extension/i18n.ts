@@ -73,6 +73,7 @@ export interface LocaleStrings {
     forkSuccess: string;
     forkNoWorkspace: string;
     previewP8Cart: string;
+    useTextEditorForP8Success: string;
 
     // Sprite editor tools
     toolPencil: string;
@@ -184,6 +185,7 @@ const en: LocaleStrings = {
     forkSuccess: "Game forked to workspace",
     forkNoWorkspace: "No workspace folder open.",
     previewP8Cart: "Preview PICO-8 Cart",
+    useTextEditorForP8Success: ".p8 files will now open in the text editor. Restart may be required.",
 
     // Sprite editor tools
     toolPencil: "Pencil",
@@ -293,6 +295,7 @@ const zhCN: LocaleStrings = {
     forkSuccess: "游戏已复制到工作区",
     forkNoWorkspace: "未打开工作区文件夹。",
     previewP8Cart: "预览 PICO-8 卡带",
+    useTextEditorForP8Success: ".p8 文件现在将使用文本编辑器打开。可能需要重新加载。",
 
     // Sprite editor tools
     toolPencil: "画笔",

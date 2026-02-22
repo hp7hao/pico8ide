@@ -5,10 +5,15 @@ import { useVscodeMessage, postMessage } from '../../hooks/useVscodeMessaging';
 import { TemplatePicker } from './TemplatePicker';
 import { ExportPreview } from './ExportPreview';
 import { ExportButtons } from './ExportButtons';
-import type { LocaleStrings, I18nData } from '../../types';
+import type { LocaleStrings, I18nData, I18nEntry } from '../../types';
 
 interface ExportTabProps {
     locale: LocaleStrings;
+}
+
+function getEntryValue(entries: I18nEntry[], key: string, loc: string): string {
+    const e = entries.find(e => e.key === key);
+    return e?.translations?.[loc] || '';
 }
 
 function isAscii(ch: string): boolean {
@@ -163,6 +168,7 @@ export function ExportTab({ locale }: ExportTabProps) {
     const meta = useMetaStore((s) => s.meta);
     const i18nData = useMetaStore((s) => s.i18nData);
     const setMetaField = useMetaStore((s) => s.setMetaField);
+    const setI18nData = useMetaStore((s) => s.setI18nData);
     const label = useCartStore((s) => s.label);
 
     const initData = window.__INIT_DATA__;
@@ -344,6 +350,25 @@ export function ExportTab({ locale }: ExportTabProps) {
         [setMetaField]
     );
 
+    const handleLocaleMetaChange = useCallback(
+        (loc: string, key: '_title' | '_author', value: string) => {
+            const data: I18nData = i18nData
+                ? { ...i18nData, entries: [...i18nData.entries] }
+                : { locales: [], entries: [], outputLocale: '' };
+            let idx = data.entries.findIndex((e) => e.key === key);
+            if (idx < 0) {
+                data.entries.push({ key, translations: {} });
+                idx = data.entries.length - 1;
+            }
+            data.entries[idx] = {
+                ...data.entries[idx],
+                translations: { ...data.entries[idx].translations, [loc]: value },
+            };
+            setI18nData(data);
+        },
+        [i18nData, setI18nData]
+    );
+
     return (
         <div className="export-editor">
             <div className="export-body">
@@ -366,6 +391,28 @@ export function ExportTab({ locale }: ExportTabProps) {
                             onChange={(e) => setMetaField('author', e.target.value)}
                         />
                     </div>
+                    {i18n.locales.length > 0 && (
+                        <div className="export-locale-meta">
+                            <label>Locale Titles &amp; Authors</label>
+                            {i18n.locales.map((loc) => (
+                                <div key={loc} className="export-locale-meta-row">
+                                    <span className="export-locale-tag">{loc}</span>
+                                    <input
+                                        type="text"
+                                        placeholder={meta.title || 'Title'}
+                                        value={getEntryValue(i18n.entries, '_title', loc)}
+                                        onChange={(e) => handleLocaleMetaChange(loc, '_title', e.target.value)}
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder={meta.author || 'Author'}
+                                        value={getEntryValue(i18n.entries, '_author', loc)}
+                                        onChange={(e) => handleLocaleMetaChange(loc, '_author', e.target.value)}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <TemplatePicker
                         locale={locale}
                         selected={meta.template}
