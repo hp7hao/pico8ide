@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+
 import { SpriteCanvas } from './SpriteCanvas';
 import { SpriteToolbar } from './SpriteToolbar';
 import { SpriteStatusBar } from './SpriteStatusBar';
@@ -24,9 +25,6 @@ export function SpriteTab({ locale }: SpriteTabProps) {
     const [quickPaletteVisible, setQuickPaletteVisible] = useState(false);
     const [quickPalettePos, setQuickPalettePos] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(4);
-
-    const undoStackRef = useRef<number[][]>([]);
-    const redoStackRef = useRef<number[][]>([]);
 
     // Zoom control callbacks (will be wired through canvas ref)
     const canvasActionsRef = useRef<{
@@ -72,8 +70,6 @@ export function SpriteTab({ locale }: SpriteTabProps) {
                     setSelection={setSelection}
                     clipboard={clipboard}
                     setClipboard={setClipboard}
-                    undoStackRef={undoStackRef}
-                    redoStackRef={redoStackRef}
                     quickPaletteVisible={quickPaletteVisible}
                     setQuickPaletteVisible={setQuickPaletteVisible}
                     quickPalettePos={quickPalettePos}

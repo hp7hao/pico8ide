@@ -8,7 +8,6 @@ interface SfxPickerProps {
     currentSfxId: number;
     editable: boolean;
     showAudio: boolean;
-    onPushUndo: () => void;
     onMusicChange: (music: number[]) => void;
     onPlaySfx: (sfxId: number) => void;
     onStopSfx: () => void;
@@ -23,7 +22,6 @@ export function SfxPicker({
     currentSfxId,
     editable,
     showAudio,
-    onPushUndo,
     onMusicChange,
     onPlaySfx,
     onStopSfx,
@@ -31,13 +29,12 @@ export function SfxPicker({
 }: SfxPickerProps) {
     const selectSfxForChannel = useCallback((ch: number, sfxIdx: number) => {
         if (!editable || ch < 0 || ch > 3) return;
-        onPushUndo();
         const next = [...music];
         const offset = currentPattern * 4 + ch;
         const flags = next[offset] & 0xc0;
         next[offset] = flags | (sfxIdx & 0x3f);
         onMusicChange(next);
-    }, [music, currentPattern, editable, onPushUndo, onMusicChange]);
+    }, [music, currentPattern, editable, onMusicChange]);
 
     return (
         <div className="music-sfx-picker">

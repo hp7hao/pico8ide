@@ -173,8 +173,6 @@ interface SpriteCanvasProps {
     setSelection: (sel: Selection | null) => void;
     clipboard: { w: number; h: number; data: number[] } | null;
     setClipboard: (clip: { w: number; h: number; data: number[] } | null) => void;
-    undoStackRef: React.MutableRefObject<number[][]>;
-    redoStackRef: React.MutableRefObject<number[][]>;
     quickPaletteVisible: boolean;
     setQuickPaletteVisible: (v: boolean) => void;
     quickPalettePos: { x: number; y: number };
@@ -187,7 +185,6 @@ export function SpriteCanvas({
     flagFilter,
     selection, setSelection,
     clipboard, setClipboard,
-    undoStackRef, redoStackRef,
     quickPaletteVisible, setQuickPaletteVisible,
     quickPalettePos, setQuickPalettePos,
     onHoveredSpriteChange,
@@ -509,29 +506,6 @@ export function SpriteCanvas({
         applyZoom(newZoom, rect.width / 2, rect.height / 2);
     }, [applyZoom]);
 
-    // ---- Undo helpers ----
-    const pushUndo = useCallback(() => {
-        undoStackRef.current.push([...gfxRef.current]);
-        if (undoStackRef.current.length > 50) undoStackRef.current.shift();
-        redoStackRef.current = [];
-    }, [undoStackRef, redoStackRef]);
-
-    const doUndo = useCallback(() => {
-        if (undoStackRef.current.length === 0) return;
-        redoStackRef.current.push([...gfxRef.current]);
-        const prev = undoStackRef.current.pop()!;
-        const newGfx = [...prev];
-        useCartStore.getState().setGfx(newGfx);
-    }, [undoStackRef, redoStackRef]);
-
-    const doRedo = useCallback(() => {
-        if (redoStackRef.current.length === 0) return;
-        undoStackRef.current.push([...gfxRef.current]);
-        const next = redoStackRef.current.pop()!;
-        const newGfx = [...next];
-        useCartStore.getState().setGfx(newGfx);
-    }, [undoStackRef, redoStackRef]);
-
     // ---- Cursor ----
     const updateCursor = useCallback(() => {
         const wrap = wrapRef.current;
@@ -548,7 +522,6 @@ export function SpriteCanvas({
     const flipH = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         const data = getSelectionPixels(currentGfx, sel);
         const w = sel.w, h = sel.h;
@@ -556,12 +529,11 @@ export function SpriteCanvas({
             for (let x = 0; x < w; x++)
                 setGfxPixel(currentGfx, sel.x + x, sel.y + y, data[y * w + (w - 1 - x)]);
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo]);
+    }, []);
 
     const flipV = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         const data = getSelectionPixels(currentGfx, sel);
         const w = sel.w, h = sel.h;
@@ -569,12 +541,11 @@ export function SpriteCanvas({
             for (let x = 0; x < w; x++)
                 setGfxPixel(currentGfx, sel.x + x, sel.y + y, data[(h - 1 - y) * w + x]);
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo]);
+    }, []);
 
     const rotate90 = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         const data = getSelectionPixels(currentGfx, sel);
         const w = sel.w, h = sel.h;
@@ -584,12 +555,11 @@ export function SpriteCanvas({
                 setGfxPixel(currentGfx, sel.x + (h - 1 - y), sel.y + x, data[y * w + x]);
         setSelection({ ...sel, w: h, h: w });
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     const shiftSelection = useCallback((dx: number, dy: number) => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         const data = getSelectionPixels(currentGfx, sel);
         clearRect(currentGfx, sel.x, sel.y, sel.w, sel.h, bgRef.current);
@@ -597,7 +567,7 @@ export function SpriteCanvas({
         pastePixels(currentGfx, newSel.x, newSel.y, newSel.w, newSel.h, data);
         setSelection(newSel);
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     const copySelection = useCallback(() => {
         const sel = selectionRef.current;
@@ -608,34 +578,31 @@ export function SpriteCanvas({
     const cutSelection = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         setClipboard({ w: sel.w, h: sel.h, data: getSelectionPixels(currentGfx, sel) });
         clearRect(currentGfx, sel.x, sel.y, sel.w, sel.h, bgRef.current);
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo, setClipboard]);
+    }, [setClipboard]);
 
     const pasteClipboard = useCallback(() => {
         const clip = clipboardRef.current;
         if (!clip) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         const px = mouseXRef.current >= 0 ? mouseXRef.current : 0;
         const py = mouseYRef.current >= 0 ? mouseYRef.current : 0;
         pastePixels(currentGfx, px, py, clip.w, clip.h, clip.data);
         setSelection({ x: px, y: py, w: clip.w, h: clip.h });
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     const deleteSelection = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentGfx = [...gfxRef.current];
         clearRect(currentGfx, sel.x, sel.y, sel.w, sel.h, bgRef.current);
         setSelection(null);
         useCartStore.getState().setGfx(currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     // ---- Mouse handlers ----
     const onMouseDown = useCallback((e: MouseEvent) => {
@@ -678,14 +645,12 @@ export function SpriteCanvas({
         if (currentTool === 'pencil') {
             if (e.ctrlKey || e.metaKey) {
                 if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
-                    pushUndo();
                     const currentGfx = [...gfxRef.current];
                     searchReplace(currentGfx, getGfxPixel(currentGfx, pos.px, pos.py), fgRef.current);
                     useCartStore.getState().setGfx(currentGfx);
                 }
                 return;
             }
-            pushUndo();
             st.isDrawing = true;
             if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
                 const currentGfx = [...gfxRef.current];
@@ -696,13 +661,11 @@ export function SpriteCanvas({
             }
         } else if (currentTool === 'fill') {
             if (pos.px >= 0 && pos.px < 128 && pos.py >= 0 && pos.py < 128) {
-                pushUndo();
                 const currentGfx = [...gfxRef.current];
                 floodFill(currentGfx, pos.px, pos.py, fgRef.current);
                 useCartStore.getState().setGfx(currentGfx);
             }
         } else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'line') {
-            pushUndo();
             st.isDrawing = true;
             st.drawStart = { x: pos.px, y: pos.py };
         } else if (currentTool === 'select') {
@@ -711,7 +674,6 @@ export function SpriteCanvas({
                 pos.py >= sel.y && pos.py < sel.y + sel.h) {
                 st.selDragging = true;
                 st.selDragStart = { mx: pos.px, my: pos.py, sx: sel.x, sy: sel.y };
-                pushUndo();
                 const currentGfx = [...gfxRef.current];
                 const data = getSelectionPixels(currentGfx, sel);
                 clearRect(currentGfx, sel.x, sel.y, sel.w, sel.h, bgRef.current);
@@ -723,7 +685,7 @@ export function SpriteCanvas({
                 st.drawStart = { x: pos.px, y: pos.py };
             }
         }
-    }, [screenToPixel, setMouseX, setMouseY, pushUndo, updateCursor, setSelection, quickPaletteVisible, setQuickPaletteVisible]);
+    }, [screenToPixel, setMouseX, setMouseY, updateCursor, setSelection, quickPaletteVisible, setQuickPaletteVisible]);
 
     const onMouseMove = useCallback((e: MouseEvent) => {
         const st = stateRef.current;
@@ -913,11 +875,6 @@ export function SpriteCanvas({
         if (key === '-') { e.preventDefault(); setZoomCenter(st.zoom / 1.5); return; }
         if (key === '0') { e.preventDefault(); fitCanvas(); updateCanvasTransform(); renderOverlay(); return; }
 
-        // Undo/Redo
-        if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && editableRef.current) { e.preventDefault(); doUndo(); return; }
-        if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey && editableRef.current) { e.preventDefault(); doRedo(); return; }
-        if ((e.ctrlKey || e.metaKey) && key === 'y' && editableRef.current) { e.preventDefault(); doRedo(); return; }
-
         // Copy/Cut/Paste
         if ((e.ctrlKey || e.metaKey) && key === 'c' && toolRef.current === 'select' && editableRef.current) { e.preventDefault(); copySelection(); return; }
         if ((e.ctrlKey || e.metaKey) && key === 'x' && toolRef.current === 'select' && editableRef.current) { e.preventDefault(); cutSelection(); return; }
@@ -964,7 +921,7 @@ export function SpriteCanvas({
             if (key === 'escape') { setSelection(null); renderOverlay(); return; }
         }
     }, [activeTab, setTool, updateCursor, setZoomCenter, fitCanvas, updateCanvasTransform, renderOverlay,
-        doUndo, doRedo, copySelection, cutSelection, pasteClipboard, setSelection, flipH, flipV, rotate90,
+        copySelection, cutSelection, pasteClipboard, setSelection, flipH, flipV, rotate90,
         shiftSelection, deleteSelection, quickPaletteVisible, setQuickPaletteVisible, setQuickPalettePos]);
 
     const onKeyUp = useCallback((e: KeyboardEvent) => {

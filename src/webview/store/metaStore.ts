@@ -10,6 +10,9 @@ interface MetaState {
     setMetaField: (field: 'title' | 'author' | 'template', value: string) => void;
     setI18nData: (data: I18nData | null) => void;
     notifyMetaChanged: () => void;
+
+    silentSetMeta: (meta: { title: string; author: string; template: string }) => void;
+    silentSetI18nData: (data: I18nData | null) => void;
 }
 
 let metaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,4 +46,7 @@ export const useMetaStore = create<MetaState>((set, get) => ({
             getVscodeApi().postMessage({ type: 'metaChanged', metaData });
         }, 100);
     },
+
+    silentSetMeta: (meta) => set({ meta }),
+    silentSetI18nData: (data) => set({ i18nData: data }),
 }));

@@ -137,8 +137,6 @@ interface MapCanvasProps {
     setSelection: (sel: MapSelection | null) => void;
     clipboard: { w: number; h: number; data: number[] } | null;
     setClipboard: (clip: { w: number; h: number; data: number[] } | null) => void;
-    undoStackRef: React.MutableRefObject<{ map: number[]; gfx: number[] }[]>;
-    redoStackRef: React.MutableRefObject<{ map: number[]; gfx: number[] }[]>;
     tilePickerVisible: boolean;
     setTilePickerVisible: (v: boolean) => void;
     showScreenBounds: boolean;
@@ -155,7 +153,6 @@ export function MapCanvas({
     mouseTX, mouseTY, setMouseTX, setMouseTY,
     selection, setSelection,
     clipboard, setClipboard,
-    undoStackRef, redoStackRef,
     tilePickerVisible, setTilePickerVisible,
     showScreenBounds,
     stampTiles, stampW, stampH,
@@ -477,27 +474,6 @@ export function MapCanvas({
         }
     }, []);
 
-    // ---- Undo helpers ----
-    const pushUndo = useCallback(() => {
-        undoStackRef.current.push({ map: [...mapRef.current], gfx: [...gfxRef.current] });
-        if (undoStackRef.current.length > 50) undoStackRef.current.shift();
-        redoStackRef.current = [];
-    }, [undoStackRef, redoStackRef]);
-
-    const doUndo = useCallback(() => {
-        if (undoStackRef.current.length === 0) return;
-        redoStackRef.current.push({ map: [...mapRef.current], gfx: [...gfxRef.current] });
-        const prev = undoStackRef.current.pop()!;
-        useCartStore.getState().setMap([...prev.map], [...prev.gfx]);
-    }, [undoStackRef, redoStackRef]);
-
-    const doRedo = useCallback(() => {
-        if (redoStackRef.current.length === 0) return;
-        undoStackRef.current.push({ map: [...mapRef.current], gfx: [...gfxRef.current] });
-        const next = redoStackRef.current.pop()!;
-        useCartStore.getState().setMap([...next.map], [...next.gfx]);
-    }, [undoStackRef, redoStackRef]);
-
     // ---- Cursor ----
     const updateCursor = useCallback(() => {
         const wrap = wrapRef.current;
@@ -520,18 +496,16 @@ export function MapCanvas({
     const cutSelection = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentMap = [...mapRef.current];
         const currentGfx = [...gfxRef.current];
         setClipboard({ w: sel.w, h: sel.h, data: meGetSelectionTiles(currentMap, currentGfx, sel) });
         meClearTileRect(currentMap, currentGfx, sel.x, sel.y, sel.w, sel.h);
         useCartStore.getState().setMap(currentMap, currentGfx);
-    }, [pushUndo, setClipboard]);
+    }, [setClipboard]);
 
     const pasteClipboard = useCallback(() => {
         const clip = clipboardRef.current;
         if (!clip) return;
-        pushUndo();
         const currentMap = [...mapRef.current];
         const currentGfx = [...gfxRef.current];
         const tx = mouseTXRef.current >= 0 ? mouseTXRef.current : 0;
@@ -539,18 +513,17 @@ export function MapCanvas({
         mePasteTiles(currentMap, currentGfx, tx, ty, clip.w, clip.h, clip.data);
         setSelection({ x: tx, y: ty, w: clip.w, h: clip.h });
         useCartStore.getState().setMap(currentMap, currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     const deleteSelection = useCallback(() => {
         const sel = selectionRef.current;
         if (!sel) return;
-        pushUndo();
         const currentMap = [...mapRef.current];
         const currentGfx = [...gfxRef.current];
         meClearTileRect(currentMap, currentGfx, sel.x, sel.y, sel.w, sel.h);
         setSelection(null);
         useCartStore.getState().setMap(currentMap, currentGfx);
-    }, [pushUndo, setSelection]);
+    }, [setSelection]);
 
     // ---- Mouse handlers ----
     const onMouseDown = useCallback((e: MouseEvent) => {
@@ -591,7 +564,6 @@ export function MapCanvas({
         }
 
         if (currentTool === 'pencil') {
-            pushUndo();
             st.isDrawing = true;
             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
                 const currentMap = [...mapRef.current];
@@ -601,7 +573,6 @@ export function MapCanvas({
             }
         } else if (currentTool === 'fill') {
             if (pos.tx >= 0 && pos.tx < 128 && pos.ty >= 0 && pos.ty < 64) {
-                pushUndo();
                 const currentMap = [...mapRef.current];
                 const currentGfx = [...gfxRef.current];
                 meFloodFill(currentMap, currentGfx, pos.tx, pos.ty, fgTileRef.current);
@@ -613,7 +584,6 @@ export function MapCanvas({
                 pos.ty >= sel.y && pos.ty < sel.y + sel.h) {
                 st.selDragging = true;
                 st.selDragStart = { mx: pos.tx, my: pos.ty, sx: sel.x, sy: sel.y };
-                pushUndo();
                 const currentMap = [...mapRef.current];
                 const currentGfx = [...gfxRef.current];
                 const data = meGetSelectionTiles(currentMap, currentGfx, sel);
@@ -626,7 +596,7 @@ export function MapCanvas({
                 st.drawStart = { tx: pos.tx, ty: pos.ty };
             }
         }
-    }, [screenToTile, setMouseTX, setMouseTY, pushUndo, updateCursor, setSelection, setFgTile,
+    }, [screenToTile, setMouseTX, setMouseTY, updateCursor, setSelection, setFgTile,
         setStampTiles, setStampW, setStampH, stampAt]);
 
     const onMouseMove = useCallback((e: MouseEvent) => {
@@ -790,11 +760,6 @@ export function MapCanvas({
         if (key === '-') { e.preventDefault(); setZoomCenter(st.zoom / 1.5); return; }
         if (key === '0') { e.preventDefault(); fitCanvas(); updateCanvasTransform(); renderOverlay(); return; }
 
-        // Undo/Redo
-        if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && editableRef.current) { e.preventDefault(); doUndo(); return; }
-        if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey && editableRef.current) { e.preventDefault(); doRedo(); return; }
-        if ((e.ctrlKey || e.metaKey) && key === 'y' && editableRef.current) { e.preventDefault(); doRedo(); return; }
-
         // Copy/Cut/Paste
         if ((e.ctrlKey || e.metaKey) && key === 'c' && toolRef.current === 'select' && editableRef.current) { e.preventDefault(); copySelection(); return; }
         if ((e.ctrlKey || e.metaKey) && key === 'x' && toolRef.current === 'select' && editableRef.current) { e.preventDefault(); cutSelection(); return; }
@@ -814,7 +779,7 @@ export function MapCanvas({
             if (key === 'escape') { setSelection(null); renderOverlay(); return; }
         }
     }, [activeTab, setTool, updateCursor, setZoomCenter, fitCanvas, updateCanvasTransform, renderOverlay,
-        doUndo, doRedo, copySelection, cutSelection, pasteClipboard, setSelection, deleteSelection,
+        copySelection, cutSelection, pasteClipboard, setSelection, deleteSelection,
         setFgTile, setStampTiles, setStampW, setStampH, setTilePickerVisible]);
 
     const onKeyUp = useCallback((e: KeyboardEvent) => {

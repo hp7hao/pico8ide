@@ -8,10 +8,9 @@ interface SfxBarModeProps {
     hoverNote: number;
     onHoverNoteChange: (note: number) => void;
     onHoverAreaChange: (area: string) => void;
-    onPushUndo: () => void;
 }
 
-export function SfxBarMode({ hoverNote, onHoverNoteChange, onHoverAreaChange, onPushUndo }: SfxBarModeProps) {
+export function SfxBarMode({ hoverNote, onHoverNoteChange, onHoverAreaChange }: SfxBarModeProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const wrapRef = useRef<HTMLDivElement>(null);
     const sfx = useCartStore((s) => s.sfx);
@@ -216,12 +215,11 @@ export function SfxBarMode({ hoverNote, onHoverNoteChange, onHoverAreaChange, on
             return;
         }
         if (e.button === 0 && editable) {
-            onPushUndo();
             isDrawingRef.current = true;
             drawAreaRef.current = hit.area;
             applyDraw(hit.noteIdx, hit.area, hit.value);
         }
-    }, [hitTest, sfxId, editable, applyDraw, onPushUndo]);
+    }, [hitTest, sfxId, editable, applyDraw]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const hit = hitTest(e);

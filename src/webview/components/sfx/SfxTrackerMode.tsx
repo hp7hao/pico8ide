@@ -7,10 +7,9 @@ import { WAVEFORMS, EFFECTS, WAVE_COLORS, FX_COLORS } from './SfxToolbar';
 interface SfxTrackerModeProps {
     hoverNote: number;
     onHoverNoteChange: (note: number) => void;
-    onPushUndo: () => void;
 }
 
-export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: SfxTrackerModeProps) {
+export function SfxTrackerMode({ hoverNote, onHoverNoteChange }: SfxTrackerModeProps) {
     const sfx = useCartStore((s) => s.sfx);
     const setSfx = useCartStore((s) => s.setSfx);
     const sfxId = useUIStore((s) => s.sfxSelectedIndex);
@@ -56,7 +55,6 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: Sfx
             // Column-specific value editing with Up/Down for non-pitch columns
             if (trackerCol > 0 && (key === 'arrowup' || key === 'arrowdown')) {
                 e.preventDefault();
-                onPushUndo();
                 const n = parseSfxNotes(sfx, sfxId).notes[trackerRow];
                 const d = key === 'arrowup' ? 1 : -1;
                 let next = sfx;
@@ -70,7 +68,6 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: Sfx
             // Direct numeric entry for non-pitch columns (0-7)
             if (trackerCol > 0 && !e.ctrlKey && !e.metaKey && key >= '0' && key <= '7') {
                 e.preventDefault();
-                onPushUndo();
                 const dv = parseInt(key);
                 let next = sfx;
                 if (trackerCol === 1) next = sfxSetNoteField(next, sfxId, trackerRow, 'waveform', dv);
@@ -97,7 +94,6 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: Sfx
                 if (e.shiftKey && pitch >= 0) pitch += 12;
                 if (pitch >= 0 && pitch <= 63) {
                     e.preventDefault();
-                    onPushUndo();
                     let next = sfxSetNoteField(sfx, sfxId, trackerRow, 'pitch', pitch);
                     next = sfxSetNoteField(next, sfxId, trackerRow, 'waveform', brushWave);
                     const lo = next[sfxId * 68 + trackerRow * 2] || 0;
@@ -114,7 +110,6 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: Sfx
 
             if (key === 'backspace' || key === 'delete') {
                 e.preventDefault();
-                onPushUndo();
                 let next = sfxSetNoteField(sfx, sfxId, trackerRow, 'volume', 0);
                 next = sfxSetNoteField(next, sfxId, trackerRow, 'pitch', 0);
                 setSfx(next);
@@ -130,7 +125,7 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange, onPushUndo }: Sfx
 
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [trackerRow, trackerCol, sfx, sfxId, editable, brushWave, setSfx, onPushUndo]);
+    }, [trackerRow, trackerCol, sfx, sfxId, editable, brushWave, setSfx]);
 
     return (
         <div className="sfx-tracker-wrap">

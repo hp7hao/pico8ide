@@ -160,6 +160,31 @@ function generateTemplatePreviews(context: vscode.ExtensionContext): { [name: st
     return previews;
 }
 
+function fireUndoableEdit(
+    document: Pico8Document,
+    webviewPanel: vscode.WebviewPanel,
+    onDidChange: vscode.EventEmitter<vscode.CustomDocumentEditEvent<Pico8Document>>,
+    prevSnapshot: Record<string, any>,
+    newSnapshot: Record<string, any>
+) {
+    const applySnapshot = (snapshot: Record<string, any>) => {
+        if ('currentCode' in snapshot) { document.currentCode = snapshot.currentCode; }
+        if ('currentGfx' in snapshot && document.cartData) { document.cartData.gfx = snapshot.currentGfx; }
+        if ('currentFlags' in snapshot && document.cartData) { document.cartData.gfxFlags = snapshot.currentFlags; }
+        if ('currentMap' in snapshot && document.cartData) { document.cartData.map = snapshot.currentMap; }
+        if ('currentSfx' in snapshot && document.cartData) { document.cartData.sfx = snapshot.currentSfx; }
+        if ('currentMusic' in snapshot && document.cartData) { document.cartData.music = snapshot.currentMusic; }
+        if ('currentMeta' in snapshot) { document.metaData = snapshot.currentMeta; }
+        if ('currentI18nData' in snapshot) { document.i18nData = snapshot.currentI18nData; }
+        webviewPanel.webview.postMessage({ type: 'restoreState', ...snapshot });
+    };
+    onDidChange.fire({
+        document,
+        undo: () => applySnapshot(prevSnapshot),
+        redo: () => applySnapshot(newSnapshot),
+    });
+}
+
 function setupEditableWebview(
     document: Pico8Document,
     webviewPanel: vscode.WebviewPanel,
@@ -213,72 +238,72 @@ function setupEditableWebview(
         if (message.type === 'codeChanged' && message.code !== undefined) {
             const prevCode = document.currentCode ?? document.cartData?.code ?? '';
             if (message.code !== prevCode) {
+                const prevSnapshot = { currentCode: prevCode };
                 document.currentCode = message.code;
+                const newSnapshot = { currentCode: message.code };
                 if (initialized) {
-                    onDidChange.fire({
-                        document,
-                        undo: () => {},
-                        redo: () => {}
-                    });
+                    fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
                 }
             }
         }
         if (message.type === 'gfxChanged' && message.gfx !== undefined && document.cartData) {
+            const prevSnapshot = { currentGfx: [...document.cartData.gfx] };
             document.cartData.gfx = message.gfx;
+            const newSnapshot = { currentGfx: [...message.gfx] };
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'flagsChanged' && message.flags !== undefined && document.cartData) {
+            const prevSnapshot = { currentFlags: [...document.cartData.gfxFlags] };
             document.cartData.gfxFlags = message.flags;
+            const newSnapshot = { currentFlags: [...message.flags] };
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'mapChanged' && message.map !== undefined && document.cartData) {
+            const prevSnapshot: Record<string, any> = { currentMap: [...document.cartData.map] };
+            const newSnapshot: Record<string, any> = { currentMap: [...message.map] };
+            if (message.gfx !== undefined) {
+                prevSnapshot.currentGfx = [...document.cartData.gfx];
+                newSnapshot.currentGfx = [...message.gfx];
+            }
             document.cartData.map = message.map;
             if (message.gfx !== undefined) {
                 document.cartData.gfx = message.gfx;
             }
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'sfxChanged' && message.sfx !== undefined && document.cartData) {
+            const prevSnapshot = { currentSfx: [...document.cartData.sfx] };
             document.cartData.sfx = message.sfx;
+            const newSnapshot = { currentSfx: [...message.sfx] };
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'musicChanged' && message.music !== undefined && document.cartData) {
+            const prevSnapshot = { currentMusic: [...document.cartData.music] };
             document.cartData.music = message.music;
+            const newSnapshot = { currentMusic: [...message.music] };
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'metaChanged' && message.metaData !== undefined) {
+            const prevSnapshot: Record<string, any> = {
+                currentMeta: document.metaData ? { ...document.metaData } : null,
+                currentI18nData: document.i18nData,
+            };
             document.metaData = message.metaData;
             document.i18nData = message.metaData.i18n;
+            const newSnapshot: Record<string, any> = {
+                currentMeta: { ...message.metaData },
+                currentI18nData: message.metaData.i18n,
+            };
             // For .p8mod files, metadata is persisted inline on save (just mark dirty).
             // For .p8/.p8.png files, persist to .meta.json companion.
             if (!document.uri.fsPath.endsWith('.p8mod')) {
@@ -290,11 +315,7 @@ function setupEditableWebview(
                 }
             }
             if (initialized) {
-                onDidChange.fire({
-                    document,
-                    undo: () => {},
-                    redo: () => {}
-                });
+                fireUndoableEdit(document, webviewPanel, onDidChange, prevSnapshot, newSnapshot);
             }
         }
         if (message.type === 'exportCart') {

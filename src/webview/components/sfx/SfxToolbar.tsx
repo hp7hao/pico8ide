@@ -10,12 +10,11 @@ const EFFECTS = ['none', 'slide', 'vib', 'drop', 'fadein', 'fadeout', 'arpF', 'a
 
 interface SfxToolbarProps {
     locale: LocaleStrings;
-    onPushUndo: () => void;
     isPlaying: boolean;
     onTogglePlay: () => void;
 }
 
-export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxToolbarProps) {
+export function SfxToolbar({ locale, isPlaying, onTogglePlay }: SfxToolbarProps) {
     const sfxMode = useUIStore((s) => s.sfxMode);
     const setSfxMode = useUIStore((s) => s.setSfxMode);
     const sfxSelectedIndex = useUIStore((s) => s.sfxSelectedIndex);
@@ -56,7 +55,6 @@ export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxT
     }, [sfx, sfxId, setSfx]);
 
     const clearSfx = useCallback(() => {
-        onPushUndo();
         const next = [...sfx];
         const offset = sfxId * 68;
         for (let i = 0; i < 64; i++) next[offset + i] = 0;
@@ -64,7 +62,7 @@ export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxT
         next[offset + 66] = 0;
         next[offset + 67] = 0;
         setSfx(next);
-    }, [sfx, sfxId, setSfx, onPushUndo]);
+    }, [sfx, sfxId, setSfx]);
 
     const loopLabel = (loopEnd === 0 && loopStart > 0) ? 'LEN' : 'LOOP';
 
@@ -108,7 +106,7 @@ export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxT
             {/* Speed */}
             <span className="sfx-label">SPD</span>
             <button
-                onClick={() => { if (!editable) return; onPushUndo(); setSpeed(speed - 1); }}
+                onClick={() => { if (!editable) return; setSpeed(speed - 1); }}
             >
                 {'\u25c0'}
             </button>
@@ -117,14 +115,13 @@ export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxT
                 title="Click to edit, scroll to adjust"
                 onWheel={editable ? (e) => {
                     e.preventDefault();
-                    onPushUndo();
                     setSpeed(speed + (e.deltaY < 0 ? 1 : -1));
                 } : undefined}
             >
                 {speed}
             </span>
             <button
-                onClick={() => { if (!editable) return; onPushUndo(); setSpeed(speed + 1); }}
+                onClick={() => { if (!editable) return; setSpeed(speed + 1); }}
             >
                 {'\u25b6'}
             </button>
@@ -133,12 +130,12 @@ export function SfxToolbar({ locale, onPushUndo, isPlaying, onTogglePlay }: SfxT
 
             {/* Loop */}
             <span className="sfx-label">{loopLabel}</span>
-            <button onClick={() => { if (!editable) return; onPushUndo(); setLoopStart(loopStart - 1); }}>{'\u25c0'}</button>
+            <button onClick={() => { if (!editable) return; setLoopStart(loopStart - 1); }}>{'\u25c0'}</button>
             <span className="sfx-val">{loopStart}</span>
-            <button onClick={() => { if (!editable) return; onPushUndo(); setLoopStart(loopStart + 1); }}>{'\u25b6'}</button>
-            <button onClick={() => { if (!editable) return; onPushUndo(); setLoopEnd(loopEnd - 1); }}>{'\u25c0'}</button>
+            <button onClick={() => { if (!editable) return; setLoopStart(loopStart + 1); }}>{'\u25b6'}</button>
+            <button onClick={() => { if (!editable) return; setLoopEnd(loopEnd - 1); }}>{'\u25c0'}</button>
             <span className="sfx-val">{loopEnd}</span>
-            <button onClick={() => { if (!editable) return; onPushUndo(); setLoopEnd(loopEnd + 1); }}>{'\u25b6'}</button>
+            <button onClick={() => { if (!editable) return; setLoopEnd(loopEnd + 1); }}>{'\u25b6'}</button>
 
             <span className="tool-sep" />
 

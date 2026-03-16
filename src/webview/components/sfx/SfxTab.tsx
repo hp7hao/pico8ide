@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useCartStore } from '../../store/cartStore';
 import { useUIStore } from '../../store/uiStore';
-import { useUndoRedo } from '../../hooks/useUndoRedo';
 import { SfxToolbar } from './SfxToolbar';
 import { SfxList } from './SfxList';
 import { SfxBarMode } from './SfxBarMode';
@@ -63,34 +62,6 @@ export function SfxTab({ locale }: SfxTabProps) {
     const currentPlayerRef = useRef<SfxPlayer | null>(null);
     const allPlayersRef = useRef<SfxPlayer[]>([]);
     const sfxClipboardRef = useRef<number[] | null>(null);
-
-    // Undo/redo
-    const { pushSnapshot, undo, redo } = useUndoRedo<{ id: number; data: number[] }>();
-
-    const pushUndo = useCallback(() => {
-        const offset = sfxId * 68;
-        pushSnapshot({ id: sfxId, data: sfx.slice(offset, offset + 68) });
-    }, [sfxId, sfx, pushSnapshot]);
-
-    const doUndo = useCallback(() => {
-        const frame = undo();
-        if (!frame) return;
-        const next = [...sfx];
-        const offset = frame.id * 68;
-        for (let i = 0; i < 68; i++) next[offset + i] = frame.data[i];
-        setSfx(next);
-        useUIStore.getState().setSfxSelectedIndex(frame.id);
-    }, [sfx, setSfx, undo]);
-
-    const doRedo = useCallback(() => {
-        const frame = redo();
-        if (!frame) return;
-        const next = [...sfx];
-        const offset = frame.id * 68;
-        for (let i = 0; i < 68; i++) next[offset + i] = frame.data[i];
-        setSfx(next);
-        useUIStore.getState().setSfxSelectedIndex(frame.id);
-    }, [sfx, setSfx, redo]);
 
     const showStatus = useCallback((msg: string) => {
         setStatusMsg(msg);
@@ -333,11 +304,6 @@ export function SfxTab({ locale }: SfxTabProps) {
                 return;
             }
 
-            // Undo/redo
-            if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey && editable) { e.preventDefault(); doUndo(); return; }
-            if ((e.ctrlKey || e.metaKey) && key === 'z' && e.shiftKey && editable) { e.preventDefault(); doRedo(); return; }
-            if ((e.ctrlKey || e.metaKey) && key === 'y' && editable) { e.preventDefault(); doRedo(); return; }
-
             // Copy SFX (Ctrl+C)
             if ((e.ctrlKey || e.metaKey) && key === 'c') {
                 e.preventDefault();
@@ -350,7 +316,6 @@ export function SfxTab({ locale }: SfxTabProps) {
             if ((e.ctrlKey || e.metaKey) && key === 'v' && editable) {
                 e.preventDefault();
                 if (!sfxClipboardRef.current) { showStatus('Nothing to paste'); return; }
-                pushUndo();
                 const next = [...sfx];
                 const offset = uiState.sfxSelectedIndex * 68;
                 for (let i = 0; i < 68; i++) next[offset + i] = sfxClipboardRef.current[i];
@@ -362,7 +327,7 @@ export function SfxTab({ locale }: SfxTabProps) {
 
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [sfx, setSfx, editable, showAudio, brushWave, brushEffect, toggleMainPlay, doUndo, doRedo, pushUndo, showStatus, setSfxMode, setSfxSelectedIndex, setBrushWave, setBrushEffect]);
+    }, [sfx, setSfx, editable, showAudio, brushWave, brushEffect, toggleMainPlay, showStatus, setSfxMode, setSfxSelectedIndex, setBrushWave, setBrushEffect]);
 
     // Cleanup audio on unmount
     useEffect(() => {
@@ -375,7 +340,6 @@ export function SfxTab({ locale }: SfxTabProps) {
         <div className="sfx-editor">
             <SfxToolbar
                 locale={locale}
-                onPushUndo={pushUndo}
                 isPlaying={isMainPlaying}
                 onTogglePlay={toggleMainPlay}
             />
@@ -392,13 +356,11 @@ export function SfxTab({ locale }: SfxTabProps) {
                             hoverNote={hoverNote}
                             onHoverNoteChange={setHoverNote}
                             onHoverAreaChange={setHoverArea}
-                            onPushUndo={pushUndo}
                         />
                     ) : (
                         <SfxTrackerMode
                             hoverNote={hoverNote}
                             onHoverNoteChange={setHoverNote}
-                            onPushUndo={pushUndo}
                         />
                     )}
                 </div>

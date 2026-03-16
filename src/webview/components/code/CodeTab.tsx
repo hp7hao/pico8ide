@@ -16,6 +16,7 @@ interface CodeTabProps {
 export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, editorLineHeight, editable, locale }: CodeTabProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<any>(null);
+    const isRestoringRef = useRef(false);
     const code = useCartStore((s) => s.code);
     const setCode = useCartStore((s) => s.setCode);
     const activeTab = useUIStore((s) => s.activeTab);
@@ -90,6 +91,7 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
 
                 if (editable) {
                     editor.onDidChangeModelContent(() => {
+                        if (isRestoringRef.current) return;
                         setCode(editor.getValue());
                     });
                 }
@@ -109,6 +111,21 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
             }
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync Monaco editor when code changes via silent restore (undo/redo)
+    useEffect(() => {
+        const unsub = useCartStore.subscribe((state, prevState) => {
+            if (state.code !== prevState.code && editorRef.current) {
+                const editorValue = editorRef.current.getValue();
+                if (editorValue !== state.code) {
+                    isRestoringRef.current = true;
+                    editorRef.current.setValue(state.code);
+                    isRestoringRef.current = false;
+                }
+            }
+        });
+        return unsub;
+    }, []);
 
     return (
         <div

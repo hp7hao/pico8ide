@@ -21,9 +21,6 @@ export function MapTab({ locale }: MapTabProps) {
     const [stampW, setStampW] = useState(1);
     const [stampH, setStampH] = useState(1);
 
-    const undoStackRef = useRef<{ map: number[]; gfx: number[] }[]>([]);
-    const redoStackRef = useRef<{ map: number[]; gfx: number[] }[]>([]);
-
     const canvasActionsRef = useRef<{
         zoomIn: () => void;
         zoomOut: () => void;
@@ -70,8 +67,6 @@ export function MapTab({ locale }: MapTabProps) {
                     setSelection={setSelection}
                     clipboard={clipboard}
                     setClipboard={setClipboard}
-                    undoStackRef={undoStackRef}
-                    redoStackRef={redoStackRef}
                     tilePickerVisible={tilePickerVisible}
                     setTilePickerVisible={setTilePickerVisible}
                     showScreenBounds={showScreenBounds}

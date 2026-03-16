@@ -7,7 +7,6 @@ interface PatternEditorProps {
     editable: boolean;
     selectedChannel: number;
     onSelectChannel: (ch: number) => void;
-    onPushUndo: () => void;
     onMusicChange: (music: number[]) => void;
 }
 
@@ -29,14 +28,12 @@ export function PatternEditor({
     editable,
     selectedChannel,
     onSelectChannel,
-    onPushUndo,
     onMusicChange,
 }: PatternEditorProps) {
     const pat = parsePattern(music, currentPattern);
 
     const toggleChannel = useCallback((ch: number) => {
         if (!editable) return;
-        onPushUndo();
         const next = [...music];
         const offset = currentPattern * 4 + ch;
         if ((next[offset] & 0x40) !== 0) {
@@ -46,11 +43,10 @@ export function PatternEditor({
             if (selectedChannel === ch) onSelectChannel(-1);
         }
         onMusicChange(next);
-    }, [music, currentPattern, editable, selectedChannel, onPushUndo, onMusicChange, onSelectChannel]);
+    }, [music, currentPattern, editable, selectedChannel, onMusicChange, onSelectChannel]);
 
     const changeSfxId = useCallback((ch: number, delta: number) => {
         if (!editable) return;
-        onPushUndo();
         const next = [...music];
         const offset = currentPattern * 4 + ch;
         const cur = next[offset] & 0x3f;
@@ -58,16 +54,15 @@ export function PatternEditor({
         const newId = ((cur + delta) % 64 + 64) % 64;
         next[offset] = flags | newId;
         onMusicChange(next);
-    }, [music, currentPattern, editable, onPushUndo, onMusicChange]);
+    }, [music, currentPattern, editable, onMusicChange]);
 
     const toggleFlag = useCallback((chIdx: number, bit: number) => {
         if (!editable) return;
-        onPushUndo();
         const next = [...music];
         const offset = currentPattern * 4 + chIdx;
         next[offset] = next[offset] ^ bit;
         onMusicChange(next);
-    }, [music, currentPattern, editable, onPushUndo, onMusicChange]);
+    }, [music, currentPattern, editable, onMusicChange]);
 
     const effectiveChannel = getEffectiveChannel(music, currentPattern, selectedChannel);
 

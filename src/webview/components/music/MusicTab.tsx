@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useCartStore } from '../../store/cartStore';
 import { useUIStore } from '../../store/uiStore';
-import { useUndoRedo } from '../../hooks/useUndoRedo';
 import { MusicToolbar } from './MusicToolbar';
 import { PatternEditor, getEffectiveChannel } from './PatternEditor';
 import { PatternNavigator, parsePattern } from './PatternNavigator';
@@ -65,34 +64,6 @@ export function MusicTab({ locale }: MusicTabProps) {
     musicRef.current = music;
     const sfxRef = useRef(sfxData);
     sfxRef.current = sfxData;
-
-    // Undo/redo
-    const { pushSnapshot, undo, redo } = useUndoRedo<{ pattern: number; data: number[] }>();
-
-    const pushUndo = useCallback(() => {
-        const offset = patternIndex * 4;
-        pushSnapshot({ pattern: patternIndex, data: [music[offset], music[offset + 1], music[offset + 2], music[offset + 3]] });
-    }, [patternIndex, music, pushSnapshot]);
-
-    const doUndo = useCallback(() => {
-        const frame = undo();
-        if (!frame) return;
-        const next = [...music];
-        const offset = frame.pattern * 4;
-        for (let i = 0; i < 4; i++) next[offset + i] = frame.data[i];
-        setMusic(next);
-        setPatternIndex(frame.pattern);
-    }, [music, setMusic, undo, setPatternIndex]);
-
-    const doRedo = useCallback(() => {
-        const frame = redo();
-        if (!frame) return;
-        const next = [...music];
-        const offset = frame.pattern * 4;
-        for (let i = 0; i < 4; i++) next[offset + i] = frame.data[i];
-        setMusic(next);
-        setPatternIndex(frame.pattern);
-    }, [music, setMusic, redo, setPatternIndex]);
 
     // Audio engine
     const stopAllSfx = useCallback(() => {
@@ -328,12 +299,11 @@ export function MusicTab({ locale }: MusicTabProps) {
     }, [patternIndex, setPatternIndex]);
 
     const handleClear = useCallback(() => {
-        pushUndo();
         const next = [...music];
         const offset = patternIndex * 4;
         for (let i = 0; i < 4; i++) next[offset + i] = 0x40;
         setMusic(next);
-    }, [music, patternIndex, pushUndo, setMusic]);
+    }, [music, patternIndex, setMusic]);
 
     const handleMusicChange = useCallback((next: number[]) => {
         setMusic(next);
@@ -370,18 +340,10 @@ export function MusicTab({ locale }: MusicTabProps) {
             } else if (e.key >= '1' && e.key <= '4' && editable) {
                 e.preventDefault();
                 const ch = parseInt(e.key) - 1;
-                pushUndo();
                 const next = [...musicRef.current];
                 const offset = uiState.musicSelectedPattern * 4 + ch;
                 next[offset] = next[offset] ^ 0x40;
                 setMusic(next);
-            } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-                e.preventDefault();
-                if (e.shiftKey) doRedo();
-                else doUndo();
-            } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-                e.preventDefault();
-                doRedo();
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
                 e.preventDefault();
                 const cpOff = uiState.musicSelectedPattern * 4;
@@ -389,14 +351,12 @@ export function MusicTab({ locale }: MusicTabProps) {
             } else if ((e.ctrlKey || e.metaKey) && e.key === 'v' && editable) {
                 e.preventDefault();
                 if (!musicClipboardRef.current) return;
-                pushUndo();
                 const next = [...music];
                 const psOff = uiState.musicSelectedPattern * 4;
                 for (let i = 0; i < 4; i++) next[psOff + i] = musicClipboardRef.current[i];
                 setMusic(next);
             } else if ((e.key === 'Delete' || e.key === 'Backspace') && editable) {
                 e.preventDefault();
-                pushUndo();
                 const next = [...music];
                 const clOff = uiState.musicSelectedPattern * 4;
                 for (let i = 0; i < 4; i++) next[clOff + i] = 0x40;
@@ -406,7 +366,7 @@ export function MusicTab({ locale }: MusicTabProps) {
 
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [music, setMusic, editable, showAudio, togglePlay, doUndo, doRedo, pushUndo, setPatternIndex]);
+    }, [music, setMusic, editable, showAudio, togglePlay, setPatternIndex]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -441,7 +401,6 @@ export function MusicTab({ locale }: MusicTabProps) {
                     editable={editable}
                     selectedChannel={selectedChannel}
                     onSelectChannel={setSelectedChannel}
-                    onPushUndo={pushUndo}
                     onMusicChange={handleMusicChange}
                 />
                 <PatternNavigator
@@ -459,7 +418,6 @@ export function MusicTab({ locale }: MusicTabProps) {
                     currentSfxId={currentSfxId}
                     editable={editable}
                     showAudio={showAudio}
-                    onPushUndo={pushUndo}
                     onMusicChange={handleMusicChange}
                     onPlaySfx={handlePlaySfxInPicker}
                     onStopSfx={stopAllSfx}
