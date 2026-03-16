@@ -1,0 +1,57 @@
+pico-8 cartridge // http://www.pico-8.com
+version 42
+__lua__
+-- chinese demo (.p8mod)
+-- uses tx() for i18n strings
+
+function _init()
+ _txi()
+ t=0
+end
+
+function _update()
+ t+=1
+end
+
+function _draw()
+ cls(1)
+
+ -- title (via i18n)
+ tx("title",36,10,7)
+
+ -- animated greeting
+ local y=50+sin(t/60)*4
+ tx("greeting",36,y,10)
+ print("pico-8 ide!",28,y+12,10)
+
+ -- more i18n strings
+ tx("test",36,80,8)
+ tx("mixed",12,92,6)
+
+ -- instructions
+ print("press any key",28,112,5)
+end
+__gfx__
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+__gff__
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+__map__
+__sfx__
+__music__
+__meta__
+{
+  "title": "Chinese Demo",
+  "author": "pico8ide",
+  "template": "default"
+}
+__i18n__
+{
+  "locales": ["zh"],
+  "entries": [
+    { "key": "title", "translations": { "zh": "你好世界" } },
+    { "key": "greeting", "translations": { "zh": "欢迎来到" } },
+    { "key": "test", "translations": { "zh": "中文测试" } },
+    { "key": "mixed", "translations": { "zh": "混合: abc你好xyz" } }
+  ],
+  "outputLocale": "zh"
+}

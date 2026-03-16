@@ -48,11 +48,8 @@ function renderGlyphBytes(
     return bytes;
 }
 
-function exportGenerateI18nLua(
-    loc: string,
-    i18nData: I18nData,
-    fontCtx: CanvasRenderingContext2D | null
-): string {
+/** Collect unique non-ASCII chars from i18n entries and return {uniqueChars, charList} */
+function collectI18nChars(i18nData: I18nData, loc: string): { uniqueChars: Record<string, number>; charList: string[] } {
     const uniqueChars: Record<string, number> = {};
     const charList: string[] = [];
     for (const entry of i18nData.entries) {
@@ -65,6 +62,15 @@ function exportGenerateI18nLua(
             }
         }
     }
+    return { uniqueChars, charList };
+}
+
+function exportGenerateI18nLua(
+    loc: string,
+    i18nData: I18nData,
+    fontCtx: CanvasRenderingContext2D | null
+): string {
+    const { uniqueChars, charList } = collectI18nChars(i18nData, loc);
 
     let glyphHex = '';
     for (const ch of charList) {
@@ -305,6 +311,7 @@ export function ExportTab({ locale }: ExportTabProps) {
                 ? localeMeta.title + localeMeta.author
                 : (meta.title || '') + (meta.author || '');
             const glyphs = collectGlyphs(allText);
+
             const i18nLuaCode = exportGenerateI18nLua(variant, i18n, fontCtxRef.current);
 
             postMessage({

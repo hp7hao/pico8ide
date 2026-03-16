@@ -211,10 +211,36 @@ export function I18nTab({ locale, fontUri }: I18nTabProps) {
             });
     }, [fontUri]);
 
-    // Auto-scan on first render when we have code
+    // Auto-scan on first render when we have code.
+    // Uses scanCodeSilent (no postMessage) to avoid marking the document dirty on open.
     useEffect(() => {
         if (!hasScanned && fontLoaded && code) {
-            handleScanCode();
+            // Scan code for tx() keys and update store state directly (no notification)
+            const currentCode = useCartStore.getState().code;
+            const re = /tx\(\s*"([^"]+)"\s*(?:,|\))/g;
+            let m: RegExpExecArray | null;
+            const foundKeys: Record<string, boolean> = {};
+            while ((m = re.exec(currentCode)) !== null) {
+                foundKeys[m[1]] = true;
+            }
+            const current: I18nData = useMetaStore.getState().i18nData || {
+                locales: [],
+                entries: [],
+                outputLocale: '',
+            };
+            const filtered = current.entries.filter((e) => foundKeys[e.key]);
+            const existingKeys: Record<string, boolean> = {};
+            filtered.forEach((e) => { existingKeys[e.key] = true; });
+            const newEntries: I18nEntry[] = [...filtered];
+            for (const k of Object.keys(foundKeys)) {
+                if (!existingKeys[k]) {
+                    const trans: Record<string, string> = {};
+                    current.locales.forEach((loc) => { trans[loc] = ''; });
+                    newEntries.push({ key: k, translations: trans });
+                }
+            }
+            // Update store state directly without triggering notifyMetaChanged
+            useMetaStore.setState({ i18nData: { ...current, entries: newEntries } });
             setHasScanned(true);
         }
     }, [fontLoaded, code]); // eslint-disable-line react-hooks/exhaustive-deps

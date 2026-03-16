@@ -5,7 +5,8 @@ import { CartData } from './cartData';
 import { MetaData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
 import { Pico8Encoder } from './pngDecoder';
-import { cartDataToP8, p8ToCartData } from './p8format';
+import { cartDataToP8 } from './p8format';
+import { cartDataToP8Mod, p8ModToCartData } from './p8modFormat';
 import { t } from './i18n';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
@@ -73,6 +74,7 @@ function exportSingleCart(
 
     // Determine final code
     let finalCode = document.currentCode ?? document.cartData.code;
+
     if (variant !== 'base' && message.i18nLuaCode) {
         finalCode = message.i18nLuaCode + '\n' + finalCode;
     }
@@ -105,7 +107,7 @@ function exportSingleCart(
 
     // Determine output path
     const cartDir = path.dirname(document.uri.fsPath);
-    const baseName = path.basename(document.uri.fsPath).replace(/\.(p8|p8\.png)$/i, '');
+    const baseName = path.basename(document.uri.fsPath).replace(/\.(p8mod|p8|p8\.png)$/i, '');
     let outName: string;
     if (variant === 'base') {
         outName = `${baseName}.p8.png`;
@@ -178,90 +180,122 @@ function setupEditableWebview(
 
     const templatePreviews = generateTemplatePreviews(context);
 
+    // Suppress change events during webview initialization.
+    // The webview sends a 'ready' message after React has mounted and stores are populated.
+    // Before that, change messages (e.g. Monaco's initial onDidChangeModelContent) would
+    // falsely mark the document as dirty.
+    let initialized = false;
+
     webviewPanel.webview.onDidReceiveMessage(async (message: any) => {
+        if (message.type === 'ready') {
+            initialized = true;
+            return;
+        }
         if (message.type === 'run') {
             // Save current state to .p8, then launch via shared command
             if (document.cartData) {
-                const p8Path = document.uri.fsPath.replace(/\.p8\.png$/i, '.p8');
-                if (!p8Path.endsWith('.p8')) {
-                    // Already a .p8 file
-                    saveDocumentAsP8(document, document.uri.fsPath);
-                    await vscode.commands.executeCommand('pico8ide.runGame', document.uri.fsPath);
+                let runPath: string;
+                if (document.uri.fsPath.endsWith('.p8mod')) {
+                    // .p8mod: save as companion .p8 for PICO-8 to run
+                    runPath = document.uri.fsPath.replace(/\.p8mod$/i, '.p8');
+                } else if (document.uri.fsPath.endsWith('.p8.png')) {
+                    runPath = document.uri.fsPath.replace(/\.p8\.png$/i, '.p8');
                 } else {
-                    saveDocumentAsP8(document, p8Path);
-                    await vscode.commands.executeCommand('pico8ide.runGame', p8Path);
+                    runPath = document.uri.fsPath;
                 }
+                saveDocumentAsP8(document, runPath);
+                await vscode.commands.executeCommand('pico8ide.runGame', runPath);
             }
         }
         if (message.type === 'stop') {
             await vscode.commands.executeCommand('pico8ide.stopGame');
         }
         if (message.type === 'codeChanged' && message.code !== undefined) {
-            document.currentCode = message.code;
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            const prevCode = document.currentCode ?? document.cartData?.code ?? '';
+            if (message.code !== prevCode) {
+                document.currentCode = message.code;
+                if (initialized) {
+                    onDidChange.fire({
+                        document,
+                        undo: () => {},
+                        redo: () => {}
+                    });
+                }
+            }
         }
         if (message.type === 'gfxChanged' && message.gfx !== undefined && document.cartData) {
             document.cartData.gfx = message.gfx;
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'flagsChanged' && message.flags !== undefined && document.cartData) {
             document.cartData.gfxFlags = message.flags;
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'mapChanged' && message.map !== undefined && document.cartData) {
             document.cartData.map = message.map;
             if (message.gfx !== undefined) {
                 document.cartData.gfx = message.gfx;
             }
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'sfxChanged' && message.sfx !== undefined && document.cartData) {
             document.cartData.sfx = message.sfx;
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'musicChanged' && message.music !== undefined && document.cartData) {
             document.cartData.music = message.music;
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'metaChanged' && message.metaData !== undefined) {
             document.metaData = message.metaData;
             document.i18nData = message.metaData.i18n;
-            // Persist to .meta.json alongside the cart
-            const metaPath = document.uri.fsPath.replace(/\.(p8|p8\.png)$/i, '.meta.json');
-            try {
-                fs.writeFileSync(metaPath, JSON.stringify(message.metaData, null, 4), 'utf-8');
-            } catch {
-                // Silently ignore write errors
+            // For .p8mod files, metadata is persisted inline on save (just mark dirty).
+            // For .p8/.p8.png files, persist to .meta.json companion.
+            if (!document.uri.fsPath.endsWith('.p8mod')) {
+                const metaPath = document.uri.fsPath.replace(/\.(p8|p8\.png)$/i, '.meta.json');
+                try {
+                    fs.writeFileSync(metaPath, JSON.stringify(message.metaData, null, 4), 'utf-8');
+                } catch {
+                    // Silently ignore write errors
+                }
             }
-            onDidChange.fire({
-                document,
-                undo: () => {},
-                redo: () => {}
-            });
+            if (initialized) {
+                onDidChange.fire({
+                    document,
+                    undo: () => {},
+                    redo: () => {}
+                });
+            }
         }
         if (message.type === 'exportCart') {
             try {
@@ -340,9 +374,17 @@ function saveDocumentAsP8(document: Pico8Document, destPath: string): void {
     fs.writeFileSync(destPath, p8Content, 'utf-8');
 }
 
-function loadMetaData(cartPath: string): MetaData | null {
-    const metaPath = cartPath.replace(/\.(p8|p8\.png)$/i, '.meta.json');
-    const i18nPath = cartPath.replace(/\.(p8|p8\.png)$/i, '.i18n.json');
+function saveDocumentAsP8Mod(document: Pico8Document, destPath: string): void {
+    if (!document.cartData) { return; }
+    const code = document.currentCode ?? document.cartData.code;
+    const saveData = { ...document.cartData, code };
+    const content = cartDataToP8Mod(saveData, document.metaData);
+    fs.writeFileSync(destPath, content, 'utf-8');
+}
+
+export function loadMetaData(cartPath: string): MetaData | null {
+    const metaPath = cartPath.replace(/\.(p8mod|p8|p8\.png)$/i, '.meta.json');
+    const i18nPath = cartPath.replace(/\.(p8mod|p8|p8\.png)$/i, '.i18n.json');
     // Try .meta.json first
     try {
         if (fs.existsSync(metaPath)) {
@@ -450,120 +492,32 @@ export class Pico8PngEditorProvider implements vscode.CustomEditorProvider<Pico8
             return;
         }
 
-        // Workspace .p8.png
+        // Workspace .p8.png: show read-only viewer with hint to use context menu
         if (!document.cartData) {
             webviewPanel.webview.html = getErrorHtml('Failed to decode cartridge');
             return;
         }
 
-        const p8Path = filePath.replace(/\.p8\.png$/i, '.p8');
-        const p8Exists = fs.existsSync(p8Path);
-
-        if (p8Exists) {
-            // Companion .p8 exists: prompt user to open it in the .p8 editor
-            this.showCompanionPrompt(webviewPanel, p8Path);
-            return;
-        }
-
-        // No companion .p8: prompt user to export or keep .p8.png
-        this.showExportPrompt(document, webviewPanel, p8Path);
-    }
-
-    private showCompanionPrompt(panel: vscode.WebviewPanel, p8Path: string): void {
-        const locale = t();
-
-        panel.webview.onDidReceiveMessage(async (message: { type: string }) => {
-            if (message.type === 'openP8') {
-                const uri = vscode.Uri.file(p8Path);
-                await vscode.commands.executeCommand('vscode.openWith', uri, Pico8P8EditorProvider.viewType);
-            }
+        webviewPanel.webview.html = generateCartViewerHtml({
+            cartData: document.cartData,
+            locale,
+            extensionUri: this.context.extensionUri,
+            webview: webviewPanel.webview,
+            showAudio: true,
+            editable: false
         });
-
-        panel.webview.html = `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    body { background: #111; color: #ccc; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                    .prompt { text-align: center; max-width: 500px; padding: 40px; }
-                    h2 { color: #fff; margin-bottom: 16px; }
-                    p { color: #aaa; margin-bottom: 24px; }
-                    button { background: #29adff; border: none; color: #fff; padding: 10px 24px; border-radius: 4px; cursor: pointer;
-                             font-family: inherit; font-size: 14px; }
-                    button:hover { background: #4dc0ff; }
-                </style>
-            </head>
-            <body>
-                <div class="prompt">
-                    <h2>${locale.companionExists}</h2>
-                    <button onclick="vscodeApi.postMessage({type:'openP8'})">${locale.openP8File}</button>
-                </div>
-                <script>const vscodeApi = acquireVsCodeApi();</script>
-            </body>
-            </html>`;
-    }
-
-    private showExportPrompt(document: Pico8Document, panel: vscode.WebviewPanel, p8Path: string): void {
-        const locale = t();
-
-        panel.webview.onDidReceiveMessage(async (message: { type: string }) => {
-            if (message.type === 'exportP8') {
-                // Convert and write .p8, then open in .p8 editor
-                try {
-                    saveDocumentAsP8(document, p8Path);
-                    vscode.window.showInformationMessage(locale.convertSuccess);
-                    const uri = vscode.Uri.file(p8Path);
-                    await vscode.commands.executeCommand('vscode.openWith', uri, Pico8P8EditorProvider.viewType);
-                } catch (e: any) {
-                    vscode.window.showErrorMessage(`${locale.error}: ${e.message}`);
-                }
-            } else if (message.type === 'keepPng') {
-                // Show the editable webview for .p8.png directly
-                setupEditableWebview(document, panel, this.context, this._onDidChangeCustomDocument);
-            }
-        });
-
-        panel.webview.html = `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    body { background: #111; color: #ccc; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                    .prompt { text-align: center; max-width: 500px; padding: 40px; }
-                    h2 { color: #fff; margin-bottom: 16px; }
-                    p { color: #aaa; margin-bottom: 24px; }
-                    .buttons { display: flex; gap: 12px; justify-content: center; }
-                    button { border: none; color: #fff; padding: 10px 24px; border-radius: 4px; cursor: pointer;
-                             font-family: inherit; font-size: 14px; }
-                    .btn-primary { background: #29adff; }
-                    .btn-primary:hover { background: #4dc0ff; }
-                    .btn-secondary { background: #555; }
-                    .btn-secondary:hover { background: #777; }
-                </style>
-            </head>
-            <body>
-                <div class="prompt">
-                    <h2>${locale.exportToP8Prompt}</h2>
-                    <div class="buttons">
-                        <button class="btn-primary" onclick="vscodeApi.postMessage({type:'exportP8'})">${locale.exportToP8}</button>
-                        <button class="btn-secondary" onclick="vscodeApi.postMessage({type:'keepPng'})">${locale.keepP8Png}</button>
-                    </div>
-                </div>
-                <script>const vscodeApi = acquireVsCodeApi();</script>
-            </body>
-            </html>`;
     }
 
     async saveCustomDocument(document: Pico8Document, _cancellation: vscode.CancellationToken): Promise<void> {
-        if (!document.cartData || document.currentCode === null) {
-            return;
-        }
-        const p8Path = document.uri.fsPath.replace(/\.p8\.png$/i, '.p8');
-        saveDocumentAsP8(document, p8Path);
+        // PNG viewer is read-only; no-op
     }
 
     async saveCustomDocumentAs(document: Pico8Document, destination: vscode.Uri, _cancellation: vscode.CancellationToken): Promise<void> {
-        saveDocumentAsP8(document, destination.fsPath);
+        if (destination.fsPath.endsWith('.p8mod')) {
+            saveDocumentAsP8Mod(document, destination.fsPath);
+        } else {
+            saveDocumentAsP8(document, destination.fsPath);
+        }
     }
 
     async revertCustomDocument(document: Pico8Document, _cancellation: vscode.CancellationToken): Promise<void> {
@@ -605,13 +559,17 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
         _token: vscode.CancellationToken
     ): Promise<Pico8Document> {
         let cartData: CartData | null = null;
+        let metaData: MetaData | null = null;
+
         try {
             const text = fs.readFileSync(uri.fsPath, 'utf-8');
-            cartData = p8ToCartData(text);
+            // Primary path: .p8mod files
+            const parsed = p8ModToCartData(text);
+            cartData = parsed.cartData;
+            metaData = parsed.metaData;
         } catch {
             // cartData stays null; error shown in resolveCustomEditor
         }
-        const metaData = loadMetaData(uri.fsPath);
         return {
             uri,
             cartData,
@@ -630,7 +588,7 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
         suppressBreadcrumbs(webviewPanel);
 
         if (!document.cartData) {
-            webviewPanel.webview.html = getErrorHtml('Failed to parse .p8 file');
+            webviewPanel.webview.html = getErrorHtml('Failed to parse file');
             return;
         }
 
@@ -639,17 +597,51 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
 
     async saveCustomDocument(document: Pico8Document, _cancellation: vscode.CancellationToken): Promise<void> {
         if (!document.cartData) { return; }
-        saveDocumentAsP8(document, document.uri.fsPath);
+
+        // If the file is in temp storage (converted from .p8/.p8.png), prompt save dialog
+        const tempDir = path.join(this.context.globalStorageUri.fsPath, 'temp_p8mod');
+        if (document.uri.fsPath.startsWith(tempDir)) {
+            const baseName = path.basename(document.uri.fsPath);
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const defaultDir = workspaceFolders?.[0]?.uri.fsPath ?? path.dirname(document.uri.fsPath);
+            const defaultUri = vscode.Uri.file(path.join(defaultDir, baseName));
+
+            const destUri = await vscode.window.showSaveDialog({
+                defaultUri,
+                filters: { 'PICO-8 Mod': ['p8mod'] }
+            });
+            if (!destUri) { return; }
+
+            saveDocumentAsP8Mod(document, destUri.fsPath);
+            // Clean up temp file
+            try { fs.unlinkSync(document.uri.fsPath); } catch {}
+            // Open the saved file in the editor
+            await vscode.commands.executeCommand('vscode.openWith', destUri, Pico8P8EditorProvider.viewType);
+            return;
+        }
+
+        // Normal save: write directly to .p8mod
+        saveDocumentAsP8Mod(document, document.uri.fsPath);
     }
 
     async saveCustomDocumentAs(document: Pico8Document, destination: vscode.Uri, _cancellation: vscode.CancellationToken): Promise<void> {
-        saveDocumentAsP8(document, destination.fsPath);
+        if (destination.fsPath.endsWith('.p8mod')) {
+            saveDocumentAsP8Mod(document, destination.fsPath);
+        } else if (destination.fsPath.endsWith('.p8')) {
+            saveDocumentAsP8(document, destination.fsPath);
+        } else {
+            // Default to .p8mod
+            saveDocumentAsP8Mod(document, destination.fsPath);
+        }
     }
 
     async revertCustomDocument(document: Pico8Document, _cancellation: vscode.CancellationToken): Promise<void> {
         try {
             const text = fs.readFileSync(document.uri.fsPath, 'utf-8');
-            document.cartData = p8ToCartData(text);
+            const parsed = p8ModToCartData(text);
+            document.cartData = parsed.cartData;
+            document.metaData = parsed.metaData;
+            document.i18nData = parsed.metaData ? parsed.metaData.i18n : null;
             document.currentCode = null;
         } catch {
             // Keep existing data

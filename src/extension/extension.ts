@@ -6,8 +6,9 @@ import { DataManager, GameMetadata, ListInfo } from './dataManager';
 import { t } from './i18n';
 import { CartData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
-import { cartDataToP8 } from './p8format';
-import { Pico8PngEditorProvider, Pico8P8EditorProvider } from './cartEditorProvider';
+import { p8ToCartData } from './p8format';
+import { cartDataToP8Mod, blankP8Mod } from './p8modFormat';
+import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
 
@@ -998,7 +999,7 @@ export function activate(context: vscode.ExtensionContext) {
         stopRunningGame();
     });
 
-    // Fork Game command - copy database game into workspace as .p8
+    // Fork Game command - copy database game into workspace as .p8mod
     vscode.commands.registerCommand('pico8ide.forkGame', async (item?: ListGameItem) => {
         const locale = t();
         const game = item?.game ?? currentSelectedGame;
@@ -1015,34 +1016,58 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             const cartPath = await dataManager.getAssetPath(game, 'cart');
             const cartData = await Pico8Decoder.decode(cartPath);
-            const p8Content = cartDataToP8(cartData);
 
             // Sanitize game name for filename
             const safeName = game.name.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_').substring(0, 64);
-            const destPath = path.join(workspaceFolders[0].uri.fsPath, `${safeName}.p8`);
+            const defaultUri = vscode.Uri.file(
+                path.join(workspaceFolders[0].uri.fsPath, `${safeName}.p8mod`)
+            );
+            const destUri = await vscode.window.showSaveDialog({
+                defaultUri,
+                filters: { 'PICO-8 Mod': ['p8mod'] }
+            });
+            if (!destUri) { return; }
 
-            fs.writeFileSync(destPath, p8Content, 'utf-8');
+            const content = cartDataToP8Mod(cartData, null);
+            fs.writeFileSync(destUri.fsPath, content, 'utf-8');
             vscode.window.showInformationMessage(locale.forkSuccess);
-            const destUri = vscode.Uri.file(destPath);
             await vscode.commands.executeCommand('vscode.openWith', destUri, Pico8P8EditorProvider.viewType);
         } catch (e: any) {
             vscode.window.showErrorMessage(`${locale.error}: ${e.message}`);
         }
     });
 
-    // Preview .p8 Cart command - open .p8 file in the cart editor
-    vscode.commands.registerCommand('pico8ide.previewP8Cart', async (uri?: vscode.Uri) => {
-        if (!uri) {
-            const activeEditor = vscode.window.activeTextEditor;
-            if (activeEditor && activeEditor.document.fileName.endsWith('.p8')) {
-                uri = activeEditor.document.uri;
-            }
-        }
-        if (!uri) {
-            return;
-        }
+    // Open with PICO-8 IDE - convert .p8 or .p8.png to .p8mod in temp storage and open
+    vscode.commands.registerCommand('pico8ide.openWithP8IDE', async (uri?: vscode.Uri) => {
+        const locale = t();
+        if (!uri) { return; }
 
-        await vscode.commands.executeCommand('vscode.openWith', uri, Pico8P8EditorProvider.viewType);
+        try {
+            let cartData: CartData;
+            let metaData = null;
+
+            if (uri.fsPath.endsWith('.p8.png')) {
+                cartData = await Pico8Decoder.decode(uri.fsPath);
+                metaData = loadMetaData(uri.fsPath);
+            } else {
+                const text = fs.readFileSync(uri.fsPath, 'utf-8');
+                cartData = p8ToCartData(text);
+                metaData = loadMetaData(uri.fsPath);
+            }
+
+            // Write .p8mod to temp dir inside extension storage
+            const tempDir = path.join(context.globalStorageUri.fsPath, 'temp_p8mod');
+            fs.mkdirSync(tempDir, { recursive: true });
+            const baseName = path.basename(uri.fsPath).replace(/\.(p8\.png|p8)$/i, '');
+            const tempPath = path.join(tempDir, `${baseName}.p8mod`);
+            const content = cartDataToP8Mod(cartData, metaData);
+            fs.writeFileSync(tempPath, content, 'utf-8');
+
+            const tempUri = vscode.Uri.file(tempPath);
+            await vscode.commands.executeCommand('vscode.openWith', tempUri, Pico8P8EditorProvider.viewType);
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`${locale.error}: ${e.message}`);
+        }
     });
 
     // Use Text Editor for .p8 Files Command
@@ -1060,6 +1085,21 @@ export function activate(context: vscode.ExtensionContext) {
             delete updated['*.p8'];
             await config.update('editorAssociations', updated, vscode.ConfigurationTarget.Global);
         }
+    });
+
+    // New Mod Cartridge command
+    vscode.commands.registerCommand('pico8ide.newP8Mod', async () => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const defaultDir = workspaceFolders?.[0]?.uri;
+
+        const dest = await vscode.window.showSaveDialog({
+            defaultUri: defaultDir ? vscode.Uri.joinPath(defaultDir, 'untitled.p8mod') : undefined,
+            filters: { 'PICO-8 Mod Cartridge': ['p8mod'] }
+        });
+        if (!dest) { return; }
+
+        fs.writeFileSync(dest.fsPath, blankP8Mod(), 'utf-8');
+        await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
     });
 
     // Initial Load

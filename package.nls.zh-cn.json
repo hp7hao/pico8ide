@@ -10,7 +10,7 @@
   "command.runGame.title": "在 PICO-8 中运行",
   "command.stopGame.title": "停止 PICO-8",
   "command.forkGame.title": "复制到工作区",
-  "command.previewP8Cart.title": "预览 PICO-8 卡带",
+  "command.openWithP8IDE.title": "用 PICO-8 IDE 打开",
   "customEditor.pngViewer.displayName": "PICO-8 卡带查看器",
   "customEditor.p8Editor.displayName": "PICO-8 卡带编辑器",
   "config.title": "PICO-8 IDE",
@@ -20,5 +20,6 @@
   "config.language.description": "覆盖显示语言。留空则使用 VS Code 的语言设置。",
   "config.language.auto": "自动（使用 VS Code 语言）",
   "config.pico8Path.description": "PICO-8 可执行文件的绝对路径。macOS 上可以指向 .app 程序包。",
-  "command.useTextEditorForP8.title": "PICO-8: 使用文本编辑器打开 .p8 文件"
+  "command.useTextEditorForP8.title": "PICO-8: 使用文本编辑器打开 .p8 文件",
+  "command.newP8Mod.title": "PICO-8: 新建 Mod 卡带"
 }

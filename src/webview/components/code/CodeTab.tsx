@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useCartStore } from '../../store/cartStore';
 import { useUIStore } from '../../store/uiStore';
+import { getVscodeApi } from '../../vscodeApi';
 import type { LocaleStrings } from '../../types';
 
 interface CodeTabProps {
@@ -92,6 +93,11 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
                         setCode(editor.getValue());
                     });
                 }
+
+                // Signal to extension host that Monaco is ready and any initial
+                // change events have already fired. The extension uses this to
+                // start tracking dirty state.
+                getVscodeApi().postMessage({ type: 'ready' });
             });
         };
         document.head.appendChild(script);

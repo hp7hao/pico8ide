@@ -61,7 +61,7 @@
         "displayName": "%customEditor.p8Editor.displayName%",
         "selector": [
           {
-            "filenamePattern": "*.p8"
+            "filenamePattern": "*.p8mod"
           }
         ],
         "priority": "default"
@@ -127,12 +127,16 @@
         }
       },
       {
-        "command": "pico8ide.previewP8Cart",
-        "title": "%command.previewP8Cart.title%"
+        "command": "pico8ide.openWithP8IDE",
+        "title": "%command.openWithP8IDE.title%"
       },
       {
         "command": "pico8ide.useTextEditorForP8",
         "title": "%command.useTextEditorForP8.title%"
+      },
+      {
+        "command": "pico8ide.newP8Mod",
+        "title": "%command.newP8Mod.title%"
       }
     ],
     "menus": {
@@ -162,8 +166,13 @@
       ],
       "explorer/context": [
         {
-          "command": "pico8ide.previewP8Cart",
+          "command": "pico8ide.openWithP8IDE",
           "when": "resourceExtname == .p8",
+          "group": "navigation"
+        },
+        {
+          "command": "pico8ide.openWithP8IDE",
+          "when": "resourceExtname == .png && resourceFilename =~ /\\.p8\\.png$/",
           "group": "navigation"
         }
       ]
