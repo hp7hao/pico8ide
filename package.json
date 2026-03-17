@@ -136,11 +136,24 @@
       },
       {
         "command": "pico8ide.newP8Mod",
-        "title": "%command.newP8Mod.title%"
+        "title": "%command.newP8Mod.title%",
+        "icon": {
+          "light": "resources/light/new-file.svg",
+          "dark": "resources/dark/new-file.svg"
+        }
+      },
+      {
+        "command": "pico8ide.showI18nDemo",
+        "title": "%command.showI18nDemo.title%"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "pico8ide.newP8Mod",
+          "when": "view == pico8Lists",
+          "group": "navigation"
+        },
         {
           "command": "pico8ide.search",
           "when": "view == pico8Lists",

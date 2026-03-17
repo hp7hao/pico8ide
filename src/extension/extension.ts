@@ -7,10 +7,11 @@ import { t } from './i18n';
 import { CartData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
 import { p8ToCartData } from './p8format';
-import { cartDataToP8Mod, blankP8Mod } from './p8modFormat';
+import { cartDataToP8Mod, blankP8Mod, i18nDemoP8Mod } from './p8modFormat';
 import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
+import { LibManager } from './libManager';
 
 // Webview provider for game detail panel in sidebar
 class GameDetailViewProvider implements vscode.WebviewViewProvider {
@@ -738,6 +739,12 @@ export function activate(context: vscode.ExtensionContext) {
     const dataManager = new DataManager(context);
     dataManager.initialize();
 
+    // Initialize library manager
+    const libManager = new LibManager(context.extensionPath);
+    libManager.loadAll();
+    const libWatcher = libManager.startWatching();
+    context.subscriptions.push(libWatcher);
+
     const listsProvider = new Pico8ListsProvider(dataManager);
     const detailProvider = new GameDetailViewProvider(context.extensionUri, dataManager);
 
@@ -777,7 +784,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider(
             Pico8P8EditorProvider.viewType,
-            new Pico8P8EditorProvider(context),
+            new Pico8P8EditorProvider(context, libManager),
             { webviewOptions: { retainContextWhenHidden: true } }
         )
     );
@@ -1099,6 +1106,21 @@ export function activate(context: vscode.ExtensionContext) {
         if (!dest) { return; }
 
         fs.writeFileSync(dest.fsPath, blankP8Mod(), 'utf-8');
+        await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
+    });
+
+    // Show I18n Demo command
+    vscode.commands.registerCommand('pico8ide.showI18nDemo', async () => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const defaultDir = workspaceFolders?.[0]?.uri;
+
+        const dest = await vscode.window.showSaveDialog({
+            defaultUri: defaultDir ? vscode.Uri.joinPath(defaultDir, 'i18n_demo.p8mod') : undefined,
+            filters: { 'PICO-8 Mod Cartridge': ['p8mod'] }
+        });
+        if (!dest) { return; }
+
+        fs.writeFileSync(dest.fsPath, i18nDemoP8Mod(), 'utf-8');
         await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
     });
 

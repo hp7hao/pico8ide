@@ -1079,3 +1079,190 @@ input[type="text"] {
     border-color: var(--p8-accent);
     outline: none;
 }
+
+/* ---- Code Toolbar ---- */
+
+.code-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px;
+    background: var(--p8-bg-secondary);
+    border-bottom: 1px solid var(--p8-border);
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.code-toolbar-btn {
+    background: var(--p8-bg-surface);
+    color: var(--p8-text-secondary);
+    border: 1px solid var(--p8-border);
+    border-radius: var(--p8-radius-sm);
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--p8-transition-fast), color var(--p8-transition-fast);
+}
+
+.code-toolbar-btn:hover {
+    background: var(--p8-accent);
+    color: var(--p8-text-primary);
+}
+
+.code-toolbar-btn.active {
+    background: var(--p8-accent);
+    color: var(--p8-text-primary);
+}
+
+.code-toolbar-spacer {
+    flex: 1;
+}
+
+.code-toolbar-stat {
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+}
+
+.code-toolbar-lib-delta {
+    opacity: 0.6;
+    font-size: 10px;
+}
+
+.code-toolbar-i18n-delta {
+    opacity: 0.6;
+    font-size: 10px;
+}
+
+.token-green { color: #00e436; }
+.token-yellow { color: #ffec27; }
+.token-red { color: #ff004d; }
+
+/* ---- Library Picker Panel ---- */
+
+.lib-panel {
+    width: 260px;
+    min-width: 200px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    background: var(--p8-bg-secondary);
+    border-left: 1px solid var(--p8-border);
+    overflow: hidden;
+}
+
+.lib-panel-header {
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--p8-accent);
+    border-bottom: 1px solid var(--p8-border);
+    flex-shrink: 0;
+}
+
+.lib-search {
+    margin: 6px 8px;
+    padding: 4px 6px;
+    background: var(--p8-bg-surface);
+    border: 1px solid var(--p8-border);
+    border-radius: var(--p8-radius-sm);
+    color: #ccc;
+    font-size: 11px;
+    font-family: inherit;
+    flex-shrink: 0;
+}
+
+.lib-search:focus {
+    border-color: var(--p8-accent);
+    outline: none;
+}
+
+.lib-panel-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.lib-no-libs {
+    padding: 16px 10px;
+    color: var(--p8-text-secondary);
+    font-size: 11px;
+    text-align: center;
+}
+
+.lib-summary {
+    padding: 6px 10px;
+    font-size: 10px;
+    color: var(--p8-text-secondary);
+    border-top: 1px solid var(--p8-border);
+    flex-shrink: 0;
+}
+
+/* ---- Library Picker Item ---- */
+
+.lib-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background var(--p8-transition-fast);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.lib-item:hover {
+    background: var(--p8-bg-surface);
+}
+
+.lib-item-selected {
+    background: rgba(41, 173, 255, 0.1);
+}
+
+.lib-item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lib-item-header input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--p8-accent);
+}
+
+.lib-item-name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--p8-text-primary);
+    flex: 1;
+}
+
+.lib-item-tokens {
+    font-size: 10px;
+    color: var(--p8-text-secondary);
+    white-space: nowrap;
+}
+
+.lib-item-desc {
+    margin-top: 2px;
+    font-size: 10px;
+    color: var(--p8-text-secondary);
+    line-height: 1.3;
+}
+
+.lib-item-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+}
+
+.lib-tag {
+    display: inline-block;
+    background: rgba(255,255,255,0.1);
+    color: var(--p8-text-secondary);
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 9px;
+}
+
+.lib-tag-workspace {
+    background: rgba(0, 228, 54, 0.15);
+    color: #00e436;
+}

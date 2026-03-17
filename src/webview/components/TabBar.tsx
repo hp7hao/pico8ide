@@ -1,4 +1,7 @@
 import { useUIStore, type TabId } from '../store/uiStore';
+import { useMetaStore } from '../store/metaStore';
+import { useFontContext } from '../hooks/useFontContext';
+import { generateI18nLua } from '../utils/i18nCodegen';
 import { getVscodeApi } from '../vscodeApi';
 import type { LocaleStrings } from '../types';
 
@@ -47,11 +50,19 @@ export function TabBar({ locale }: TabBarProps) {
 }
 
 function RunButton({ locale, running }: { locale: LocaleStrings; running: boolean }) {
+    const { fontCtx } = useFontContext();
+
     const handleClick = () => {
         if (running) {
             getVscodeApi().postMessage({ type: 'stop' });
         } else {
-            getVscodeApi().postMessage({ type: 'run' });
+            // Generate i18n Lua code if i18n data is configured
+            const i18nData = useMetaStore.getState().i18nData;
+            let i18nLuaCode: string | null = null;
+            if (i18nData && i18nData.outputLocale) {
+                i18nLuaCode = generateI18nLua(i18nData.outputLocale, i18nData, fontCtx);
+            }
+            getVscodeApi().postMessage({ type: 'run', i18nLuaCode });
         }
     };
 

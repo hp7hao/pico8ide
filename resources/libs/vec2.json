@@ -1,0 +1,12 @@
+{
+    "id": "vec2",
+    "name": "Vec2 Math",
+    "description": "2D vector operations: add, sub, mul, len, normalize, dot, distance",
+    "author": "pico8ide",
+    "version": "1.0.0",
+    "tags": ["math", "utility"],
+    "depends": [],
+    "code": "function v2(x,y) return {x=x,y=y} end\nfunction v2add(a,b) return v2(a.x+b.x,a.y+b.y) end\nfunction v2sub(a,b) return v2(a.x-b.x,a.y-b.y) end\nfunction v2mul(a,s) return v2(a.x*s,a.y*s) end\nfunction v2len(a) return sqrt(a.x*a.x+a.y*a.y) end\nfunction v2norm(a) local l=v2len(a) if l==0 then return v2(0,0) end return v2(a.x/l,a.y/l) end\nfunction v2dot(a,b) return a.x*b.x+a.y*b.y end\nfunction v2dist(a,b) return v2len(v2sub(a,b)) end",
+    "tokenCount": 82,
+    "charCount": 340
+}

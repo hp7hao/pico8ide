@@ -1,7 +1,10 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useCartStore } from '../../store/cartStore';
 import { useUIStore } from '../../store/uiStore';
+import { useLibStore } from '../../store/libStore';
 import { getVscodeApi } from '../../vscodeApi';
+import { CodeToolbar } from './CodeToolbar';
+import { LibPicker } from './LibPicker';
 import type { LocaleStrings } from '../../types';
 
 interface CodeTabProps {
@@ -20,6 +23,7 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
     const code = useCartStore((s) => s.code);
     const setCode = useCartStore((s) => s.setCode);
     const activeTab = useUIStore((s) => s.activeTab);
+    const libPanelOpen = useLibStore((s) => s.libPanelOpen);
 
     // Layout Monaco when tab becomes active
     useEffect(() => {
@@ -128,11 +132,19 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
     }, []);
 
     return (
-        <div
-            id="monaco-container"
-            ref={containerRef}
-            style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
-        />
+        <>
+            <CodeToolbar locale={locale} editable={editable} />
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <div
+                    id="monaco-container"
+                    ref={containerRef}
+                    style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
+                />
+                {editable && libPanelOpen && (
+                    <LibPicker locale={locale} />
+                )}
+            </div>
+        </>
     );
 }
 

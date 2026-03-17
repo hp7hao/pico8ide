@@ -21,5 +21,6 @@
   "config.language.auto": "自动（使用 VS Code 语言）",
   "config.pico8Path.description": "PICO-8 可执行文件的绝对路径。macOS 上可以指向 .app 程序包。",
   "command.useTextEditorForP8.title": "PICO-8: 使用文本编辑器打开 .p8 文件",
-  "command.newP8Mod.title": "PICO-8: 新建 Mod 卡带"
+  "command.newP8Mod.title": "PICO-8: 新建 Mod 卡带",
+  "command.showI18nDemo.title": "PICO-8: 显示国际化演示"
 }

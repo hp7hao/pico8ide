@@ -60,7 +60,7 @@ describe('TabBar', () => {
         vi.spyOn(bridge, 'postMessage');
         render(<TabBar locale={locale} />);
         fireEvent.click(screen.getByText(/Run/));
-        expect(bridge.postMessage).toHaveBeenCalledWith({ type: 'run' });
+        expect(bridge.postMessage).toHaveBeenCalledWith({ type: 'run', i18nLuaCode: null });
         vi.restoreAllMocks();
     });
 

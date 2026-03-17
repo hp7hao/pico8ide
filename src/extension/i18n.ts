@@ -111,6 +111,15 @@ export interface LocaleStrings {
     exportLocaleVariant: string;
     exportAll: string;
     exportCodeTooLarge: string;
+
+    // Library picker
+    libPanelTitle: string;
+    libSearch: string;
+    libTokens: string;
+    libChars: string;
+    libNoLibs: string;
+    libSelected: string;
+    libTotalWithLibs: string;
 }
 
 const en: LocaleStrings = {
@@ -221,6 +230,15 @@ const en: LocaleStrings = {
     exportLocaleVariant: "Export",
     exportAll: "Export All",
     exportCodeTooLarge: "Code exceeds 15616 bytes limit",
+
+    // Library picker
+    libPanelTitle: "Libraries",
+    libSearch: "Search libraries...",
+    libTokens: "tokens",
+    libChars: "chars",
+    libNoLibs: "No libraries available",
+    libSelected: "Selected",
+    libTotalWithLibs: "With libs",
 };
 
 const zhCN: LocaleStrings = {
@@ -331,6 +349,15 @@ const zhCN: LocaleStrings = {
     exportLocaleVariant: "导出",
     exportAll: "全部导出",
     exportCodeTooLarge: "代码超过 15616 字节限制",
+
+    // Library picker
+    libPanelTitle: "代码库",
+    libSearch: "搜索代码库...",
+    libTokens: "令牌",
+    libChars: "字符",
+    libNoLibs: "没有可用的代码库",
+    libSelected: "已选择",
+    libTotalWithLibs: "含代码库",
 };
 
 // Locale map

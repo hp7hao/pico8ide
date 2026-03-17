@@ -1,5 +1,18 @@
 // Shared types for the webview, mirrored from extension
 
+export interface Pico8LibMeta {
+    id: string;
+    name: string;
+    description: string;
+    author: string;
+    version: string;
+    tags: string[];
+    depends?: string[];
+    tokenCount: number;
+    charCount: number;
+    source: 'bundled' | 'workspace';
+}
+
 export interface CartData {
     gfx: number[];
     map: number[];
@@ -125,6 +138,15 @@ export interface LocaleStrings {
     exportAll: string;
     exportCodeTooLarge: string;
 
+    // Library picker
+    libPanelTitle: string;
+    libSearch: string;
+    libTokens: string;
+    libChars: string;
+    libNoLibs: string;
+    libSelected: string;
+    libTotalWithLibs: string;
+
     // Catch-all for any additional locale keys
     [key: string]: string;
 }
@@ -164,6 +186,7 @@ export interface InitData {
     editorFontSize: number;
     editorFontFamily: string;
     editorLineHeight: number;
+    availableLibs: Pico8LibMeta[];
 }
 
 declare global {

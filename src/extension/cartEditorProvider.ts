@@ -10,6 +10,7 @@ import { cartDataToP8Mod, p8ModToCartData } from './p8modFormat';
 import { t } from './i18n';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
+import { LibManager } from './libManager';
 
 interface Pico8Document extends vscode.CustomDocument {
     uri: vscode.Uri;
@@ -64,7 +65,8 @@ function suppressBreadcrumbs(webviewPanel: vscode.WebviewPanel): vscode.Disposab
 function exportSingleCart(
     document: Pico8Document,
     message: any,
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
+    libManager?: LibManager
 ): string {
     if (!document.cartData) {
         throw new Error('No cart data');
@@ -77,6 +79,12 @@ function exportSingleCart(
 
     if (variant !== 'base' && message.i18nLuaCode) {
         finalCode = message.i18nLuaCode + '\n' + finalCode;
+    }
+
+    // Resolve library includes
+    if (libManager) {
+        const resolved = libManager.resolveIncludes(finalCode);
+        finalCode = resolved.resolvedCode;
     }
 
     // Assemble RAM (uses LZSS compression automatically for large code)
@@ -189,7 +197,8 @@ function setupEditableWebview(
     document: Pico8Document,
     webviewPanel: vscode.WebviewPanel,
     context: vscode.ExtensionContext,
-    onDidChange: vscode.EventEmitter<vscode.CustomDocumentEditEvent<Pico8Document>>
+    onDidChange: vscode.EventEmitter<vscode.CustomDocumentEditEvent<Pico8Document>>,
+    libManager?: LibManager
 ): void {
     const locale = t();
 
@@ -228,7 +237,7 @@ function setupEditableWebview(
                 } else {
                     runPath = document.uri.fsPath;
                 }
-                saveDocumentAsP8(document, runPath);
+                saveDocumentAsP8(document, runPath, libManager, message.i18nLuaCode);
                 await vscode.commands.executeCommand('pico8ide.runGame', runPath);
             }
         }
@@ -323,7 +332,7 @@ function setupEditableWebview(
                 if (!document.cartData) {
                     throw new Error('No cart data');
                 }
-                const outName = exportSingleCart(document, message, context);
+                const outName = exportSingleCart(document, message, context, libManager);
 
                 webviewPanel.webview.postMessage({
                     type: 'exportComplete',
@@ -351,7 +360,7 @@ function setupEditableWebview(
             const errors: string[] = [];
             for (const item of message.items) {
                 try {
-                    const outName = exportSingleCart(document, item, context);
+                    const outName = exportSingleCart(document, item, context, libManager);
                     results.push(outName);
                 } catch (e: any) {
                     errors.push(`${item.variant}: ${e.message}`);
@@ -377,7 +386,8 @@ function setupEditableWebview(
         editable: true,
         i18nData: document.i18nData,
         metaData: document.metaData,
-        templatePreviews
+        templatePreviews,
+        availableLibs: libManager?.getMetadataList(),
     });
 
     // Subscribe to shared run state so the button updates
@@ -387,9 +397,18 @@ function setupEditableWebview(
     webviewPanel.onDidDispose(() => runStateDisposable.dispose());
 }
 
-function saveDocumentAsP8(document: Pico8Document, destPath: string): void {
+function saveDocumentAsP8(document: Pico8Document, destPath: string, libManager?: LibManager, i18nLuaCode?: string | null): void {
     if (!document.cartData) { return; }
-    const code = document.currentCode ?? document.cartData.code;
+    let code = document.currentCode ?? document.cartData.code;
+    // Prepend i18n runtime code if provided
+    if (i18nLuaCode) {
+        code = i18nLuaCode + '\n' + code;
+    }
+    // Resolve library includes for .p8 output (run/export)
+    if (libManager) {
+        const resolved = libManager.resolveIncludes(code);
+        code = resolved.resolvedCode;
+    }
     const saveData = { ...document.cartData, code };
     const p8Content = cartDataToP8(saveData);
     fs.writeFileSync(destPath, p8Content, 'utf-8');
@@ -571,7 +590,8 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
     public readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
 
     constructor(
-        private readonly context: vscode.ExtensionContext
+        private readonly context: vscode.ExtensionContext,
+        private readonly libManager?: LibManager
     ) {}
 
     async openCustomDocument(
@@ -613,7 +633,7 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
             return;
         }
 
-        setupEditableWebview(document, webviewPanel, this.context, this._onDidChangeCustomDocument);
+        setupEditableWebview(document, webviewPanel, this.context, this._onDidChangeCustomDocument, this.libManager);
     }
 
     async saveCustomDocument(document: Pico8Document, _cancellation: vscode.CancellationToken): Promise<void> {

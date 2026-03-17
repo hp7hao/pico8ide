@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { CartData, PICO8_PALETTE, MetaData } from './cartData';
 import { LocaleStrings } from './i18n';
+import type { Pico8LibMeta } from './libTypes';
 
 export interface CartViewerOptions {
     cartData: CartData;
@@ -15,6 +16,7 @@ export interface CartViewerOptions {
     i18nData?: object | null;
     metaData?: MetaData | null;
     templatePreviews?: { [name: string]: string };
+    availableLibs?: Pico8LibMeta[];
 }
 
 function getNonce(): string {
@@ -27,7 +29,7 @@ function getNonce(): string {
 }
 
 export function generateCartViewerHtml(options: CartViewerOptions): string {
-    const { cartData, locale, extensionUri, webview, gameName, showRunButton, showAudio, editable, i18nData, metaData, templatePreviews } = options;
+    const { cartData, locale, extensionUri, webview, gameName, showRunButton, showAudio, editable, i18nData, metaData, templatePreviews, availableLibs } = options;
 
     const nonce = getNonce();
 
@@ -70,6 +72,7 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
         editorFontSize,
         editorFontFamily,
         editorLineHeight,
+        availableLibs: availableLibs || [],
     };
 
     return `<!DOCTYPE html>

@@ -4,16 +4,22 @@ import { TabContainer } from './components/TabContainer';
 import { useUIStore } from './store/uiStore';
 import { useCartStore } from './store/cartStore';
 import { useMetaStore } from './store/metaStore';
+import { useLibStore } from './store/libStore';
 import { useVscodeMessage } from './hooks/useVscodeMessaging';
+import { useFontLoader, FontCtxContext } from './hooks/useFontContext';
 import type { InitData } from './types';
 
 export function App() {
     const initData = window.__INIT_DATA__;
+    const font = useFontLoader(initData.fontUri);
 
     // Handle messages from extension host
     const handleMessage = useCallback((msg: any) => {
         if (msg.type === 'runState') {
             useUIStore.getState().setPico8Running(msg.running);
+        }
+        if (msg.type === 'libsUpdated') {
+            useLibStore.getState().setAvailableLibs(msg.libs);
         }
         if (msg.type === 'restoreState') {
             const cart = useCartStore.getState();
@@ -34,16 +40,18 @@ export function App() {
     useVscodeMessage(handleMessage);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-            <TabBar locale={initData.locale} />
-            <TabContainer
-                locale={initData.locale}
-                monacoBaseUri={initData.monacoBaseUri}
-                fontUri={initData.fontUri}
-                editorFontSize={initData.editorFontSize}
-                editorFontFamily={initData.editorFontFamily}
-                editorLineHeight={initData.editorLineHeight}
-            />
-        </div>
+        <FontCtxContext.Provider value={font}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <TabBar locale={initData.locale} />
+                <TabContainer
+                    locale={initData.locale}
+                    monacoBaseUri={initData.monacoBaseUri}
+                    fontUri={initData.fontUri}
+                    editorFontSize={initData.editorFontSize}
+                    editorFontFamily={initData.editorFontFamily}
+                    editorLineHeight={initData.editorLineHeight}
+                />
+            </div>
+        </FontCtxContext.Provider>
     );
 }

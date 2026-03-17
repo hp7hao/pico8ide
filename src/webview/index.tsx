@@ -3,6 +3,7 @@ import { App } from './App';
 import { useCartStore } from './store/cartStore';
 import { useUIStore } from './store/uiStore';
 import { useMetaStore } from './store/metaStore';
+import { useLibStore } from './store/libStore';
 import { PICO8_PALETTE } from './types';
 import './styles/global.css';
 
@@ -39,6 +40,10 @@ if (initData) {
         });
     } else if (i18nData) {
         useMetaStore.setState({ i18nData });
+    }
+
+    if (initData.availableLibs) {
+        useLibStore.setState({ availableLibs: initData.availableLibs });
     }
 }
 
