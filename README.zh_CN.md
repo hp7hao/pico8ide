@@ -21,6 +21,22 @@
 
 安装后，点击活动栏中的 PICO-8 图标即可打开游戏浏览器。游戏数据来自定期更新的数据库。
 
+## VS Code 命令
+
+扩展提供以下命令：
+
+- `pico8ide.search` — Search
+- `pico8ide.openCart` — Open Cartridge
+- `pico8ide.refreshEntry` — Refresh
+- `pico8ide.setPico8Path` — Set PICO-8 Path
+- `pico8ide.runGame` — Run in PICO-8
+- `pico8ide.stopGame` — Stop PICO-8
+- `pico8ide.forkGame` — Fork to Workspace
+- `pico8ide.openWithP8IDE` — Open with PICO-8 IDE
+- `pico8ide.useTextEditorForP8` — PICO-8: Use Text Editor for .p8 Files
+- `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
+- `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
+
 ## 创建你自己的游戏列表
 
 本扩展支持由 [fcdb](https://github.com/hp7hao/fcdb) 项目驱动的精选游戏列表。你可以创建自己的列表并贡献到数据库中。

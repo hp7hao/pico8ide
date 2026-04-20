@@ -21,6 +21,22 @@ A VS Code extension for browsing and playing PICO-8 games.
 
 After installing, click the PICO-8 icon in the Activity Bar to open the game browser. Games are loaded from a regularly updated database.
 
+## VS Code Commands
+
+The extension contributes these commands:
+
+- `pico8ide.search` — Search
+- `pico8ide.openCart` — Open Cartridge
+- `pico8ide.refreshEntry` — Refresh
+- `pico8ide.setPico8Path` — Set PICO-8 Path
+- `pico8ide.runGame` — Run in PICO-8
+- `pico8ide.stopGame` — Stop PICO-8
+- `pico8ide.forkGame` — Fork to Workspace
+- `pico8ide.openWithP8IDE` — Open with PICO-8 IDE
+- `pico8ide.useTextEditorForP8` — PICO-8: Use Text Editor for .p8 Files
+- `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
+- `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
+
 ## Create Your Own Game List
 
 The extension supports curated game lists powered by the [fcdb](https://github.com/hp7hao/fcdb) project. You can create your own list and contribute it to the database.

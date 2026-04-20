@@ -2,7 +2,7 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "0.0.7",
+  "version": "1.0.0",
   "publisher": "hp7hao",
   "license": "MIT",
   "icon": "resources/logo.png",
@@ -212,7 +212,7 @@
         },
         "pico8ide.remoteUrl": {
           "type": "string",
-          "default": "https://github.com/hp7hao/fcdb/releases/latest/download/fcdb_pico8.zip",
+          "default": "https://github.com/hp7hao/fcdb/releases/download/pico8-latest/fcdb_pico8.zip",
           "description": "%config.remoteUrl.description%"
         },
         "pico8ide.localPath": {

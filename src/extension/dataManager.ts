@@ -143,7 +143,7 @@ export class DataManager {
         }
 
         // Remote mode: Load cached first, then check for updates
-        const remoteUrl = vscode.workspace.getConfiguration('pico8ide').get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/latest/download/fcdb_pico8.zip';
+        const remoteUrl = vscode.workspace.getConfiguration('pico8ide').get<string>('remoteUrl') || 'https://github.com/hp7hao/fcdb/releases/download/pico8-latest/fcdb_pico8.zip';
 
         // 1. Try to load cached database first
         let cachedGames: GameMetadata[] = [];
@@ -249,19 +249,34 @@ export class DataManager {
     private async checkForUpdates(remoteUrl: string): Promise<void> {
         try {
             // Get current metadata
-            let currentMeta: { etag?: string; lastModified?: string; gameCount?: number } = {};
+            let currentMeta: {
+                etag?: string;
+                lastModified?: string;
+                gameCount?: number;
+                githubAssetId?: number;
+                githubAssetUpdatedAt?: string;
+            } = {};
             if (fs.existsSync(this.dbMetaPath)) {
                 currentMeta = JSON.parse(fs.readFileSync(this.dbMetaPath, 'utf8'));
             }
 
-            // Check remote headers
-            const headers = await this.getRemoteHeaders(remoteUrl);
-            const remoteEtag = headers['etag'];
-            const remoteLastModified = headers['last-modified'];
+            // Prefer GitHub release asset metadata when URL points to GitHub release download.
+            // HEAD headers on redirected CDN URLs can be unstable for change detection.
+            const githubAsset = await this.getGithubReleaseAssetMeta(remoteUrl);
 
-            // Compare versions
-            const hasNewVersion = (remoteEtag && remoteEtag !== currentMeta.etag) ||
-                                  (remoteLastModified && remoteLastModified !== currentMeta.lastModified);
+            let hasNewVersion = false;
+            if (githubAsset) {
+                hasNewVersion =
+                    (typeof githubAsset.id === 'number' && githubAsset.id !== currentMeta.githubAssetId) ||
+                    (typeof githubAsset.updatedAt === 'string' && githubAsset.updatedAt !== currentMeta.githubAssetUpdatedAt);
+            } else {
+                // Fallback: compare remote headers
+                const headers = await this.getRemoteHeaders(remoteUrl);
+                const remoteEtag = headers['etag'];
+                const remoteLastModified = headers['last-modified'];
+                hasNewVersion = (!!remoteEtag && remoteEtag !== currentMeta.etag) ||
+                                (!!remoteLastModified && remoteLastModified !== currentMeta.lastModified);
+            }
 
             if (hasNewVersion) {
                 console.log('[DataManager] New database version available');
@@ -325,10 +340,13 @@ export class DataManager {
 
             // Save metadata
             const headers = await this.getRemoteHeaders(remoteUrl);
+            const githubAsset = await this.getGithubReleaseAssetMeta(remoteUrl);
             const meta = {
                 platform: 'pico8',
                 etag: headers['etag'],
                 lastModified: headers['last-modified'],
+                githubAssetId: githubAsset?.id,
+                githubAssetUpdatedAt: githubAsset?.updatedAt,
                 gameCount: games.length,
                 downloadedAt: new Date().toISOString()
             };
@@ -371,6 +389,75 @@ export class DataManager {
         });
     }
 
+    private parseGithubReleaseDownload(url: string): { owner: string; repo: string; tag: string; assetName: string } | null {
+        try {
+            const parsed = new URL(url);
+            if (parsed.hostname !== 'github.com') return null;
+
+            // /{owner}/{repo}/releases/download/{tag}/{asset}
+            const parts = parsed.pathname.split('/').filter(Boolean);
+            if (parts.length < 6) return null;
+            if (parts[2] !== 'releases' || parts[3] !== 'download') return null;
+
+            return {
+                owner: parts[0],
+                repo: parts[1],
+                tag: parts[4],
+                assetName: parts.slice(5).join('/')
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private getGithubReleaseAssetMeta(url: string): Promise<{ id: number; updatedAt: string } | null> {
+        const info = this.parseGithubReleaseDownload(url);
+        if (!info) return Promise.resolve(null);
+
+        return new Promise((resolve) => {
+            const apiUrl = `https://api.github.com/repos/${info.owner}/${info.repo}/releases/tags/${encodeURIComponent(info.tag)}`;
+            const options = {
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 PICO-8 IDE Extension',
+                    'Accept': 'application/vnd.github+json'
+                }
+            };
+
+            const req = https.request(apiUrl, options, (res) => {
+                let body = '';
+                res.on('data', chunk => body += chunk.toString());
+                res.on('end', () => {
+                    if (res.statusCode !== 200) {
+                        resolve(null);
+                        return;
+                    }
+
+                    try {
+                        const json = JSON.parse(body) as {
+                            assets?: Array<{ id?: number; name?: string; updated_at?: string }>;
+                        };
+                        const asset = json.assets?.find(a => a.name === info.assetName);
+                        if (!asset || typeof asset.id !== 'number' || typeof asset.updated_at !== 'string') {
+                            resolve(null);
+                            return;
+                        }
+
+                        resolve({
+                            id: asset.id,
+                            updatedAt: asset.updated_at
+                        });
+                    } catch {
+                        resolve(null);
+                    }
+                });
+            });
+
+            req.on('error', () => resolve(null));
+            req.end();
+        });
+    }
+
     public async getAssetPath(game: GameMetadata, type: 'cart' | 'thumb'): Promise<string> {
         const mode = this.getDataMode();
 
@@ -397,18 +484,18 @@ export class DataManager {
              // Local file not found — fall through to download
         }
 
-        // Check extracted bundle for custom source assets (from ZIP)
+        // Check extracted bundle for non-BBS source assets (from ZIP)
         const source = game.source || 'bbs';
-        if (source === 'custom') {
+        if (source !== 'bbs') {
             const subDir = type === 'cart' ? 'carts' : 'thumbs';
             if (type === 'cart') {
                 const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
-                const bundlePath = path.join(this.extractDir, subDir, 'custom', cartFile);
+                const bundlePath = path.join(this.extractDir, subDir, source, cartFile);
                 if (fs.existsSync(bundlePath)) {
                     return bundlePath;
                 }
             } else {
-                const bundlePath = path.join(this.extractDir, subDir, 'custom', `${game.id}.png`);
+                const bundlePath = path.join(this.extractDir, subDir, source, `${game.id}.png`);
                 if (fs.existsSync(bundlePath)) {
                     return bundlePath;
                 }
@@ -433,8 +520,8 @@ export class DataManager {
             let sourceUrl = '';
             const thumbnailPath = game.extension.thumbnail_path || '';
 
-            // For custom source: use cart_url directly
-            if (source === 'custom' && game.extension.cart_url) {
+            // For non-BBS sources: use cart_url directly if available
+            if (game.extension.cart_url) {
                 sourceUrl = game.extension.cart_url;
             } else {
                 // BBS logic
