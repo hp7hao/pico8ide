@@ -95,15 +95,19 @@ export class DataManager {
     }
 
     private getDataMode(): string {
+        const config = vscode.workspace.getConfiguration('pico8ide');
+        const forceRemoteInDev = config.get<boolean>('forceRemoteInDev') || false;
+
         // Auto-detect development mode: if running via F5, use local if sibling fcdb exists
-        if (this.context.extensionMode === vscode.ExtensionMode.Development) {
+        // unless forceRemoteInDev is enabled.
+        if (this.context.extensionMode === vscode.ExtensionMode.Development && !forceRemoteInDev) {
             const extPath = this.context.extensionPath;
             const siblingDb = path.join(extPath, '..', 'fcdb', 'dist', 'pico8', 'db.json');
             if (fs.existsSync(siblingDb)) {
                 return 'local';
             }
         }
-        const config = vscode.workspace.getConfiguration('pico8ide');
+
         return config.get<string>('dataMode') || 'remote';
     }
 
@@ -384,6 +388,10 @@ export class DataManager {
                 resolve(headers);
             });
 
+            req.setTimeout(10000, () => {
+                req.destroy(new Error(`Request timed out for ${url}`));
+            });
+
             req.on('error', reject);
             req.end();
         });
@@ -451,6 +459,11 @@ export class DataManager {
                         resolve(null);
                     }
                 });
+            });
+
+            req.setTimeout(10000, () => {
+                req.destroy();
+                resolve(null);
             });
 
             req.on('error', () => resolve(null));

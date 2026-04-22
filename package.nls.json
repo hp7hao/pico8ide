@@ -15,6 +15,7 @@
   "customEditor.p8Editor.displayName": "PICO-8 Cart Editor",
   "config.title": "PICO-8 IDE",
   "config.dataMode.description": "Source of game data: 'remote' (download from URL) or 'local' (read from directory).",
+  "config.forceRemoteInDev.description": "When debugging the extension (F5), force remote mode instead of auto-using sibling fcdb local data.",
   "config.remoteUrl.description": "URL to the master database JSON file (used in remote mode).",
   "config.localPath.description": "Absolute path to the local FCDB distribution directory e.g., /path/to/fcdb/dist/pico8 (used in local mode).",
   "config.language.description": "Override display language. Leave empty to use VS Code's language setting.",

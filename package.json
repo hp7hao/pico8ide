@@ -2,7 +2,7 @@
   "name": "pico8ide",
   "displayName": "PICO-8 IDE",
   "description": "%extension.description%",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "hp7hao",
   "license": "MIT",
   "icon": "resources/logo.png",
@@ -17,6 +17,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onView:pico8Lists",
     "onCustomEditor:pico8ide.pngViewer",
     "onCustomEditor:pico8ide.p8Editor"
   ],
@@ -209,6 +210,11 @@
           ],
           "default": "remote",
           "description": "%config.dataMode.description%"
+        },
+        "pico8ide.forceRemoteInDev": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.forceRemoteInDev.description%"
         },
         "pico8ide.remoteUrl": {
           "type": "string",

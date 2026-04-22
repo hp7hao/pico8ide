@@ -15,6 +15,7 @@
   "customEditor.p8Editor.displayName": "PICO-8 卡带编辑器",
   "config.title": "PICO-8 IDE",
   "config.dataMode.description": "游戏数据来源：'remote'（从网络下载）或 'local'（从本地读取）。",
+  "config.forceRemoteInDev.description": "在 F5 调试扩展时，强制使用远程模式，而不是自动使用同级 fcdb 本地数据。",
   "config.remoteUrl.description": "主数据库 JSON 文件的 URL（远程模式使用）。",
   "config.localPath.description": "本地 FCDB 分发目录的绝对路径，例如 /path/to/fcdb/dist/pico8（本地模式使用）。",
   "config.language.description": "覆盖显示语言。留空则使用 VS Code 的语言设置。",
