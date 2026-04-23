@@ -4,9 +4,9 @@ import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { DataManager, GameMetadata, ListInfo } from './dataManager';
 import { t } from './i18n';
-import { CartData } from './cartData';
+import { CartData, MetaData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
-import { p8ToCartData } from './p8format';
+import { cartDataToP8, p8ToCartData } from './p8format';
 import { cartDataToP8Mod, p8ModToCartData, blankP8Mod, i18nDemoP8Mod } from './p8modFormat';
 import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
@@ -554,8 +554,8 @@ class Pico8CartPanel {
         this._panel.webview.html = this._getErrorHtml(this._game, error);
     }
 
-    public showCart(cartData: CartData) {
-        this._panel.webview.html = this._getCartHtml(this._game, cartData);
+    public showCart(cartData: CartData, metaData?: MetaData | null) {
+        this._panel.webview.html = this._getCartHtml(this._game, cartData, metaData);
     }
 
     public dispose() {
@@ -625,7 +625,7 @@ class Pico8CartPanel {
             </html>`;
     }
 
-    private _getCartHtml(game: GameMetadata, cartData: CartData) {
+    private _getCartHtml(game: GameMetadata, cartData: CartData, metaData?: MetaData | null) {
         const locale = t();
         return generateCartViewerHtml({
             cartData,
@@ -635,7 +635,9 @@ class Pico8CartPanel {
             gameName: game.name,
             showRunButton: true,
             showAudio: true,
-            editable: false
+            editable: false,
+            i18nData: metaData?.i18n || null,
+            metaData: metaData || null
         });
     }
 }
@@ -879,10 +881,12 @@ export function activate(context: vscode.ExtensionContext) {
 
             panel.updateProgress(locale.extracting);
             let cartData;
+            let metaData: MetaData | null = null;
             if (cartPath.endsWith('.p8mod')) {
                 const text = fs.readFileSync(cartPath, 'utf-8');
                 const parsed = p8ModToCartData(text);
                 cartData = parsed.cartData;
+                metaData = parsed.metaData;
             } else {
                 cartData = await Pico8Decoder.decode(cartPath);
             }
@@ -891,7 +895,7 @@ export function activate(context: vscode.ExtensionContext) {
             detailProvider.updateCartInfo(game, cartData.code.length, cartData.label);
 
             // Show the cart content
-            panel.showCart(cartData);
+            panel.showCart(cartData, metaData);
         } catch (e: any) {
             panel.showError(e.message || 'Unknown error');
         }
@@ -948,9 +952,26 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-            const cartPath = typeof gameOrPath === 'string'
+            let cartPath = typeof gameOrPath === 'string'
                 ? gameOrPath
                 : await dataManager.getAssetPath(gameOrPath, 'cart');
+
+            if (cartPath.endsWith('.p8mod')) {
+                const text = fs.readFileSync(cartPath, 'utf-8');
+                const parsed = p8ModToCartData(text);
+                const stubs = 'function _txi() end\nfunction tx(k,x,y,c) print(k,x,y,c) end\nfunction txw(k) return #k*4 end\n';
+                parsed.cartData.code = stubs + parsed.cartData.code;
+                const p8Content = cartDataToP8(parsed.cartData);
+                const tempDir = path.join(context.globalStorageUri.fsPath, 'temp_run');
+                if (!fs.existsSync(tempDir)) {
+                    fs.mkdirSync(tempDir, { recursive: true });
+                }
+                const baseName = path.basename(cartPath, '.p8mod');
+                const tempPath = path.join(tempDir, `${baseName}.p8`);
+                fs.writeFileSync(tempPath, p8Content);
+                cartPath = tempPath;
+            }
+
             const child = spawn(pico8Path, ['-run', cartPath], {
                 detached: true,
                 stdio: 'ignore'

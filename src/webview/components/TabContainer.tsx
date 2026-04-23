@@ -1,4 +1,5 @@
 import { useUIStore } from '../store/uiStore';
+import { useMetaStore } from '../store/metaStore';
 import { CodeTab } from './code/CodeTab';
 import { SpriteTab } from './sprites/SpriteTab';
 import { MapTab } from './map/MapTab';
@@ -28,6 +29,8 @@ const tabStyle = (active: boolean): React.CSSProperties => ({
 export function TabContainer(props: TabContainerProps) {
     const activeTab = useUIStore((s) => s.activeTab);
     const editable = useUIStore((s) => s.editable);
+    const i18nData = useMetaStore((s) => s.i18nData);
+    const hasI18n = !!(i18nData && (i18nData.locales.length > 0 || i18nData.entries.length > 0));
 
     return (
         <div className="tab-content">
@@ -53,15 +56,15 @@ export function TabContainer(props: TabContainerProps) {
             <div style={tabStyle(activeTab === 'music')}>
                 <MusicTab locale={props.locale} />
             </div>
+            {(editable || hasI18n) && (
+                <div style={tabStyle(activeTab === 'i18n')}>
+                    <I18nTab locale={props.locale} fontUri={props.fontUri} />
+                </div>
+            )}
             {editable && (
-                <>
-                    <div style={tabStyle(activeTab === 'i18n')}>
-                        <I18nTab locale={props.locale} fontUri={props.fontUri} />
-                    </div>
-                    <div style={tabStyle(activeTab === 'export')}>
-                        <ExportTab locale={props.locale} />
-                    </div>
-                </>
+                <div style={tabStyle(activeTab === 'export')}>
+                    <ExportTab locale={props.locale} />
+                </div>
             )}
         </div>
     );

@@ -9,13 +9,13 @@ interface TabBarProps {
     locale: LocaleStrings;
 }
 
-const TAB_DEFS: { id: TabId; localeKey: keyof LocaleStrings; editableOnly?: boolean }[] = [
+const TAB_DEFS: { id: TabId; localeKey: keyof LocaleStrings; editableOnly?: boolean; i18nOnly?: boolean }[] = [
     { id: 'code', localeKey: 'tabCode' },
     { id: 'sprites', localeKey: 'tabSprites' },
     { id: 'map', localeKey: 'tabMap' },
     { id: 'sfx', localeKey: 'tabSfx' },
     { id: 'music', localeKey: 'tabMusic' },
-    { id: 'i18n', localeKey: 'tabI18n', editableOnly: true },
+    { id: 'i18n', localeKey: 'tabI18n', i18nOnly: true },
     { id: 'export', localeKey: 'tabExport', editableOnly: true },
 ];
 
@@ -25,8 +25,14 @@ export function TabBar({ locale }: TabBarProps) {
     const setActiveTab = useUIStore((s) => s.setActiveTab);
     const showRunButton = useUIStore((s) => s.showRunButton);
     const pico8Running = useUIStore((s) => s.pico8Running);
+    const i18nData = useMetaStore((s) => s.i18nData);
+    const hasI18n = !!(i18nData && (i18nData.locales.length > 0 || i18nData.entries.length > 0));
 
-    const visibleTabs = TAB_DEFS.filter((t) => !t.editableOnly || editable);
+    const visibleTabs = TAB_DEFS.filter((t) => {
+        if (t.editableOnly && !editable) return false;
+        if (t.i18nOnly && !editable && !hasI18n) return false;
+        return true;
+    });
 
     return (
         <div className="tab-header">
