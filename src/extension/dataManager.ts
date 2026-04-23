@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import AdmZip = require('adm-zip');
+import { log, logError } from './log';
 
 export interface GameMetadata {
     id: string;
@@ -139,7 +140,7 @@ export class DataManager {
                      const data = fs.readFileSync(dbPath, 'utf8');
                      return JSON.parse(data);
                  } catch (e) {
-                     console.error("Error reading local DB", e);
+                     logError("Error reading local DB", e);
                      return [];
                  }
             }
@@ -155,9 +156,9 @@ export class DataManager {
             try {
                 const data = fs.readFileSync(this.cachedDbPath, 'utf8');
                 cachedGames = JSON.parse(data);
-                console.log(`[DataManager] Loaded ${cachedGames.length} games from cache`);
+                log(`Loaded ${cachedGames.length} games from cache`);
             } catch (e) {
-                console.error("Error reading cached DB", e);
+                logError("Error reading cached DB", e);
             }
         }
 
@@ -237,7 +238,7 @@ export class DataManager {
                     results.push({ name: basename, order: 0, filename: file, games: parsed as GameMetadata[] });
                 }
             } catch (e) {
-                console.error(`Error reading list ${file}`, e);
+                logError(`Error reading list ${file}`, e);
             }
         }
 
@@ -283,7 +284,7 @@ export class DataManager {
             }
 
             if (hasNewVersion) {
-                console.log('[DataManager] New database version available');
+                log('New database version available');
 
                 const choice = await vscode.window.showInformationMessage(
                     'A new PICO-8 game database is available. Update now?',
@@ -308,10 +309,10 @@ export class DataManager {
                     }
                 }
             } else {
-                console.log('[DataManager] Database is up to date');
+                log('Database is up to date');
             }
         } catch (e) {
-            console.warn('[DataManager] Failed to check for updates:', e);
+            logError('Failed to check for updates', e);
         }
     }
 
@@ -356,7 +357,7 @@ export class DataManager {
             };
             fs.writeFileSync(this.dbMetaPath, JSON.stringify(meta, null, 2));
 
-            console.log(`[DataManager] Extracted bundle: ${games.length} games`);
+            log(`Extracted bundle: ${games.length} games`);
         } finally {
             // Remove temp file
             if (fs.existsSync(tempPath)) {
@@ -545,11 +546,11 @@ export class DataManager {
             }
 
             try {
-                console.log(`[DataManager] Downloading cart from: ${sourceUrl}`);
+                log(`Downloading cart from: ${sourceUrl}`);
                 await this.downloadFile(sourceUrl, filePath);
                 return filePath;
             } catch (e: any) {
-                console.error(`Failed to download cart: ${sourceUrl}, Error: ${e.message}`);
+                logError(`Failed to download cart: ${sourceUrl}`, e);
                 throw new Error(`Failed to download cart from ${sourceUrl}. Reason: ${e.message}`);
             }
         } else {
@@ -570,11 +571,11 @@ export class DataManager {
             }
 
             try {
-                console.log(`[DataManager] Downloading thumb from: ${sourceUrl}`);
+                log(`Downloading thumb from: ${sourceUrl}`);
                 await this.downloadFile(sourceUrl, filePath);
                 return filePath;
             } catch (e: any) {
-                console.error(`Failed to download thumb: ${sourceUrl}, Error: ${e.message}`);
+                logError(`Failed to download thumb: ${sourceUrl}`, e);
                 throw new Error(`Failed to download thumb from ${sourceUrl}. Reason: ${e.message}`);
             }
         }
@@ -600,7 +601,7 @@ export class DataManager {
         // Remove data URL prefix: "data:image/png;base64,"
         const base64Data = base64DataUrl.replace(/^data:image\/png;base64,/, '');
         fs.writeFileSync(thumbPath, Buffer.from(base64Data, 'base64'));
-        console.log(`[DataManager] Saved extracted thumbnail: ${thumbPath}`);
+        log(`Saved extracted thumbnail: ${thumbPath}`);
     }
 
     // Load extracted thumbnail as data URL
@@ -666,7 +667,7 @@ export class DataManager {
 
     private downloadFile(url: string, destPath: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            console.log(`[DataManager] Starting download: ${url} -> ${destPath}`);
+            log(`Starting download: ${url} -> ${destPath}`);
             const file = fs.createWriteStream(destPath);
             const options = {
                 headers: {
@@ -677,7 +678,7 @@ export class DataManager {
             };
 
             const request = https.get(url, options, (response) => {
-                console.log(`[DataManager] Response status: ${response.statusCode} for ${url}`);
+                log(`Response status: ${response.statusCode} for ${url}`);
 
                 // Determine redirect URL properly
                 if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
@@ -691,7 +692,7 @@ export class DataManager {
                              const u = new URL(url);
                              redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
                          }
-                         console.log(`[DataManager] Redirecting to: ${redirectUrl}`);
+                         log(`Redirecting to: ${redirectUrl}`);
 
                          this.downloadFile(redirectUrl, destPath)
                             .then(resolve)
@@ -711,7 +712,7 @@ export class DataManager {
 
                 file.on('finish', () => {
                     file.close();
-                    console.log(`[DataManager] Download complete: ${destPath}`);
+                    log(`Download complete: ${destPath}`);
                     resolve();
                 });
             });
@@ -723,13 +724,13 @@ export class DataManager {
             });
 
             request.on('error', (err) => {
-                console.error(`[DataManager] Request error: ${err.message}`);
+                logError(`Request error: ${err.message}`);
                 fs.unlink(destPath, () => {});
                 reject(err);
             });
 
             file.on('error', (err) => {
-                 console.error(`[DataManager] File write error: ${err.message}`);
+                 logError(`File write error: ${err.message}`);
                  fs.unlink(destPath, () => {});
                  reject(err);
             });

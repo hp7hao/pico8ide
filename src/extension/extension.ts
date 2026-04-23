@@ -12,6 +12,7 @@ import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './c
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
 import { LibManager } from './libManager';
+import { log, logError } from './log';
 
 // Webview provider for game detail panel in sidebar
 class GameDetailViewProvider implements vscode.WebviewViewProvider {
@@ -732,21 +733,28 @@ function showDisclaimer(context: vscode.ExtensionContext) {
 
 
 export function activate(context: vscode.ExtensionContext) {
+  try {
+    log('Activating PICO-8 IDE extension...');
+
     // Show disclaimer on every activation
     showDisclaimer(context);
 
     const locale = t();
+    log('Creating DataManager...');
     const dataManager = new DataManager(context);
     dataManager.initialize();
+    log('DataManager initialized');
 
     // Initialize library manager
     const libManager = new LibManager(context.extensionPath);
     libManager.loadAll();
     const libWatcher = libManager.startWatching();
     context.subscriptions.push(libWatcher);
+    log('LibManager initialized');
 
     const listsProvider = new Pico8ListsProvider(dataManager);
     const detailProvider = new GameDetailViewProvider(context.extensionUri, dataManager);
+    log('Providers created');
 
     // Set callback to refresh game list when database is updated
     dataManager.setUpdateCallback(() => {
@@ -755,6 +763,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const listsTreeView = vscode.window.createTreeView('pico8Lists', { treeDataProvider: listsProvider });
+    log('TreeView pico8Lists created');
     listsTreeView.onDidExpandElement(e => {
         if (e.element instanceof ListGroupItem) {
             detailProvider.showListInfo(e.element.listInfo);
@@ -770,6 +779,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(GameDetailViewProvider.viewType, detailProvider)
     );
+    log('WebviewViewProvider registered');
 
     // Custom Editor for .p8.png files
     context.subscriptions.push(
@@ -788,6 +798,7 @@ export function activate(context: vscode.ExtensionContext) {
             { webviewOptions: { retainContextWhenHidden: true } }
         )
     );
+    log('Custom editors registered');
 
     // Refresh Command
     vscode.commands.registerCommand('pico8ide.refreshEntry', () => listsProvider.load());
@@ -1125,6 +1136,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // Initial Load
+    log('Starting initial data load...');
     listsProvider.load();
+    log('Activation complete');
+  } catch (e) {
+    logError('Extension activation failed', e);
+    throw e;
+  }
 }
 
