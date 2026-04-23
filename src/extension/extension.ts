@@ -7,7 +7,7 @@ import { t } from './i18n';
 import { CartData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
 import { p8ToCartData } from './p8format';
-import { cartDataToP8Mod, blankP8Mod, i18nDemoP8Mod } from './p8modFormat';
+import { cartDataToP8Mod, p8ModToCartData, blankP8Mod, i18nDemoP8Mod } from './p8modFormat';
 import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
@@ -878,7 +878,14 @@ export function activate(context: vscode.ExtensionContext) {
             const cartPath = await dataManager.getAssetPath(game, 'cart');
 
             panel.updateProgress(locale.extracting);
-            const cartData = await Pico8Decoder.decode(cartPath);
+            let cartData;
+            if (cartPath.endsWith('.p8mod')) {
+                const text = fs.readFileSync(cartPath, 'utf-8');
+                const parsed = p8ModToCartData(text);
+                cartData = parsed.cartData;
+            } else {
+                cartData = await Pico8Decoder.decode(cartPath);
+            }
 
             // Update detail panel with cart info and label
             detailProvider.updateCartInfo(game, cartData.code.length, cartData.label);

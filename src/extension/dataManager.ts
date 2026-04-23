@@ -509,13 +509,15 @@ export class DataManager {
                 if (fs.existsSync(bundlePath)) {
                     return bundlePath;
                 }
-                // Try alternate extension (.p8 vs .p8.png)
-                const altFile = cartFile.endsWith('.p8.png')
-                    ? cartFile.replace(/\.p8\.png$/, '.p8')
-                    : cartFile.replace(/\.p8$/, '.p8.png');
-                const altPath = path.join(bundleDir, altFile);
-                if (fs.existsSync(altPath)) {
-                    return altPath;
+                // Try alternate extension (.p8 vs .p8.png vs .p8mod)
+                const altExtensions = ['.p8.png', '.p8', '.p8mod'];
+                for (const ext of altExtensions) {
+                    const altFile = cartFile.replace(/\.(p8\.png|p8|p8mod)$/, ext.substring(1));
+                    if (altFile === cartFile) continue;
+                    const altPath = path.join(bundleDir, altFile);
+                    if (fs.existsSync(altPath)) {
+                        return altPath;
+                    }
                 }
             } else {
                 const bundlePath = path.join(this.extractDir, subDir, source, `${game.id}.png`);
