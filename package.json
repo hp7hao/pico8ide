@@ -16,11 +16,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:pico8Lists",
-    "onCustomEditor:pico8ide.pngViewer",
-    "onCustomEditor:pico8ide.p8Editor"
-  ],
+  "activationEvents": [],
   "main": "./out/extension/extension.js",
   "contributes": {
     "viewsContainers": {
