@@ -504,9 +504,18 @@ export class DataManager {
             const subDir = type === 'cart' ? 'carts' : 'thumbs';
             if (type === 'cart') {
                 const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
-                const bundlePath = path.join(this.extractDir, subDir, source, cartFile);
+                const bundleDir = path.join(this.extractDir, subDir, source);
+                const bundlePath = path.join(bundleDir, cartFile);
                 if (fs.existsSync(bundlePath)) {
                     return bundlePath;
+                }
+                // Try alternate extension (.p8 vs .p8.png)
+                const altFile = cartFile.endsWith('.p8.png')
+                    ? cartFile.replace(/\.p8\.png$/, '.p8')
+                    : cartFile.replace(/\.p8$/, '.p8.png');
+                const altPath = path.join(bundleDir, altFile);
+                if (fs.existsSync(altPath)) {
+                    return altPath;
                 }
             } else {
                 const bundlePath = path.join(this.extractDir, subDir, source, `${game.id}.png`);
@@ -534,15 +543,14 @@ export class DataManager {
             let sourceUrl = '';
             const thumbnailPath = game.extension.thumbnail_path || '';
 
-            // For non-BBS sources: use cart_url directly if available
             if (game.extension.cart_url) {
                 sourceUrl = game.extension.cart_url;
+            } else if (source !== 'bbs') {
+                throw new Error(`Cart for non-BBS game "${game.id}" (source: ${source}) is not available. It should be included in the data bundle.`);
             } else {
-                // BBS logic
                 const computed = this.computeCartUrl(thumbnailPath);
-                const explicit = game.extension.cart_url;
                 const fallback = `https://www.lexaloffle.com/bbs/cposts/${game.id}.p8.png`;
-                sourceUrl = computed || explicit || fallback;
+                sourceUrl = computed || fallback;
             }
 
             try {
