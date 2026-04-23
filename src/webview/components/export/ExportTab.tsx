@@ -79,7 +79,7 @@ export function ExportTab({ locale }: ExportTabProps) {
             for (let i = 0; i < text.length; i++) {
                 const ch = text[i];
                 if (!glyphs[ch]) {
-                    glyphs[ch] = renderGlyphBytes(ch, fontCtx);
+                    glyphs[ch] = renderGlyphBytes(ch, fontCtx).bytes;
                 }
             }
             return glyphs;

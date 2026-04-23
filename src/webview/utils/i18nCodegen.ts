@@ -1,15 +1,12 @@
 import type { I18nData } from '../types';
 
-function isAscii(ch: string): boolean {
-    return ch.charCodeAt(0) < 128;
-}
-
-/** Render a single character to 8 bytes (LSB=leftmost pixel) using BoutiqueBitmap7x7 font */
+/** Render a single character to 8 bytes (LSB=leftmost pixel) using BoutiqueBitmap7x7 font.
+ *  Returns { bytes, width } where width is the rightmost lit pixel column + 2 (for spacing). */
 export function renderGlyphBytes(
     ch: string,
     ctx: CanvasRenderingContext2D | null
-): number[] {
-    if (!ctx) return [0, 0, 0, 0, 0, 0, 0, 0];
+): { bytes: number[]; width: number } {
+    if (!ctx) return { bytes: [0, 0, 0, 0, 0, 0, 0, 0], width: 4 };
     ctx.clearRect(0, 0, 8, 8);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, 8, 8);
@@ -19,20 +16,23 @@ export function renderGlyphBytes(
     ctx.fillText(ch, 0, 0);
     const imgData = ctx.getImageData(0, 0, 8, 8);
     const bytes: number[] = [];
+    let maxCol = 0;
     for (let row = 0; row < 8; row++) {
         let b = 0;
         for (let col = 0; col < 8; col++) {
             const idx = (row * 8 + col) * 4;
             if (imgData.data[idx] > 128) {
                 b |= 1 << col;
+                if (col > maxCol) maxCol = col;
             }
         }
         bytes.push(b);
     }
-    return bytes;
+    const width = maxCol + 2;
+    return { bytes, width };
 }
 
-/** Collect unique non-ASCII chars from i18n entries for a given locale */
+/** Collect unique printable chars from i18n entries for a given locale */
 export function collectI18nChars(i18nData: I18nData, loc: string): { uniqueChars: Record<string, number>; charList: string[] } {
     const uniqueChars: Record<string, number> = {};
     const charList: string[] = [];
@@ -40,7 +40,7 @@ export function collectI18nChars(i18nData: I18nData, loc: string): { uniqueChars
         const text = (entry.translations && entry.translations[loc]) || '';
         for (let i = 0; i < text.length; i++) {
             const ch = text[i];
-            if (!isAscii(ch) && uniqueChars[ch] === undefined) {
+            if (ch !== '\n' && uniqueChars[ch] === undefined) {
                 uniqueChars[ch] = charList.length;
                 charList.push(ch);
             }
@@ -68,8 +68,10 @@ export function generateI18nLua(
     const { uniqueChars, charList } = collectI18nChars(i18nData, loc);
 
     let glyphHex = '';
+    const glyphWidths: number[] = [];
     for (const ch of charList) {
-        const bytes = renderGlyphBytes(ch, fontCtx);
+        const { bytes, width } = renderGlyphBytes(ch, fontCtx);
+        glyphWidths.push(width);
         for (const b of bytes) {
             glyphHex += ('0' + b.toString(16)).slice(-2);
         }
@@ -89,35 +91,32 @@ export function generateI18nLua(
     const tdLines: string[] = [];
     if (!useSwap) {
         // Direct mode: embed chars 128-255 in strings
+        // Mark uniform-width strings with f=1 for fast single-print path
         for (const entry of i18nData.entries) {
             const text = (entry.translations && entry.translations[loc]) || '';
             if (!text) continue;
             let mapped = '';
             let width = 0;
+            let uniform = true;
             for (let i = 0; i < text.length; i++) {
                 const ch = text[i];
                 if (ch === '\n') {
                     mapped += bslash + 'n';
-                    // newline doesn't add to width
-                } else if (isAscii(ch)) {
-                    if (ch === '"') mapped += bslash + '"';
-                    else if (ch === bslash) mapped += bslash + bslash;
-                    else mapped += ch;
-                    width += 4;
                 } else {
                     const idx = uniqueChars[ch];
                     const code = 128 + idx;
                     mapped += bslash + code.toString();
-                    width += 8;
+                    width += glyphWidths[idx];
+                    if (glyphWidths[idx] !== 8) uniform = false;
                 }
             }
-            tdLines.push(' ' + entry.key + '={w=' + width + ',s="' + mapped + '"}');
+            const extra = uniform ? ',f=1' : '';
+            tdLines.push(' ["' + entry.key.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]={w=' + width + extra + ',s="' + mapped + '"}');
         }
     } else {
         // Swap mode: store glyph index arrays
         // Each entry is {w=width, g={...}} where values are:
-        //   positive number = glyph index (0-based into _gd)
-        //   negative number = ASCII char code (to be printed directly)
+        //   non-negative number = glyph index (0-based into _gd)
         //   32767 = newline sentinel
         for (const entry of i18nData.entries) {
             const text = (entry.translations && entry.translations[loc]) || '';
@@ -128,16 +127,13 @@ export function generateI18nLua(
                 const ch = text[i];
                 if (ch === '\n') {
                     indices.push('32767');
-                    // newline doesn't add to width
-                } else if (isAscii(ch)) {
-                    indices.push((-ch.charCodeAt(0)).toString());
-                    width += 4;
                 } else {
-                    indices.push(uniqueChars[ch].toString());
-                    width += 8;
+                    const idx = uniqueChars[ch];
+                    indices.push(idx.toString());
+                    width += glyphWidths[idx];
                 }
             }
-            tdLines.push(' ' + entry.key + '={w=' + width + ',g={' + indices.join(',') + '}}');
+            tdLines.push(' ["' + entry.key.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"]={w=' + width + ',g={' + indices.join(',') + '}}');
         }
     }
 
@@ -147,48 +143,55 @@ export function generateI18nLua(
     if (glyphHex.length > 0) {
         lua += '_gd="' + gdStr + '"' + nl;
     }
+    if (glyphWidths.length > 0) {
+        lua += '_gw={' + glyphWidths.join(',') + '}' + nl;
+    }
     lua += '_td={' + nl;
     for (const l of tdLines) {
         lua += l + ',' + nl;
     }
     lua += '}' + nl + nl;
 
+    // Both modes use char-by-char rendering with per-glyph widths
+    lua += 'function _txi()' + nl;
+    lua += ' poke(0x5600,4)' + nl;
+    lua += ' poke(0x5601,8)' + nl;
+    lua += ' poke(0x5602,8)' + nl;
+    if (!useSwap && glyphHex.length > 0) {
+        lua += ' for i=1,#_gd do poke(0x59ff+i,ord(_gd,i)) end' + nl;
+    }
+    lua += 'end' + nl + nl;
+
     if (!useSwap) {
-        lua += 'function _txi()' + nl;
-        lua += ' poke(0x5600,4)' + nl;
-        lua += ' poke(0x5601,8)' + nl;
-        lua += ' poke(0x5602,8)' + nl;
-        if (glyphHex.length > 0) {
-            lua += ' for i=1,#_gd do poke(0x59ff+i,ord(_gd,i)) end' + nl;
-        }
-        lua += 'end' + nl + nl;
+        // Direct mode: fast single-print for uniform-width (f=1), char-by-char for mixed
         lua += 'function tx(k,x,y,c)' + nl;
         lua += ' local d=_td[k]' + nl;
-        lua += ' if(d)print("' + p014 + '"..d.s,x,y,c)' + nl;
+        lua += ' if not d then return end' + nl;
+        lua += ' if d.f then print("' + p014 + '"..d.s,x,y,c) return end' + nl;
+        lua += ' local cx=x' + nl;
+        lua += ' for i=1,#d.s do' + nl;
+        lua += '  local ch=ord(d.s,i)' + nl;
+        lua += '  if ch==10 then cx=x y+=10' + nl;
+        lua += '  else' + nl;
+        lua += '   print("' + p014 + '"..chr(ch),cx,y,c)' + nl;
+        lua += '   cx+=_gw[ch-127]' + nl;
+        lua += '  end' + nl;
+        lua += ' end' + nl;
         lua += 'end' + nl + nl;
     } else {
-        // Swap mode: tx() iterates glyph array, pokes each into slot 128, prints char-by-char
-        lua += 'function _txi()' + nl;
-        lua += ' poke(0x5600,4)' + nl;
-        lua += ' poke(0x5601,8)' + nl;
-        lua += ' poke(0x5602,8)' + nl;
-        lua += 'end' + nl + nl;
+        // Swap mode: poke each glyph into slot 128, print char-by-char
         lua += 'function tx(k,x,y,c)' + nl;
         lua += ' local d=_td[k]' + nl;
         lua += ' if not d then return end' + nl;
         lua += ' local cx=x' + nl;
-        lua += ' local cy=y' + nl;
         lua += ' for gi in all(d.g) do' + nl;
         lua += '  if gi==32767 then' + nl;
-        lua += '   cx=x cy+=10' + nl;
-        lua += '  elseif gi<0 then' + nl;
-        lua += '   print(chr(-gi),cx,cy,c)' + nl;
-        lua += '   cx+=4' + nl;
+        lua += '   cx=x y+=10' + nl;
         lua += '  else' + nl;
         lua += '   local o=gi*8+1' + nl;
         lua += '   for j=0,7 do poke(0x5a00+j,ord(_gd,o+j)) end' + nl;
-        lua += '   print("' + p014 + bslash + '128",cx,cy,c)' + nl;
-        lua += '   cx+=8' + nl;
+        lua += '   print("' + p014 + bslash + '128",cx,y,c)' + nl;
+        lua += '   cx+=_gw[gi+1]' + nl;
         lua += '  end' + nl;
         lua += ' end' + nl;
         lua += 'end' + nl + nl;
