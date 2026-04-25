@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useMetaStore } from '../../store/metaStore';
 import { useCartStore } from '../../store/cartStore';
+import { useUIStore } from '../../store/uiStore';
 import { useFontContext } from '../../hooks/useFontContext';
 import { generateI18nCodegen } from '../../utils/i18nCodegen';
 import { I18nToolbar } from './I18nToolbar';
@@ -17,6 +18,7 @@ export function I18nTab({ locale, fontUri }: I18nTabProps) {
     const i18nData = useMetaStore((s) => s.i18nData);
     const setI18nData = useMetaStore((s) => s.setI18nData);
     const code = useCartStore((s) => s.code);
+    const editable = useUIStore((s) => s.editable);
     const { fontCtx, fontLoaded } = useFontContext();
 
     const [copyLabel, setCopyLabel] = useState('Copy');
@@ -196,6 +198,7 @@ export function I18nTab({ locale, fontUri }: I18nTabProps) {
         <div className="i18n-editor">
             <I18nToolbar
                 i18nData={data}
+                editable={editable}
                 onAddLocale={handleAddLocale}
                 onRemoveLocale={handleRemoveLocale}
                 onOutputLocaleChange={handleOutputLocaleChange}
@@ -203,6 +206,7 @@ export function I18nTab({ locale, fontUri }: I18nTabProps) {
             />
             <TranslationTable
                 i18nData={data}
+                editable={editable}
                 onTranslationChange={handleTranslationChange}
             />
             <div className="i18n-codegen">

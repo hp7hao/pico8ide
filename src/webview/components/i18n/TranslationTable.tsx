@@ -3,10 +3,11 @@ import type { I18nData } from '../../types';
 
 interface TranslationTableProps {
     i18nData: I18nData;
+    editable: boolean;
     onTranslationChange: (entryIndex: number, locale: string, value: string) => void;
 }
 
-export function TranslationTable({ i18nData, onTranslationChange }: TranslationTableProps) {
+export function TranslationTable({ i18nData, editable, onTranslationChange }: TranslationTableProps) {
     const handleInput = useCallback(
         (idx: number, loc: string, value: string) => {
             onTranslationChange(idx, loc, value);
@@ -48,7 +49,8 @@ export function TranslationTable({ i18nData, onTranslationChange }: TranslationT
                                         <input
                                             className={`i18n-trans-input${!val ? ' empty' : ''}`}
                                             value={val}
-                                            onChange={(e) => handleInput(idx, loc, e.target.value)}
+                                            readOnly={!editable}
+                                            onChange={(e) => { if (editable) handleInput(idx, loc, e.target.value); }}
                                         />
                                     </td>
                                 );

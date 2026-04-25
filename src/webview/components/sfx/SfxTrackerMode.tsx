@@ -22,9 +22,10 @@ export function SfxTrackerMode({ hoverNote, onHoverNoteChange }: SfxTrackerModeP
     const parsed = parseSfxNotes(sfx, sfxId);
 
     const handleRowClick = useCallback((idx: number, col: number) => {
+        if (!editable) return;
         setTrackerRow(idx);
         setTrackerCol(col);
-    }, []);
+    }, [editable]);
 
     // Keyboard handler
     useEffect(() => {

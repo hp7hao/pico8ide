@@ -299,11 +299,12 @@ export function MusicTab({ locale }: MusicTabProps) {
     }, [patternIndex, setPatternIndex]);
 
     const handleClear = useCallback(() => {
+        if (!editable) return;
         const next = [...music];
         const offset = patternIndex * 4;
         for (let i = 0; i < 4; i++) next[offset + i] = 0x40;
         setMusic(next);
-    }, [music, patternIndex, setMusic]);
+    }, [music, patternIndex, setMusic, editable]);
 
     const handleMusicChange = useCallback((next: number[]) => {
         setMusic(next);

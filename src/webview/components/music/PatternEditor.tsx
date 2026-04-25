@@ -94,7 +94,7 @@ export function PatternEditor({
                         <div className="music-ch-sfx">
                             {editable && !pat.disabled[ch] && (
                                 <button onClick={(e) => { e.stopPropagation(); changeSfxId(ch, -1); }}>
-                                    {'\u25c0'}
+                                    {'◀'}
                                 </button>
                             )}
                             <span className={`sfx-val${pat.disabled[ch] ? ' muted' : ''}`}>
@@ -102,7 +102,7 @@ export function PatternEditor({
                             </span>
                             {editable && !pat.disabled[ch] && (
                                 <button onClick={(e) => { e.stopPropagation(); changeSfxId(ch, 1); }}>
-                                    {'\u25b6'}
+                                    {'▶'}
                                 </button>
                             )}
                         </div>
@@ -116,20 +116,23 @@ export function PatternEditor({
                 <button
                     className={`flag-btn${pat.loopStart ? ' loop-start-on' : ''}`}
                     onClick={() => toggleFlag(0, 0x80)}
+                    disabled={!editable}
                 >
-                    {(pat.loopStart ? '\u25cf ' : '\u25cb ') + 'Loop Start'}
+                    {(pat.loopStart ? '● ' : '○ ') + 'Loop Start'}
                 </button>
                 <button
                     className={`flag-btn${pat.loopEnd ? ' loop-end-on' : ''}`}
                     onClick={() => toggleFlag(1, 0x80)}
+                    disabled={!editable}
                 >
-                    {(pat.loopEnd ? '\u25cf ' : '\u25cb ') + 'Loop End'}
+                    {(pat.loopEnd ? '● ' : '○ ') + 'Loop End'}
                 </button>
                 <button
                     className={`flag-btn${pat.stopAtEnd ? ' stop-on' : ''}`}
                     onClick={() => toggleFlag(2, 0x80)}
+                    disabled={!editable}
                 >
-                    {(pat.stopAtEnd ? '\u25cf ' : '\u25cb ') + 'Stop'}
+                    {(pat.stopAtEnd ? '● ' : '○ ') + 'Stop'}
                 </button>
             </div>
         </div>

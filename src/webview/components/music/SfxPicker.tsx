@@ -59,7 +59,7 @@ export function SfxPicker({
                             key={i}
                             className={cls}
                             onClick={() => {
-                                if (effectiveChannel >= 0) selectSfxForChannel(effectiveChannel, i);
+                                if (editable && effectiveChannel >= 0) selectSfxForChannel(effectiveChannel, i);
                             }}
                         >
                             <span>{i.toString().padStart(2, '0')}</span>
