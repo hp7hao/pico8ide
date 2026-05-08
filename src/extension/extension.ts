@@ -1060,8 +1060,18 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-            const cartPath = await dataManager.getAssetPath(game, 'cart');
-            const cartData = await Pico8Decoder.decode(cartPath);
+            let sourceContent: string | undefined;
+            try {
+                const sourcePath = await dataManager.getAssetPath(game, 'source');
+                if (sourcePath.endsWith('.p8mod')) {
+                    sourceContent = fs.readFileSync(sourcePath, 'utf-8');
+                } else if (sourcePath.endsWith('.p8')) {
+                    const cartData = p8ToCartData(fs.readFileSync(sourcePath, 'utf-8'));
+                    sourceContent = cartDataToP8Mod(cartData, null);
+                }
+            } catch {
+                // Source artifacts are optional; fall back to decoding the runtime cart.
+            }
 
             // Sanitize game name for filename
             const safeName = game.name.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_').substring(0, 64);
@@ -1074,7 +1084,20 @@ export function activate(context: vscode.ExtensionContext) {
             });
             if (!destUri) { return; }
 
-            const content = cartDataToP8Mod(cartData, null);
+            let content = sourceContent;
+            if (!content) {
+                const cartPath = await dataManager.getAssetPath(game, 'cart');
+                if (cartPath.endsWith('.p8mod')) {
+                    content = fs.readFileSync(cartPath, 'utf-8');
+                } else if (cartPath.endsWith('.p8')) {
+                    const cartData = p8ToCartData(fs.readFileSync(cartPath, 'utf-8'));
+                    content = cartDataToP8Mod(cartData, null);
+                } else {
+                    const cartData = await Pico8Decoder.decode(cartPath);
+                    content = cartDataToP8Mod(cartData, null);
+                }
+            }
+
             fs.writeFileSync(destUri.fsPath, content, 'utf-8');
             vscode.window.showInformationMessage(locale.forkSuccess);
             await vscode.commands.executeCommand('vscode.openWith', destUri, Pico8P8EditorProvider.viewType);
@@ -1172,4 +1195,3 @@ export function activate(context: vscode.ExtensionContext) {
     throw e;
   }
 }
-

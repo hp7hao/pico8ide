@@ -34,6 +34,7 @@ npm run package    # Create .vsix distribution file
   - Remote mode: Downloads db.json from GitHub releases, caches locally
   - Local mode: Loads from local fcdb repository path
   - On-demand asset downloading from Lexaloffle BBS
+  - Resolves optional FCDB editable source artifacts from `sources/{source}/` for database forks, preferring `.p8mod`, then `.p8`, before runtime carts
   - ETag-based version checking for database updates
 
 - **i18n.ts** - Internationalization (English, Chinese)

@@ -1065,7 +1065,7 @@ All icons use 16×16 viewBox SVG format.
 - All inline `onclick` handlers replaced with `addEventListener` to comply with nonce-based CSP.
 - Upgraded `Pico8PngEditorProvider` from `CustomReadonlyEditorProvider` to `CustomEditorProvider` with save/revert/backup support.
 - Editable Monaco editor for workspace `.p8.png` files; save writes companion `.p8` file.
-- Added `pico8ide.forkGame` command to copy database carts into workspace.
+- Added `pico8ide.forkGame` command to copy database carts into workspace. Fork tries optional `.p8mod` source first, then `.p8` source, then falls back to the `.p8.png` runtime cart.
 - Added `pico8ide.previewP8Cart` command for `.p8` file preview via explorer context menu.
 - Removed `pico8ide.runGame` from `view/title` menu (kept in `view/item/context` inline only).
 - Fixed `:c:` LZSS decompression: corrected 8-byte header parsing (was skipping only 4 bytes, producing `???` characters).

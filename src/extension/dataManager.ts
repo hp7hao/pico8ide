@@ -22,6 +22,7 @@ export interface GameMetadata {
     extension: {
         cart_url?: string;
         cart_file?: string;
+        source_file?: string;
         thumbnail_path?: string;
         [key: string]: any;
     };
@@ -472,14 +473,28 @@ export class DataManager {
         });
     }
 
-    public async getAssetPath(game: GameMetadata, type: 'cart' | 'thumb'): Promise<string> {
+    private getSourceFileCandidates(game: GameMetadata): string[] {
+        const sourceFile = game.extension?.source_file;
+        const base = sourceFile
+            ? sourceFile.replace(/\.(p8mod|p8)$/i, '')
+            : game.id;
+
+        const candidates = [`${base}.p8mod`, `${base}.p8`];
+        if (sourceFile && !candidates.includes(sourceFile)) {
+            candidates.push(sourceFile);
+        }
+
+        return candidates;
+    }
+
+    public async getAssetPath(game: GameMetadata, type: 'cart' | 'thumb' | 'source'): Promise<string> {
         const mode = this.getDataMode();
 
         // Local mode: try local file first, fall through to download if not found
         if (mode === 'local') {
              const platformsPath = this.getLocalPlatformsPath();
              if (platformsPath) {
-                 const subDir = type === 'cart' ? 'carts' : 'thumbs';
+                 const subDir = type === 'cart' ? 'carts' : type === 'source' ? 'sources' : 'thumbs';
                  const source = game.source || 'bbs';
 
                  if (type === 'cart') {
@@ -487,6 +502,13 @@ export class DataManager {
                      const localPath = path.join(platformsPath, subDir, source, cartFile);
                      if (fs.existsSync(localPath)) {
                          return localPath;
+                     }
+                 } else if (type === 'source') {
+                     for (const sourceFile of this.getSourceFileCandidates(game)) {
+                         const localPath = path.join(platformsPath, subDir, source, sourceFile);
+                         if (fs.existsSync(localPath)) {
+                             return localPath;
+                         }
                      }
                  } else {
                      const localPath = path.join(platformsPath, subDir, source, `${game.id}.png`);
@@ -501,7 +523,7 @@ export class DataManager {
         // Check extracted bundle for non-BBS source assets (from ZIP)
         const source = game.source || 'bbs';
         if (source !== 'bbs') {
-            const subDir = type === 'cart' ? 'carts' : 'thumbs';
+            const subDir = type === 'cart' ? 'carts' : type === 'source' ? 'sources' : 'thumbs';
             if (type === 'cart') {
                 const cartFile = game.extension?.cart_file || `${game.id}.p8.png`;
                 const bundleDir = path.join(this.extractDir, subDir, source);
@@ -512,11 +534,18 @@ export class DataManager {
                 // Try alternate extension (.p8 vs .p8.png vs .p8mod)
                 const altExtensions = ['.p8.png', '.p8', '.p8mod'];
                 for (const ext of altExtensions) {
-                    const altFile = cartFile.replace(/\.(p8\.png|p8|p8mod)$/, ext.substring(1));
+                    const altFile = cartFile.replace(/\.(p8\.png|p8|p8mod)$/, ext);
                     if (altFile === cartFile) continue;
                     const altPath = path.join(bundleDir, altFile);
                     if (fs.existsSync(altPath)) {
                         return altPath;
+                    }
+                }
+            } else if (type === 'source') {
+                for (const sourceFile of this.getSourceFileCandidates(game)) {
+                    const bundlePath = path.join(this.extractDir, subDir, source, sourceFile);
+                    if (fs.existsSync(bundlePath)) {
+                        return bundlePath;
                     }
                 }
             } else {
@@ -528,6 +557,10 @@ export class DataManager {
         }
 
         // Remote mode (or local fallback): check cache first, then download
+        if (type === 'source') {
+            throw new Error(`Source artifact for game "${game.id}" (source: ${source}) is not available. It should be included in the data bundle.`);
+        }
+
         const cacheDir = path.join(this.assetsDir, type === 'cart' ? 'carts' : 'thumbs', source);
         if (!fs.existsSync(cacheDir)) {
             fs.mkdirSync(cacheDir, { recursive: true });
