@@ -327,6 +327,21 @@ Editor background: `#1a1a1a`. Cursor: `#ff77a8`.
 
 **Read-only vs editable**: Controlled by the `editable` option. When editable, `onDidChangeModelContent` sends `{ type: 'codeChanged', code }` messages to the extension host.
 
+### Shared Lua Libraries
+
+The Code tab supports opt-in shared Lua libraries through `--#include <id>` directives. Bundled libraries live under `resources/libs/*.json`, and workspace libraries may live under `.pico8libs/*.json`. The library picker inserts or removes include directives in editable carts. Run/export paths resolve the directives by prepending dependency-ordered library code and stripping the directive lines from the emitted `.p8` output.
+
+Bundled libraries:
+
+| ID | Purpose |
+|----|---------|
+| `vec2` | 2D vector utility helpers |
+| `p8go` | PICO8GO device bridge runtime helpers |
+
+The `p8go` library is opt-in. It must only be included when a cart intentionally targets PICO8GO-enhanced release flows. Its runtime defines `p8go.ipc_send(channel, payload)` plus package helpers `p8go.vibe`, `p8go.vibe_stop`, `p8go.ach_unlock`, and `p8go.ach_progress`. Vibration and achievements are package conventions over the core IPC channel/payload transport, not separate transport commands.
+
+Monaco completions should suggest `--#include p8go` from include lines and should suggest `p8go.*` helpers only when the current code includes `--#include p8go`.
+
 ### CSP (Content Security Policy)
 
 ```

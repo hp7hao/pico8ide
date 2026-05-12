@@ -1,0 +1,12 @@
+{
+    "id": "p8go",
+    "name": "PICO8GO Device Bridge",
+    "description": "Opt-in PICO8GO mailbox IPC runtime with haptic and achievement helper packages",
+    "author": "pico8ide",
+    "version": "0.1.0",
+    "tags": ["p8go", "device", "ipc", "haptic", "achievements"],
+    "depends": [],
+    "code": "-- p8go runtime v0\np8go={}\nlocal _b=0x5f80\nlocal _s=0\nlocal function _w(cmd,ch,msg)\n _s=(_s+1)%256\n ch=ch or \"\"\n msg=msg or \"\"\n poke(_b,0)\n poke(_b+1,_s)\n poke(_b+2,112) poke(_b+3,56) poke(_b+4,103) poke(_b+5,111) poke(_b+6,33)\n poke(_b+7,cmd)\n poke(_b+8,#ch)\n poke(_b+9,#msg)\n for i=1,min(#ch,8) do poke(_b+9+i,ord(ch,i)) end\n for i=1,min(#msg,13) do poke(_b+17+i,ord(msg,i)) end\n local c=0\n for i=0,30 do c=(c+peek(_b+i))%256 end\n poke(_b+31,c)\nend\nfunction p8go.has(_) return peek(_b+2)==112 and peek(_b+3)==56 end\nfunction p8go.ipc_send(ch,msg) _w(1,ch,msg) end\nfunction p8go.vibe(ms,strength) p8go.ipc_send(\"haptic\",chr(1)..chr(ms%256)..chr(flr((strength or 1)*255))) end\nfunction p8go.vibe_stop() p8go.ipc_send(\"haptic\",chr(2)) end\nfunction p8go.ach_unlock(id) p8go.ipc_send(\"ach\",chr(1)..id) end\nfunction p8go.ach_progress(id,v,t) p8go.ipc_send(\"ach\",chr(2)..id..\":\"..v..\":\"..t) end",
+    "tokenCount": 120,
+    "charCount": 920
+}

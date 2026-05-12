@@ -41,6 +41,8 @@ npm run package    # Create .vsix distribution file
   - `t()` function returns `LocaleStrings` based on VS Code language setting
   - Package.json uses `%key%` pattern for static strings (package.nls.json)
 
+- **libManager.ts / resources/libs/** - Opt-in shared Lua libraries for `--#include <id>` directives. Bundled `p8go` is the PICO8GO device bridge runtime helper library; keep it transport-aligned with `projects/xwsdk/p8mod/src/p8go_runtime.lua`.
+
 ### PICO-8 Cartridge Format
 
 Cartridges are .p8.png files with data hidden in pixel LSBs:

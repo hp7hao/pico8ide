@@ -61,6 +61,7 @@ export function CodeTab({ monacoBaseUri, editorFontSize, editorFontFamily, edito
                 // Register PICO-8 Lua language
                 monaco.languages.register({ id: 'pico8-lua' });
                 monaco.languages.setMonarchTokensProvider('pico8-lua', getPico8LuaTokenizer());
+                registerPico8CompletionProvider(monaco);
 
                 // Register PICO-8 dark theme
                 monaco.editor.defineTheme('pico8-dark', getPico8DarkTheme());
@@ -193,6 +194,66 @@ function getPico8LuaTokenizer() {
             ],
         },
     };
+}
+
+function registerPico8CompletionProvider(monaco: any) {
+    monaco.languages.registerCompletionItemProvider('pico8-lua', {
+        triggerCharacters: ['.', '#'],
+        provideCompletionItems(model: any, position: any) {
+            const text = model.getValue();
+            const word = model.getWordUntilPosition(position);
+            const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: word.startColumn,
+                endColumn: word.endColumn,
+            };
+            const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+
+            if (/^\s*--#include\s+\S*$/.test(linePrefix)) {
+                return {
+                    suggestions: [
+                        {
+                            label: 'p8go',
+                            kind: monaco.languages.CompletionItemKind.Module,
+                            detail: 'PICO8GO device bridge runtime',
+                            documentation: 'Opt-in PICO8GO mailbox IPC runtime. Resolves during run/export from resources/libs/p8go.json.',
+                            insertText: 'p8go',
+                            range,
+                        },
+                    ],
+                };
+            }
+
+            if (!/^\s*p8go\.\w*$/.test(linePrefix)) {
+                return { suggestions: [] };
+            }
+            if (!/^--#include\s+p8go\s*$/m.test(text)) {
+                return { suggestions: [] };
+            }
+
+            const mk = (label: string, insertText: string, detail: string, documentation: string) => ({
+                label,
+                kind: monaco.languages.CompletionItemKind.Function,
+                detail,
+                documentation,
+                insertText,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range,
+            });
+
+            return {
+                suggestions: [
+                    mk('ipc_send', 'ipc_send(${1:channel},${2:payload})', 'p8go.ipc_send(channel,payload)', 'Send one small cart-to-host IPC message on a channel.'),
+                    mk('has', 'has(${1:capability})', 'p8go.has(capability)', 'Check whether the p8go runtime marker is active.'),
+                    mk('vibe', 'vibe(${1:ms},${2:strength})', 'p8go.vibe(ms,strength)', 'Haptic package helper over the haptic IPC channel.'),
+                    mk('vibe_stop', 'vibe_stop()', 'p8go.vibe_stop()', 'Stop haptic output through the haptic IPC channel.'),
+                    mk('ach_unlock', 'ach_unlock(${1:id})', 'p8go.ach_unlock(id)', 'Achievement package helper over the ach IPC channel.'),
+                    mk('ach_progress', 'ach_progress(${1:id},${2:value},${3:target})', 'p8go.ach_progress(id,value,target)', 'Achievement progress helper over the ach IPC channel.'),
+                ],
+            };
+        },
+    });
 }
 
 function getPico8DarkTheme() {
