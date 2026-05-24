@@ -671,8 +671,9 @@ export function MapCanvas({
             renderOverlay();
         }
 
-        if (st.selDragging && selectionRef.current && selectionRef.current.data) {
-            const sel = selectionRef.current;
+        const dragSelection = selectionRef.current;
+        if (st.selDragging && dragSelection?.data) {
+            const sel = { ...dragSelection, data: dragSelection.data };
             const currentMap = [...mapRef.current];
             const currentGfx = [...gfxRef.current];
             mePasteTiles(currentMap, currentGfx, sel.x, sel.y, sel.w, sel.h, sel.data);

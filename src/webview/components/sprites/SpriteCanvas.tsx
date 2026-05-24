@@ -801,8 +801,9 @@ export function SpriteCanvas({
             useCartStore.getState().setGfx(currentGfx);
         }
 
-        if (st.selDragging && selectionRef.current && selectionRef.current.data) {
-            const sel = selectionRef.current;
+        const dragSelection = selectionRef.current;
+        if (st.selDragging && dragSelection?.data) {
+            const sel = { ...dragSelection, data: dragSelection.data };
             const currentGfx = [...gfxRef.current];
             pastePixels(currentGfx, sel.x, sel.y, sel.w, sel.h, sel.data);
             setSelection({ ...sel, data: null });
