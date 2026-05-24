@@ -60,7 +60,7 @@ describe('I18nStatusBar', () => {
 describe('TranslationTable', () => {
     it('renders empty state when no entries and no locales', () => {
         const i18nData: I18nData = { locales: [], entries: [] };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={vi.fn()} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={vi.fn()} />);
         expect(screen.getByText(/No i18n entries yet/)).toBeDefined();
     });
 
@@ -69,7 +69,7 @@ describe('TranslationTable', () => {
             locales: ['en', 'zh_CN'],
             entries: [{ key: 'hello', translations: { en: 'Hello' } }],
         };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={vi.fn()} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={vi.fn()} />);
         expect(screen.getByText('Key')).toBeDefined();
         expect(screen.getByText('en')).toBeDefined();
         expect(screen.getByText('zh_CN')).toBeDefined();
@@ -83,7 +83,7 @@ describe('TranslationTable', () => {
                 { key: 'farewell', translations: { en: 'Bye' } },
             ],
         };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={vi.fn()} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={vi.fn()} />);
         expect(screen.getByText('greeting')).toBeDefined();
         expect(screen.getByText('farewell')).toBeDefined();
     });
@@ -93,7 +93,7 @@ describe('TranslationTable', () => {
             locales: ['en'],
             entries: [{ key: 'hello', translations: { en: 'Hello World' } }],
         };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={vi.fn()} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={vi.fn()} />);
         const input = screen.getByDisplayValue('Hello World');
         expect(input).toBeDefined();
     });
@@ -104,7 +104,7 @@ describe('TranslationTable', () => {
             locales: ['en'],
             entries: [{ key: 'hello', translations: { en: '' } }],
         };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={onChange} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={onChange} />);
         const inputs = document.querySelectorAll('.i18n-trans-input');
         fireEvent.change(inputs[0], { target: { value: 'Hi' } });
         expect(onChange).toHaveBeenCalledWith(0, 'en', 'Hi');
@@ -115,7 +115,7 @@ describe('TranslationTable', () => {
             locales: ['en'],
             entries: [{ key: 'hello', translations: {} }],
         };
-        render(<TranslationTable i18nData={i18nData} onTranslationChange={vi.fn()} />);
+        render(<TranslationTable i18nData={i18nData} editable={true} onTranslationChange={vi.fn()} />);
         const input = document.querySelector('.i18n-trans-input');
         expect(input?.className).toContain('empty');
     });
