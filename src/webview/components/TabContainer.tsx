@@ -16,6 +16,15 @@ interface TabContainerProps {
     editorFontSize: number;
     editorFontFamily: string;
     editorLineHeight: number;
+    editorTabSize: number;
+    editorInsertSpaces: boolean;
+    editorWordWrap: string;
+    editorRenderWhitespace: string;
+    editorCursorStyle: string;
+    editorCursorBlinking: string;
+    editorMinimapEnabled: boolean;
+    editorBracketPairColorization: boolean;
+    editorGuidesBracketPairs: boolean | string;
 }
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -40,6 +49,15 @@ export function TabContainer(props: TabContainerProps) {
                     editorFontSize={props.editorFontSize}
                     editorFontFamily={props.editorFontFamily}
                     editorLineHeight={props.editorLineHeight}
+                    editorTabSize={props.editorTabSize}
+                    editorInsertSpaces={props.editorInsertSpaces}
+                    editorWordWrap={props.editorWordWrap}
+                    editorRenderWhitespace={props.editorRenderWhitespace}
+                    editorCursorStyle={props.editorCursorStyle}
+                    editorCursorBlinking={props.editorCursorBlinking}
+                    editorMinimapEnabled={props.editorMinimapEnabled}
+                    editorBracketPairColorization={props.editorBracketPairColorization}
+                    editorGuidesBracketPairs={props.editorGuidesBracketPairs}
                     editable={editable}
                     locale={props.locale}
                 />

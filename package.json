@@ -71,6 +71,12 @@
           "PICO-8",
           "pico8"
         ],
+        "extensions": [
+          ".p8"
+        ],
+        "filenames": [
+          ".p8mod"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -192,7 +198,7 @@
         "command": "pico8ide.runGame",
         "key": "ctrl+r",
         "mac": "cmd+r",
-        "when": "activeWebviewPanelId == pico8Cart || resourceExtname == .p8"
+        "when": "activeWebviewPanelId == pico8Cart || activeWebviewPanelId == pico8ide.p8Editor || activeWebviewPanelId == pico8ide.pngViewer || resourceExtname == .p8"
       }
     ],
     "configuration": {

@@ -43,6 +43,15 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
     const editorFontSize = editorConfig.get<number>('fontSize', 13);
     const editorFontFamily = editorConfig.get<string>('fontFamily', "'Courier New', monospace");
     const editorLineHeight = editorConfig.get<number>('lineHeight', 0);
+    const editorTabSize = editorConfig.get<number>('tabSize', 2);
+    const editorInsertSpaces = editorConfig.get<boolean>('insertSpaces', true);
+    const editorWordWrap = editorConfig.get<string>('wordWrap', 'off');
+    const editorRenderWhitespace = editorConfig.get<string>('renderWhitespace', 'selection');
+    const editorCursorStyle = editorConfig.get<string>('cursorStyle', 'line');
+    const editorCursorBlinking = editorConfig.get<string>('cursorBlinking', 'blink');
+    const editorMinimapEnabled = editorConfig.get<boolean>('minimap.enabled', false);
+    const editorBracketPairColorization = editorConfig.get<boolean>('bracketPairColorization.enabled', true);
+    const editorGuidesBracketPairs = editorConfig.get<boolean | string>('guides.bracketPairs', false);
 
     const title = gameName ? `PICO-8 Cart: ${gameName}` : 'PICO-8 Cart';
 
@@ -72,6 +81,15 @@ export function generateCartViewerHtml(options: CartViewerOptions): string {
         editorFontSize,
         editorFontFamily,
         editorLineHeight,
+        editorTabSize,
+        editorInsertSpaces,
+        editorWordWrap,
+        editorRenderWhitespace,
+        editorCursorStyle,
+        editorCursorBlinking,
+        editorMinimapEnabled,
+        editorBracketPairColorization,
+        editorGuidesBracketPairs,
         availableLibs: availableLibs || [],
     };
 

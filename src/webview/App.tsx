@@ -50,6 +50,15 @@ export function App() {
                     editorFontSize={initData.editorFontSize}
                     editorFontFamily={initData.editorFontFamily}
                     editorLineHeight={initData.editorLineHeight}
+                    editorTabSize={initData.editorTabSize}
+                    editorInsertSpaces={initData.editorInsertSpaces}
+                    editorWordWrap={initData.editorWordWrap}
+                    editorRenderWhitespace={initData.editorRenderWhitespace}
+                    editorCursorStyle={initData.editorCursorStyle}
+                    editorCursorBlinking={initData.editorCursorBlinking}
+                    editorMinimapEnabled={initData.editorMinimapEnabled}
+                    editorBracketPairColorization={initData.editorBracketPairColorization}
+                    editorGuidesBracketPairs={initData.editorGuidesBracketPairs}
                 />
             </div>
         </FontCtxContext.Provider>

@@ -101,6 +101,14 @@ const mockLocale: LocaleStrings = {
     exportLocaleVariant: 'Locale Variant',
     exportAll: 'Export All',
     exportCodeTooLarge: 'Code too large',
+
+    libPanelTitle: 'Libraries',
+    libSearch: 'Search libraries...',
+    libTokens: 'tokens',
+    libChars: 'chars',
+    libNoLibs: 'No libraries available',
+    libSelected: 'Selected',
+    libTotalWithLibs: 'Total with libs',
 };
 
 const mockCartData: CartData = {
@@ -131,5 +139,15 @@ export function createMockInitData(): InitData {
         editorFontSize: 14,
         editorFontFamily: 'monospace',
         editorLineHeight: 1.5,
+        editorTabSize: 2,
+        editorInsertSpaces: true,
+        editorWordWrap: 'off',
+        editorRenderWhitespace: 'selection',
+        editorCursorStyle: 'line',
+        editorCursorBlinking: 'blink',
+        editorMinimapEnabled: false,
+        editorBracketPairColorization: true,
+        editorGuidesBracketPairs: false,
+        availableLibs: [],
     };
 }

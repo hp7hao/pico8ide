@@ -186,6 +186,15 @@ export interface InitData {
     editorFontSize: number;
     editorFontFamily: string;
     editorLineHeight: number;
+    editorTabSize: number;
+    editorInsertSpaces: boolean;
+    editorWordWrap: string;
+    editorRenderWhitespace: string;
+    editorCursorStyle: string;
+    editorCursorBlinking: string;
+    editorMinimapEnabled: boolean;
+    editorBracketPairColorization: boolean;
+    editorGuidesBracketPairs: boolean | string;
     availableLibs: Pico8LibMeta[];
 }
 
