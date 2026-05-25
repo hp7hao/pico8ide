@@ -148,6 +148,10 @@
       {
         "command": "pico8ide.showI18nDemo",
         "title": "%command.showI18nDemo.title%"
+      },
+      {
+        "command": "pico8ide.installAgentSkills",
+        "title": "%command.installAgentSkills.title%"
       }
     ],
     "menus": {

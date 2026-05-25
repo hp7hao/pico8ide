@@ -74,6 +74,9 @@ export interface LocaleStrings {
     forkNoWorkspace: string;
     previewP8Cart: string;
     useTextEditorForP8Success: string;
+    installAgentSkillsNoWorkspace: string;
+    installAgentSkillsMissing: string;
+    installAgentSkillsSuccess: string;
 
     // Sprite editor tools
     toolPencil: string;
@@ -195,6 +198,9 @@ const en: LocaleStrings = {
     forkNoWorkspace: "No workspace folder open.",
     previewP8Cart: "Preview PICO-8 Cart",
     useTextEditorForP8Success: ".p8 files will now open in the text editor. Restart may be required.",
+    installAgentSkillsNoWorkspace: "Open a workspace folder before installing the PICO-8 p8mod agent skill.",
+    installAgentSkillsMissing: "The bundled PICO-8 p8mod agent skill was not found in this extension installation.",
+    installAgentSkillsSuccess: "Installed the PICO-8 p8mod agent skill into this workspace.",
 
     // Sprite editor tools
     toolPencil: "Pencil",
@@ -314,6 +320,9 @@ const zhCN: LocaleStrings = {
     forkNoWorkspace: "未打开工作区文件夹。",
     previewP8Cart: "预览 PICO-8 卡带",
     useTextEditorForP8Success: ".p8 文件现在将使用文本编辑器打开。可能需要重新加载。",
+    installAgentSkillsNoWorkspace: "安装 PICO-8 p8mod Agent 技能前，请先打开一个工作区文件夹。",
+    installAgentSkillsMissing: "此扩展安装中未找到内置的 PICO-8 p8mod Agent 技能。",
+    installAgentSkillsSuccess: "已将 PICO-8 p8mod Agent 技能安装到当前工作区。",
 
     // Sprite editor tools
     toolPencil: "画笔",

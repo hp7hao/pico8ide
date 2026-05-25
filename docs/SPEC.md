@@ -29,6 +29,27 @@ PICO-8 IDE is a VS Code extension for browsing, viewing, editing, and running PI
 | `pico8ide.stopGame` | Stop PICO-8 | stop.svg | Kill the running PICO-8 process |
 | `pico8ide.forkGame` | Fork Game | fork.svg | Copy a database game's cart into the workspace |
 | `pico8ide.previewP8Cart` | Preview PICO-8 Cart | — | Open a `.p8` file in the cart viewer (context menu on `.p8` files in explorer) |
+| `pico8ide.openWithP8IDE` | Open with PICO-8 IDE | — | Open `.p8` or `.p8.png` files through the Pico-8 IDE editor surface |
+| `pico8ide.useTextEditorForP8` | PICO-8: Use Text Editor for .p8 Files | — | Restore the default text editor association for `.p8` files |
+| `pico8ide.newP8Mod` | PICO-8: New Mod Cartridge | new-file.svg | Create a blank editable `.p8mod` cartridge in the workspace |
+| `pico8ide.showI18nDemo` | PICO-8: Show I18n Demo | — | Create an i18n demo `.p8mod` cartridge in the workspace |
+| `pico8ide.installAgentSkills` | PICO-8: Install Agent Skills | — | Install the bundled p8mod skill into the opened workspace under `.pico8ide-skills` with thin wrappers for common agent tools |
+
+### Bundled Agent Skills
+
+`pico8ide.installAgentSkills` copies the extension's bundled p8mod authoring skill from `resources/.pico8ide-skills/` into the first opened workspace folder at `.pico8ide-skills/`. The command installs:
+
+- `p8mod-author` — guides agents when creating, editing, or validating Pico-8 IDE `.p8mod` cartridges, with emphasis on i18n-ready games.
+
+The command may overwrite the known `.pico8ide-skills/p8mod-author` skill directory and the tool-specific wrapper files on reinstall, but it must not remove or modify unrelated workspace skills.
+
+The command also writes thin wrapper instructions that point agents back to the canonical `.pico8ide-skills/p8mod-author/SKILL.md`:
+
+- Codex: `.codex/skills/p8mod-author/SKILL.md`
+- Claude Code: `.claude/skills/p8mod-author/SKILL.md`
+- Copilot: `.github/instructions/pico8ide-p8mod.instructions.md`
+
+The installed canonical skill includes `scripts/validate-p8mod.mjs` and `scripts/validate-p8mod.py`, standard-library-only structural validators. Agents using the skill must run the Node.js validator after creating or editing a `.p8mod`, fall back to `python3`/`python` if Node.js is unavailable, and report validation as blocked with documented manual checks only when neither runtime exists.
 
 ## 4. Keybindings
 

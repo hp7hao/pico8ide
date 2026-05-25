@@ -13,6 +13,7 @@ import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
 import { LibManager } from './libManager';
 import { log, logError } from './log';
+import { installBundledAgentSkills } from './skillInstaller';
 
 // Webview provider for game detail panel in sidebar
 class GameDetailViewProvider implements vscode.WebviewViewProvider {
@@ -1184,6 +1185,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         fs.writeFileSync(dest.fsPath, i18nDemoP8Mod(), 'utf-8');
         await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
+    });
+
+    // Install bundled Codex skills into the opened workspace.
+    vscode.commands.registerCommand('pico8ide.installAgentSkills', async () => {
+        await installBundledAgentSkills(context, t());
     });
 
     // Initial Load
