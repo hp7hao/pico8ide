@@ -1,10 +1,10 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Overview
 
-PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle BBS. This extension is part of the larger fcdb ecosystem - see `../fcdbtool/CLAUDE.md` for the full data pipeline.
+PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle BBS. This extension is part of the larger fcdb ecosystem - see `../fcdbtool/AGENTS.md` for the full data pipeline.
 
 **Important**: This is a hobby project for learning purposes. PICO-8 is paid software by Lexaloffle Games. The extension shows a disclaimer on every activation.
 
