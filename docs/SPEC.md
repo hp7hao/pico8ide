@@ -43,7 +43,7 @@ PICO-8 IDE is a VS Code extension for browsing, viewing, editing, and running PI
 
 The command may overwrite the known `.pico8ide-skills/p8mod-author` skill directory and the tool-specific wrapper files on reinstall, but it must not remove or modify unrelated workspace skills.
 
-The command also writes thin wrapper instructions that point agents back to the canonical `.pico8ide-skills/p8mod-author/SKILL.md`:
+The command also writes thin wrapper instructions that point agents back to the canonical `.pico8ide-skills/p8mod-author/SKILL.md`. Repo-local agents should prefer `.agents/skills/p8mod-author/SKILL.md` when working inside `goindie2`; these installed workspace wrappers are only for external Pico8 IDE workspaces:
 
 - Codex: `.codex/skills/p8mod-author/SKILL.md`
 - Claude Code: `.claude/skills/p8mod-author/SKILL.md`
