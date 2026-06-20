@@ -1,6 +1,16 @@
-# PICO-8 IDE Extension — Specification
+# PICO-8 IDE Extension — Reference Specification
 
 > Version 0.1.0 — 2026-02-12
+
+This document is a reference snapshot for the `pico8ide` submodule. In the
+`goindie2` monorepo, the root spec index is the authority for whether this file
+is canonical: `docs/specs/spec_index.md` currently classifies
+`projects/pico8ide/docs/SPEC.md` as reference-only, with
+`projects/pico8ide/AGENTS.md`, README/package metadata, and source as the local
+working authority until a repo-local spec index is added.
+
+Keep this file useful and current when editing it, but do not treat it as the
+owning SDD spec for monorepo work.
 
 ## 1. Overview
 
@@ -28,7 +38,6 @@ PICO-8 IDE is a VS Code extension for browsing, viewing, editing, and running PI
 | `pico8ide.runGame` | Run in PICO-8 | play.svg | Launch current game in local PICO-8 |
 | `pico8ide.stopGame` | Stop PICO-8 | stop.svg | Kill the running PICO-8 process |
 | `pico8ide.forkGame` | Fork Game | fork.svg | Copy a database game's cart into the workspace |
-| `pico8ide.previewP8Cart` | Preview PICO-8 Cart | — | Open a `.p8` file in the cart viewer (context menu on `.p8` files in explorer) |
 | `pico8ide.openWithP8IDE` | Open with PICO-8 IDE | — | Open `.p8` or `.p8.png` files through the Pico-8 IDE editor surface |
 | `pico8ide.useTextEditorForP8` | PICO-8: Use Text Editor for .p8 Files | — | Restore the default text editor association for `.p8` files |
 | `pico8ide.newP8Mod` | PICO-8: New Mod Cartridge | new-file.svg | Create a blank editable `.p8mod` cartridge in the workspace |
@@ -68,7 +77,8 @@ The installed canonical skill includes `scripts/validate-p8mod.mjs` and `scripts
 - `pico8ide.forkGame` — when `viewItem == gameItem`
 
 ### `explorer/context`
-- `pico8ide.previewP8Cart` — when `resourceExtname == .p8`, navigation group
+- `pico8ide.openWithP8IDE` — when `resourceExtname == .p8`, navigation group
+- `pico8ide.openWithP8IDE` — when `resourceExtname == .png && resourceFilename =~ /\\.p8\\.png$/`, navigation group
 
 ## 6. Tree View Behavior
 
@@ -116,7 +126,7 @@ src/
     │   ├── cartStore.ts           # zustand: GFX, MAP, FLAGS, SFX, MUSIC, CODE
     │   ├── uiStore.ts             # zustand: activeTab, tool, zoom, pan, selection
     │   ├── metaStore.ts           # zustand: MetaData, i18n entries
-    │   └── undoStore.ts           # zustand: per-editor undo/redo stacks
+    │   └── libStore.ts            # zustand: bundled library metadata
     ├── components/
     │   ├── TabBar.tsx             # Tab header with tab switching
     │   ├── TabContainer.tsx       # Renders active tab content
@@ -177,13 +187,13 @@ The webview is built separately from the extension host:
 
 ```bash
 # Development (watch mode)
-npm run watch:webview     # esbuild --watch
+npm run watch:webview     # node esbuild.config.mjs --watch
 
 # Production
-npm run build:webview     # esbuild --minify --bundle
+npm run build:webview     # node esbuild.config.mjs
 
 # Full build (extension + webview)
-npm run compile           # tsc -p ./ && esbuild webview
+npm run compile           # tsc -p ./ && node esbuild.config.mjs
 ```
 
 esbuild configuration:
@@ -191,8 +201,8 @@ esbuild configuration:
 - **Output**: `out/webview/bundle.js` + `out/webview/bundle.css`
 - **Format**: `iife` (immediately-invoked function expression — no module system needed in webview)
 - **Target**: `es2020`
-- **JSX**: `automatic` (React 18 JSX transform, no `import React` needed)
-- **External**: `['vscode']` (not used in webview, but prevents accidental imports)
+- **JSX**: `automatic` (React JSX transform, no `import React` needed)
+- **External**: none; the VS Code API is reached through the webview bridge rather than bundled from `vscode`
 - **Loader**: `.tsx` → `tsx`, `.ts` → `ts`, `.css` → `css`
 - **Plugins**: CSS modules plugin for `*.module.css` files
 
@@ -315,7 +325,7 @@ All change notifications are debounced (100ms) at the store level before posting
 The former 6000-line inline HTML generator is replaced by a thin shell generator (~50 lines). It generates a minimal HTML document that loads the bundled React app and passes initial data. The function signature and `CartViewerOptions` interface remain the same for backward compatibility with the three callers:
 1. **`Pico8CartPanel`** — database game viewer (read-only, with audio + run button)
 2. **`Pico8PngEditorProvider`** — `.p8.png` custom editor (editable for workspace files)
-3. **`previewP8Cart` command** — `.p8` file preview (read-only)
+3. **`openWithP8IDE` command** — `.p8` or `.p8.png` file preview/editor entry point
 
 ### Layout
 
@@ -940,7 +950,11 @@ When `showConvertBanner` is true, a yellow banner appears above the tabs with a 
 
 ## 9. `.p8` File Preview
 
-The `pico8ide.previewP8Cart` command (available via right-click context menu on `.p8` files in the explorer) opens a read-only cart viewer in a webview panel. It parses `.p8` text format, extracts sections (code, gfx, map, sfx, music), and passes the data to `generateCartViewerHtml()` with no audio, no run button, and not editable.
+The `pico8ide.openWithP8IDE` command is available from explorer context menus
+for `.p8` files and `.p8.png` cartridges. `.p8mod` and `.p8.png` files are also
+registered as custom editors. The command routes files into the Pico-8 IDE
+viewer/editor surface through the extension host rather than a separate legacy
+preview command.
 
 ## 10. PICO-8 Process Management
 
@@ -996,16 +1010,15 @@ When the user selects a `.app` bundle via `setPico8Path`, the extension auto-res
 
 | Package | Purpose |
 |---------|---------|
-| `react` (^18.3.0) | UI component library for webview |
-| `react-dom` (^18.3.0) | React DOM renderer for webview |
-| `zustand` (^5.0.0) | Lightweight state management for webview |
+| `react` (^19.2.4) | UI component library for webview |
+| `react-dom` (^19.2.4) | React DOM renderer for webview |
+| `zustand` (^5.0.11) | Lightweight state management for webview |
 | `monaco-editor` (^0.52.0) | Code editor in webview tabs |
 | `pngjs` (^7.0.0) | PNG decode/encode for `.p8.png` steganography |
 | `adm-zip` (^0.5.10) | Unzip remote database downloads |
-| `esbuild` (^0.24.0) | Bundles React webview app (dev dependency) |
-| `@types/react` (^18.3.0) | TypeScript types for React (dev dependency) |
-| `@types/react-dom` (^18.3.0) | TypeScript types for React DOM (dev dependency) |
-| `esbuild-css-modules-plugin` (^3.1.0) | CSS Modules support for esbuild (dev dependency) |
+| `esbuild` (^0.27.3) | Bundles React webview app (dev dependency) |
+| `@types/react` (^19.2.14) | TypeScript types for React (dev dependency) |
+| `@types/react-dom` (^19.2.3) | TypeScript types for React DOM (dev dependency) |
 
 Monaco's AMD build (`min/vs/`) is copied to `resources/monaco/` by `scripts/copy-monaco.js` (runs on `postinstall` and `precompile`). The `.gitignore` excludes `resources/monaco/`; `.vscodeignore` ensures it is included in the VSIX package.
 
@@ -1102,7 +1115,7 @@ All icons use 16×16 viewBox SVG format.
 - Upgraded `Pico8PngEditorProvider` from `CustomReadonlyEditorProvider` to `CustomEditorProvider` with save/revert/backup support.
 - Editable Monaco editor for workspace `.p8.png` files; save writes companion `.p8` file.
 - Added `pico8ide.forkGame` command to copy database carts into workspace. Fork tries optional `.p8mod` source first, then `.p8` source, then falls back to the `.p8.png` runtime cart.
-- Added `pico8ide.previewP8Cart` command for `.p8` file preview via explorer context menu.
+- Added the Pico-8 IDE explorer entry point for `.p8` and `.p8.png` files.
 - Removed `pico8ide.runGame` from `view/title` menu (kept in `view/item/context` inline only).
 - Fixed `:c:` LZSS decompression: corrected 8-byte header parsing (was skipping only 4 bytes, producing `???` characters).
 - Added `monaco-editor` dependency with `postinstall`/`precompile` copy script.
