@@ -28,7 +28,7 @@ npm run package    # Create .vsix distribution file
   - `Pico8GamesProvider` - TreeDataProvider for the game list sidebar
   - `GameDetailViewProvider` - WebviewViewProvider for game details panel
   - `Pico8CartPanel` - WebviewPanel for viewing cartridge contents (code, sprites, map, SFX, music)
-  - `Pico8Decoder` - Decodes .p8.png cartridge files (steganography extraction, LZSS/PXA decompression)
+  - `Pico8Decoder` in `src/extension/pngDecoder.ts` - Decodes .p8.png cartridge files (steganography extraction, LZSS/PXA decompression)
 
 - **dataManager.ts** - Handles data loading and caching:
   - Remote mode: Downloads db.json from GitHub releases, caches locally
@@ -61,6 +61,13 @@ Code compression formats:
 - `:c:\0` header → Legacy LZSS compression
 - `\0pxa` header → PXA compression (MTF + LZ77, LSB-first bitstream)
 - No header → Raw ASCII
+
+The old text-document content-provider decoder lane and root-level compiled
+`src/*.js` first-commit artifacts have been removed. Do not restore
+`src/extension/decoder.ts`, `src/extension/contentProvider.ts`, or tracked
+root-level `src/*.js` files; `.p8`, `.p8mod`, and `.p8.png` entry points must
+route through the custom editor and `pngDecoder.ts` path. Build output belongs
+under ignored `out/`.
 
 Label image is extracted from pixel area starting at offset (16, 24).
 
