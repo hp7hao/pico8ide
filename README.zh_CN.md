@@ -2,11 +2,11 @@
 
 [English](README.md) | [中文](README.zh_CN.md)
 
-一个用于浏览和体验 PICO-8 游戏的 VS Code 扩展。
+一个用于浏览、编辑、复制和运行 PICO-8 游戏的 VS Code 扩展。
 
 ![PICO-8 IDE](resources/screenshots/pico8ide.png)
 
-> **注意：** 目前仅支持查看卡带数据（代码、精灵图、地图、音效、音乐），编辑和运行游戏功能即将推出。
+> **注意：** PICO-8 是 Lexaloffle Games 的付费软件。从扩展中运行卡带需要先通过 `pico8ide.setPico8Path` 配置本地 PICO-8 安装路径。
 
 ## 功能
 
@@ -14,6 +14,11 @@
 - 按名称、作者或游戏 ID 搜索游戏
 - 查看游戏详情、缩略图和元数据
 - 打开并阅读 PICO-8 卡带源代码
+- 编辑 `.p8mod` 卡带的代码、精灵图、地图、标志、音效、音乐、国际化和导出内容
+- 在本地 PICO-8 中运行卡带，并可从 VS Code 停止运行中的进程
+- 将数据库游戏复制到工作区，并优先使用可编辑的 FCDB 源文件
+- 新建空白 `.p8mod` 卡带和国际化演示卡带
+- 将内置 `p8mod-author` Agent 技能安装到外部 Pico8 IDE 工作区
 - 查看精灵图、地图、音效和音乐数据
 - 精选游戏列表
 
@@ -36,6 +41,7 @@
 - `pico8ide.useTextEditorForP8` — PICO-8: Use Text Editor for .p8 Files
 - `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
 - `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
+- `pico8ide.installAgentSkills` — PICO-8: Install Agent Skills
 
 ## 创建你自己的游戏列表
 

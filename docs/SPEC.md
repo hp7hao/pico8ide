@@ -64,7 +64,7 @@ The installed canonical skill includes `scripts/validate-p8mod.mjs` and `scripts
 
 | Key | Command | When |
 |-----|---------|------|
-| `Ctrl+R` (`Cmd+R` on macOS) | `pico8ide.runGame` | `activeWebviewPanelId == pico8Cart \|\| resourceExtname == .p8` |
+| `Ctrl+R` (`Cmd+R` on macOS) | `pico8ide.runGame` | `activeWebviewPanelId == pico8Cart \|\| activeWebviewPanelId == pico8ide.p8Editor \|\| activeWebviewPanelId == pico8ide.pngViewer \|\| resourceExtname == .p8` |
 
 ## 5. Menus
 
