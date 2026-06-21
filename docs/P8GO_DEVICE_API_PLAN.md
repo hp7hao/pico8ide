@@ -145,18 +145,19 @@ Bridge requirements:
 
 ## Feasibility Tests
 
-The first tests use `/home/hp/apps/pico-8/pico8` with an isolated `-home` directory.
+The first tests use an operator-provided native PICO-8 binary with an isolated
+`-home` directory. Set `P8GO_PICO8_BIN` to the local licensed binary path.
 
 Test commands should prefer headless execution:
 
 ```bash
-/home/hp/apps/pico-8/pico8 -home /tmp/p8go-pico8-home -x projects/pico8ide/tests/p8go_probe/p8go_probe.p8
+"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -x projects/pico8ide/tests/p8go_probe/p8go_probe.p8
 ```
 
 If a window is required, keep it small and windowed:
 
 ```bash
-/home/hp/apps/pico-8/pico8 -home /tmp/p8go-pico8-home -windowed 1 -width 128 -height 128 -draw_rect 0,0,128,128 -run projects/pico8ide/tests/p8go_probe/p8go_probe.p8
+"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -windowed 1 -width 128 -height 128 -draw_rect 0,0,128,128 -run projects/pico8ide/tests/p8go_probe/p8go_probe.p8
 ```
 
 Acceptance criteria before committing to live IPC:
@@ -171,14 +172,14 @@ Acceptance criteria before committing to live IPC:
 - Bundled PICO-8 manual documents `-x filename` as experimental headless cart execution.
 - Bundled PICO-8 manual documents `-width`, `-height`, `-windowed`, `-draw_rect`, and `-home` command-line flags.
 - Manual notes that Raspberry Pi `pico8_dyn` does not support GPIO/serial, so native GPIO assumptions must be tested rather than assumed.
-- Local x86-64 native PICO-8 at `/home/hp/apps/pico-8/pico8` successfully runs a probe cart with `-x` headless mode and emits `printh()` output to stdout.
+- Local x86-64 native PICO-8 successfully runs a probe cart with `-x` headless mode and emits `printh()` output to stdout.
 - A bounded host-side probe using `process_vm_readv` found a cart-written mailbox marker while PICO-8 continued running: `FOUND marker_addr=0xca64a1 scan_ms=2 bytes=00137038676f21140000000000000000`.
 - The same `process_vm_readv` probe failed inside the Codex sandbox with `errno=1`, so bridge tests that inspect another process need normal host permissions or device-side launcher privileges.
 - 5-second 60 Hz polling test: `reads=311 failed=0 changed=295 stagnant=15 backward=0 avg_read_us=7 worst_read_us=32`; host-to-cart write ack succeeded after 1 poll.
 - 10-second 120 Hz stress polling test: `reads=1236 failed=0 changed=599 stagnant=636 backward=0 avg_read_us=5 worst_read_us=75`; stagnant reads are expected because polling is faster than the cart's 60 Hz update rate; host-to-cart write ack succeeded after 1 poll.
 - 30-second 60 Hz stability test: `reads=1854 failed=0 changed=1777 stagnant=76 backward=0 avg_read_us=15 worst_read_us=77`; host-to-cart write ack succeeded after 1 poll.
-- `p8mod` now has ignored real-memory tests that launch `/home/hp/apps/pico-8/pico8` with isolated `-home`, generate carts from the bundled `p8go_lua_runtime()`, and validate live mailbox discovery against native PICO-8.
-- `p8mod` validated host-packet writes with a one-shot sentinel: `touch /tmp/p8go-real-write-after-discovery.ok` followed by `P8GO_PICO8_BIN=/home/hp/apps/pico-8/pico8 cargo test -p p8mod --features p8go-memory-bridge real_pico8_validated_host_write_readback -- --ignored --nocapture`.
+- `p8mod` now has ignored real-memory tests that launch `$P8GO_PICO8_BIN` with isolated `-home`, generate carts from the bundled `p8go_lua_runtime()`, and validate live mailbox discovery against native PICO-8.
+- `p8mod` validated host-packet writes with a one-shot sentinel: `touch /tmp/p8go-real-write-after-discovery.ok` followed by `P8GO_PICO8_BIN=/path/to/pico8 cargo test -p p8mod --features p8go-memory-bridge real_pico8_validated_host_write_readback -- --ignored --nocapture`.
 - Cart-side consumption of host events is not yet part of the committed real test. The current committed write test proves bounded `process_vm_writev` into the validated host packet range and readback from the child process; the inbound Lua API needs a separately specified safe memory range and runtime contract.
 
 ## Feasibility Conclusion
