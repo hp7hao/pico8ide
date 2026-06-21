@@ -1,10 +1,10 @@
 # PICO-8 IDE
 
-A VS Code extension for browsing and playing PICO-8 games.
+A VS Code extension for browsing, editing, forking, and running PICO-8 games.
 
 ![PICO-8 IDE](https://raw.githubusercontent.com/hp7hao/pico8ide/main/resources/screenshots/pico8ide.png)
 
-> **Note:** The extension currently supports viewing cartridge data only (code, sprites, maps, SFX, music). Editing and running games is coming soon.
+> **Note:** PICO-8 is paid software by Lexaloffle Games. Running carts from the extension requires a local PICO-8 installation configured with `pico8ide.setPico8Path`.
 
 ## Features
 
@@ -12,12 +12,34 @@ A VS Code extension for browsing and playing PICO-8 games.
 - Search games by name, author, or game ID
 - View game details, thumbnails, and metadata
 - Open and read PICO-8 cartridge source code
+- Edit `.p8mod` cartridges with code, sprites, maps, flags, SFX, music, i18n, and export surfaces
+- Run carts in a local PICO-8 installation and stop the running process from VS Code
+- Fork database games into a workspace, preferring editable FCDB source artifacts when available
+- Create blank `.p8mod` cartridges and i18n demo cartridges
+- Install the bundled `p8mod-author` agent skill into external Pico8 IDE workspaces
 - View sprites, maps, SFX, and music data
 - Curated game lists
 
 ## Usage
 
 After installing, click the PICO-8 icon in the Activity Bar to open the game browser. Games are loaded from a regularly updated database.
+
+## VS Code Commands
+
+The extension contributes these commands:
+
+- `pico8ide.search` — Search
+- `pico8ide.openCart` — Open Cartridge
+- `pico8ide.refreshEntry` — Refresh
+- `pico8ide.setPico8Path` — Set PICO-8 Path
+- `pico8ide.runGame` — Run in PICO-8
+- `pico8ide.stopGame` — Stop PICO-8
+- `pico8ide.forkGame` — Fork to Workspace
+- `pico8ide.openWithP8IDE` — Open with PICO-8 IDE
+- `pico8ide.useTextEditorForP8` — PICO-8: Use Text Editor for .p8 Files
+- `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
+- `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
+- `pico8ide.installAgentSkills` — PICO-8: Install Agent Skills
 
 ## Create Your Own Game List
 
@@ -126,9 +148,9 @@ If you're interested in PICO-8, please visit the official website: https://www.l
 
 # PICO-8 IDE (中文)
 
-一个用于浏览和体验 PICO-8 游戏的 VS Code 扩展。
+一个用于浏览、编辑、复制和运行 PICO-8 游戏的 VS Code 扩展。
 
-> **注意：** 目前仅支持查看卡带数据（代码、精灵图、地图、音效、音乐），编辑和运行游戏功能即将推出。
+> **注意：** PICO-8 是 Lexaloffle Games 的付费软件。从扩展中运行卡带需要先通过 `pico8ide.setPico8Path` 配置本地 PICO-8 安装路径。
 
 ## 功能
 
@@ -136,12 +158,34 @@ If you're interested in PICO-8, please visit the official website: https://www.l
 - 按名称、作者或游戏 ID 搜索游戏
 - 查看游戏详情、缩略图和元数据
 - 打开并阅读 PICO-8 卡带源代码
+- 编辑 `.p8mod` 卡带的代码、精灵图、地图、标志、音效、音乐、国际化和导出内容
+- 在本地 PICO-8 中运行卡带，并可从 VS Code 停止运行中的进程
+- 将数据库游戏复制到工作区，并优先使用可编辑的 FCDB 源文件
+- 新建空白 `.p8mod` 卡带和国际化演示卡带
+- 将内置 `p8mod-author` Agent 技能安装到外部 Pico8 IDE 工作区
 - 查看精灵图、地图、音效和音乐数据
 - 精选游戏列表
 
 ## 使用方法
 
 安装后，点击活动栏中的 PICO-8 图标即可打开游戏浏览器。游戏数据来自定期更新的数据库。
+
+## VS Code 命令
+
+扩展提供以下命令：
+
+- `pico8ide.search` — Search
+- `pico8ide.openCart` — Open Cartridge
+- `pico8ide.refreshEntry` — Refresh
+- `pico8ide.setPico8Path` — Set PICO-8 Path
+- `pico8ide.runGame` — Run in PICO-8
+- `pico8ide.stopGame` — Stop PICO-8
+- `pico8ide.forkGame` — Fork to Workspace
+- `pico8ide.openWithP8IDE` — Open with PICO-8 IDE
+- `pico8ide.useTextEditorForP8` — PICO-8: Use Text Editor for .p8 Files
+- `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
+- `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
+- `pico8ide.installAgentSkills` — PICO-8: Install Agent Skills
 
 ## 创建你自己的游戏列表
 
