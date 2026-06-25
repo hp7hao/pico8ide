@@ -34,7 +34,6 @@ p8go.vibe(ms,strength)
 p8go.vibe_stop()
 
 p8go.ipc_send(channel,payload)
-local msg=p8go.ipc_recv(channel)
 
 p8go.ach_unlock(id)
 p8go.ach_progress(id,value,target)
@@ -45,6 +44,9 @@ Rules:
 - `p8go.has(name)` returns `false` if the bridge is absent or the capability is disabled.
 - `p8go.vibe(ms,strength)` clamps duration and strength and is rate-limited.
 - IPC payloads start as short strings. JSON should not be part of the cart runtime API unless the token/runtime cost is justified.
+- The current bundled Lua runtime is cart-to-host only. `p8go.ipc_recv(channel)`
+  remains deferred until the inbound Lua runtime contract defines a safe
+  host-to-cart memory range and cart-side consumption test.
 - Achievement events are idempotent. Repeated unlocks must not duplicate notifications or corrupt state.
 
 ## Manifest V0
@@ -104,7 +106,7 @@ Command IDs:
 - `3`: IPC send
 - `4`: achievement unlock
 - `5`: achievement progress
-- `128..255`: host-to-cart responses/events
+- `128..255`: reserved for future host-to-cart responses/events after the inbound Lua runtime contract lands
 
 Bridge requirements:
 
