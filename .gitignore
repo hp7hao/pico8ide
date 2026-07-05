@@ -3,3 +3,7 @@ out/
 *.vsix
 resources/monaco/
 .claude/settings.local.json
+.vscode-test/
+test-results/
+playwright-report/
+.playwright/

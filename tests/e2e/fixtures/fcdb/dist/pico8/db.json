@@ -1,0 +1,38 @@
+[
+  {
+    "id": "synthetic-legacy",
+    "name": "Synthetic Legacy Cart",
+    "description": "legacy-lzss synthetic decoder fixture generated for pico8ide tests.",
+    "author": {
+      "name": "pico8ide tests",
+      "url": "https://example.invalid/pico8ide-tests"
+    },
+    "source": "bbs",
+    "extension": {
+      "cart_file": "synthetic_legacy.p8.png",
+      "tags": [
+        "synthetic",
+        "legacy-lzss"
+      ],
+      "likes": 0
+    }
+  },
+  {
+    "id": "synthetic-pxa",
+    "name": "Synthetic PXA Cart",
+    "description": "pxa synthetic decoder fixture generated for pico8ide tests.",
+    "author": {
+      "name": "pico8ide tests",
+      "url": "https://example.invalid/pico8ide-tests"
+    },
+    "source": "bbs",
+    "extension": {
+      "cart_file": "synthetic_pxa.p8.png",
+      "tags": [
+        "synthetic",
+        "pxa"
+      ],
+      "likes": 0
+    }
+  }
+]

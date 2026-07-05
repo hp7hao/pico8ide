@@ -1,0 +1,38 @@
+{
+  "synthetic_legacy.p8.png": {
+    "format": "legacy-lzss",
+    "codeLen": 22433,
+    "codeSha256": "92d9c0296ac1d443040f5bc1e18f2c048f8699dae8d13bfdd30b90af4e4a1b28",
+    "gfxSha256": "79a68194a5a1dc354264d70a556ff0a6acf1478d589a98cbb22bbb81fe55b5e5",
+    "mapSha256": "95af26ec99f51f9237d42df16037c2981548c81d9d16982b2e4cb41a46dae47c",
+    "gfxFlagsSha256": "185e2778bfc9dbe38090d6572dc90a588fea6288ea5038f4e0bc48a38da74e45",
+    "musicSha256": "c891b664f6aec3eec9b1ea4979429b9b466bff02569945dd4e1eb82b641ea5bd",
+    "sfxSha256": "ee6e070e454235e8c7dbfbddf69fff4c29e9d28bc1aec4b8dbb32a6437fc5c84",
+    "labelLen": 28474,
+    "sectionLens": {
+      "gfx": 8192,
+      "map": 4096,
+      "gfxFlags": 256,
+      "music": 256,
+      "sfx": 4352
+    }
+  },
+  "synthetic_pxa.p8.png": {
+    "format": "pxa",
+    "codeLen": 64,
+    "codeSha256": "c249a87d9575244c37a396a3cd14e79f7825816b242da0607627ec7cf6293c67",
+    "gfxSha256": "79a68194a5a1dc354264d70a556ff0a6acf1478d589a98cbb22bbb81fe55b5e5",
+    "mapSha256": "95af26ec99f51f9237d42df16037c2981548c81d9d16982b2e4cb41a46dae47c",
+    "gfxFlagsSha256": "185e2778bfc9dbe38090d6572dc90a588fea6288ea5038f4e0bc48a38da74e45",
+    "musicSha256": "c891b664f6aec3eec9b1ea4979429b9b466bff02569945dd4e1eb82b641ea5bd",
+    "sfxSha256": "ee6e070e454235e8c7dbfbddf69fff4c29e9d28bc1aec4b8dbb32a6437fc5c84",
+    "labelLen": 27106,
+    "sectionLens": {
+      "gfx": 8192,
+      "map": 4096,
+      "gfxFlags": 256,
+      "music": 256,
+      "sfx": 4352
+    }
+  }
+}

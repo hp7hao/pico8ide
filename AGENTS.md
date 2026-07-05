@@ -11,12 +11,36 @@ PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle 
 ## Commands
 
 ```bash
-npm run compile    # Build extension to out/
-npm run watch      # Watch mode for development
-npm run package    # Create .vsix distribution file
+npm run compile     # Build extension to out/
+npm run watch       # Watch mode for development
+npm run package     # Create .vsix distribution file
+npm test            # vitest suite (webview unit + Tier C decoder golden)
+npm run test:e2e    # Tier A extension-host E2E in a real VS Code
+npm run test:webview # Tier B webview E2E in headless Chromium (Playwright)
 ```
 
 **Debugging**: Use VS Code's "Run Extension" launch config (F5) which compiles and launches an Extension Development Host.
+
+## Testing
+
+Test tiers and their design are documented in `docs/E2E_TEST_PLAN.md`:
+
+- **Tier C (decoder/format golden)** and the webview unit/component tests run
+  under vitest (`npm test`, jsdom). Tier C decodes generated synthetic `.p8.png`
+  fixtures under `tests/e2e/fixtures/carts/` and asserts against committed `golden.json`. This
+  is the CI gate (`.github/workflows/test.yml` → `test` job).
+- **Tier A (extension-host E2E)** uses `@vscode/test-electron`/`@vscode/test-cli`
+  (`npm run test:e2e`, Mocha TDD interface). Suites live under
+  `tests/e2e/suite/`, compiled to `out/e2e/` via `tests/e2e/tsconfig.json` and
+  run by `.vscode-test.mjs`. Tests are hermetic: local `dataMode` + a fixture
+  FCDB dir (no network) and a fake PICO-8 stub (`tests/e2e/fixtures/fake-pico8.sh`)
+  for run/stop. CI runs this under `xvfb-run` (`e2e` job).
+- **Tier B (webview E2E)** uses Playwright against the standalone webview build
+  (`npm run test:webview`). Specs live under `tests/e2e-webview/specs/`; a
+  fixed-port esbuild server (`tests/e2e-webview/server.mjs`, referenced by
+  `playwright.config.ts`) serves the `dev:standalone` bundle with mock init data.
+  Tests assert tab/panel rendering and the `standaloneBridge` message contract.
+  CI runs this via `playwright install --with-deps chromium` (`webview-e2e` job).
 
 ## Architecture
 

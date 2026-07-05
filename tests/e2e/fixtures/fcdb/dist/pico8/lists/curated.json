@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "id": "synthetic-fixtures",
+    "name": "Synthetic Fixtures"
+  },
+  "games": [
+    {
+      "id": "synthetic-legacy",
+      "name": "Synthetic Legacy Cart",
+      "author": {
+        "name": "pico8ide tests",
+        "url": "https://example.invalid/pico8ide-tests"
+      },
+      "source": "bbs",
+      "extension": {
+        "cart_file": "synthetic_legacy.p8.png",
+        "tags": [
+          "synthetic",
+          "legacy-lzss"
+        ],
+        "likes": 0
+      }
+    },
+    {
+      "id": "synthetic-pxa",
+      "name": "Synthetic PXA Cart",
+      "author": {
+        "name": "pico8ide tests",
+        "url": "https://example.invalid/pico8ide-tests"
+      },
+      "source": "bbs",
+      "extension": {
+        "cart_file": "synthetic_pxa.p8.png",
+        "tags": [
+          "synthetic",
+          "pxa"
+        ],
+        "likes": 0
+      }
+    }
+  ]
+}
