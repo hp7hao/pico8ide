@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "assetPack": {
+    "id": "pico8ide-default",
+    "version": "2026.07.0"
+  },
+  "assets": [
+    {
+      "kind": "font",
+      "id": "BoutiqueBitmap7x7_1.7",
+      "version": "1.7.0",
+      "path": "resources/fonts/BoutiqueBitmap7x7_1.7.ttf",
+      "sha256": "f47ffa5a11c525e51b487a9ae6fc4c92f80366fc75a4e2088bf05888104637bf"
+    },
+    {
+      "kind": "lib",
+      "id": "p8go",
+      "version": "0.1.0",
+      "path": "resources/libs/p8go.json",
+      "sha256": "0a34324ba1b5cb2ac5a2d75012e76c07f14ba84dc52b6dc5a3550c7c6b137f7d"
+    },
+    {
+      "kind": "lib",
+      "id": "vec2",
+      "version": "1.0.0",
+      "path": "resources/libs/vec2.json",
+      "sha256": "7ffcf45988ece80e4f7c0add0dd0e5423310351ad058ef2ce43a275e03fc42c8"
+    },
+    {
+      "kind": "template",
+      "id": "cyan",
+      "version": "1.0.0",
+      "path": "resources/cart_templates/cyan.png",
+      "sha256": "24cfbca17d7e658ab712b2d0dd33e20e8c127e99b0e4c990c90b5922c363d0a9"
+    },
+    {
+      "kind": "template",
+      "id": "default",
+      "version": "1.0.0",
+      "path": "resources/cart_templates/default.png",
+      "sha256": "227e51e020c6bc681df7ce49ba1740434ccf4f5dd23cbcbcd3e3357592a7d9c8"
+    },
+    {
+      "kind": "template",
+      "id": "e-zombie",
+      "version": "1.0.0",
+      "path": "resources/cart_templates/e-zombie.png",
+      "sha256": "b51faeeb6aa557a6ca6ac4320bef6a87a468cd78dbdfdd2cd40f004f31c73ba8"
+    },
+    {
+      "kind": "template",
+      "id": "e-zombie16",
+      "version": "1.0.0",
+      "path": "resources/cart_templates/e-zombie16.png",
+      "sha256": "d6881ed781c4393061ab9a3cfdd7d10b484b2568acbe2888641300cd1d2c79e6"
+    }
+  ]
+}

@@ -59,6 +59,25 @@ Use `__meta__` for Pico-8 IDE metadata:
 
 Omit `__meta__` only when title and author are empty and the template is `default`.
 
+Use optional `__meta__.export` only when the cart needs Pico8 IDE exporter
+asset compatibility constraints. Keep Lua include directives simple, such as
+`--#include p8go`; do not put versions in include lines. Release builds should
+record exact exporter and asset versions/hashes in a sidecar lock/provenance
+file, not in the editable `.p8mod` source.
+
+```json
+{
+  "title": "My Game",
+  "author": "Author Name",
+  "template": "default",
+  "export": {
+    "assetPack": "pico8ide-default@^2026.07.0",
+    "libs": { "p8go": "^0.1.0" },
+    "templates": { "default": "^1.0.0" }
+  }
+}
+```
+
 ## i18n
 
 Use `__i18n__` when Lua calls `tx("key", x, y, color)` or `_txi()`:
@@ -113,3 +132,6 @@ python3 .codex/skills/p8mod-author/scripts/validate-p8mod.py path/to/game.p8mod
 
 - `.p8mod` stores i18n data as metadata. Pico-8 IDE can generate the Lua i18n runtime during run/export.
 - Do not assume a raw `.p8mod` with `tx()` and `_txi()` will run directly in vanilla PICO-8 without Pico-8 IDE export/codegen.
+- `.p8mod` is portable source; reproducible release output depends on the
+  exporter package plus versioned assets. For release workflows, prefer a
+  generated lock/provenance file that pins asset versions and content hashes.

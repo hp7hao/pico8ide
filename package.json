@@ -18,6 +18,9 @@
   ],
   "activationEvents": [],
   "main": "./out/extension/extension.js",
+  "bin": {
+    "p8modtool": "./out/extension/p8modtool.js"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -264,6 +267,9 @@
     "build:webview": "node esbuild.config.mjs",
     "watch": "tsc -watch -p ./",
     "watch:webview": "node esbuild.config.mjs --watch",
+    "assets:manifest": "node scripts/asset-manifest.mjs write",
+    "assets:check": "node scripts/asset-manifest.mjs check",
+    "assets:bump": "node scripts/asset-manifest.mjs bump",
     "dev:standalone": "node src/webview/standalone/devServer.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -297,6 +303,7 @@
   "dependencies": {
     "adm-zip": "^0.5.10",
     "monaco-editor": "^0.52.0",
+    "opentype.js": "^2.0.0",
     "pngjs": "^7.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

@@ -7,6 +7,7 @@ import { Pico8Decoder } from './pngDecoder';
 import { Pico8Encoder } from './pngDecoder';
 import { cartDataToP8 } from './p8format';
 import { cartDataToP8Mod, p8ModToCartData } from './p8modFormat';
+import { buildFinalCode, resolveTemplatePath } from './p8modExporter';
 import { t } from './i18n';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
@@ -74,18 +75,12 @@ function exportSingleCart(
     const variant: string = message.variant || 'base';
     const glyphs: { [char: string]: number[] } = message.glyphs || {};
 
-    // Determine final code
-    let finalCode = document.currentCode ?? document.cartData.code;
-
-    if (variant !== 'base' && message.i18nLuaCode) {
-        finalCode = message.i18nLuaCode + '\n' + finalCode;
-    }
-
-    // Resolve library includes
-    if (libManager) {
-        const resolved = libManager.resolveIncludes(finalCode);
-        finalCode = resolved.resolvedCode;
-    }
+    const finalCode = buildFinalCode(
+        document.currentCode ?? document.cartData.code,
+        { i18nLuaCode: variant !== 'base' ? message.i18nLuaCode : null },
+        { includeResolver: makeIncludeResolver(libManager) },
+        context.extensionPath
+    );
 
     // Assemble RAM (uses LZSS compression automatically for large code)
     const ram = Pico8Encoder.assembleRAM(document.cartData, finalCode);
@@ -100,8 +95,7 @@ function exportSingleCart(
     }
 
     // Generate cover PNG
-    const templateName = meta?.template || 'default';
-    const templatePath = path.join(context.extensionPath, 'resources', 'cart_templates', `${templateName}.png`);
+    const templatePath = resolveTemplatePath({}, context.extensionPath, document.metaData);
     const coverPng = Pico8Encoder.generateCover(
         templatePath,
         document.cartData.label,
@@ -399,19 +393,28 @@ function setupEditableWebview(
 
 function saveDocumentAsP8(document: Pico8Document, destPath: string, libManager?: LibManager, i18nLuaCode?: string | null): void {
     if (!document.cartData) { return; }
-    let code = document.currentCode ?? document.cartData.code;
-    // Prepend i18n runtime code if provided
-    if (i18nLuaCode) {
-        code = i18nLuaCode + '\n' + code;
-    }
-    // Resolve library includes for .p8 output (run/export)
-    if (libManager) {
-        const resolved = libManager.resolveIncludes(code);
-        code = resolved.resolvedCode;
-    }
+    const code = buildFinalCode(
+        document.currentCode ?? document.cartData.code,
+        { i18nLuaCode },
+        { includeResolver: makeIncludeResolver(libManager) },
+        path.resolve(__dirname, '..', '..')
+    );
     const saveData = { ...document.cartData, code };
     const p8Content = cartDataToP8(saveData);
     fs.writeFileSync(destPath, p8Content, 'utf-8');
+}
+
+function makeIncludeResolver(libManager?: LibManager): ((code: string) => string) | undefined {
+    if (!libManager) {
+        return undefined;
+    }
+    return (code: string) => {
+        const resolved = libManager.resolveIncludes(code);
+        if (resolved.errors.length > 0) {
+            throw new Error(resolved.errors.join('\n'));
+        }
+        return resolved.resolvedCode;
+    };
 }
 
 function saveDocumentAsP8Mod(document: Pico8Document, destPath: string): void {

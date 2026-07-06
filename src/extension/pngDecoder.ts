@@ -238,6 +238,10 @@ export class Pico8Encoder {
      * Returns the full code region bytes (header + compressed data) or null if it doesn't fit.
      */
     static compressLZSS(code: string): Uint8Array | null {
+        if (code.length > 0xFFFF) {
+            return null;
+        }
+
         const LUT = Pico8Encoder.LUT;
         const lutMap: { [ch: string]: number } = {};
         for (let i = 0; i < LUT.length; i++) {
@@ -316,6 +320,7 @@ export class Pico8Encoder {
     /**
      * Build a 32KB RAM buffer from CartData sections + code at 0x4300.
      * Uses raw encoding for short code, :c: LZSS compression for longer code.
+     * Throws when the source cannot fit in the PNG cartridge code region.
      */
     static assembleRAM(cartData: CartData, code: string): Uint8Array {
         const ram = new Uint8Array(0x8000); // 32KB zeroed
@@ -358,10 +363,7 @@ export class Pico8Encoder {
                     ram[codeStart + i] = compressed[i];
                 }
             } else {
-                // Compressed data doesn't fit either — truncate raw as fallback
-                for (let i = 0; i < maxRawLen; i++) {
-                    ram[codeStart + i] = code.charCodeAt(i) & 0xFF;
-                }
+                throw new Error('Code does not fit in .p8.png export; export .p8 source instead.');
             }
         }
 

@@ -18,6 +18,7 @@ A VS Code extension for browsing, editing, forking, and running PICO-8 games.
 - Run carts in a local PICO-8 installation and stop the running process from VS Code
 - Fork database games into a workspace, preferring editable FCDB source artifacts when available
 - Create blank `.p8mod` cartridges and i18n demo cartridges
+- Export `.p8mod` cartridges headlessly with the `p8modtool` CLI
 - Install the bundled `p8mod-author` agent skill into external Pico8 IDE workspaces
 - View sprites, maps, SFX, and music data
 - Curated game lists
@@ -42,6 +43,43 @@ The extension contributes these commands:
 - `pico8ide.newP8Mod` — PICO-8: New Mod Cartridge
 - `pico8ide.showI18nDemo` — PICO-8: Show I18n Demo
 - `pico8ide.installAgentSkills` — PICO-8: Install Agent Skills
+
+## p8modtool CLI
+
+The npm package exposes `p8modtool` for batch export outside VS Code. It uses the same `.p8mod` parser, bundled library resolver, i18n code generation, and cartridge cover templates as Pico8 IDE.
+
+```bash
+# Export a runnable text cartridge
+p8modtool game.p8mod --format p8 --out game.p8
+
+# Export a runtime PNG cartridge with the template from __meta__.template
+p8modtool game.p8mod --format p8.png --out game.p8.png
+
+# Export a localized runtime variant
+p8modtool game.p8mod --format p8.png --locale zh --out game.zh.p8.png
+
+# Export base plus every locale declared in __i18n__
+p8modtool game.p8mod --format p8.png --all-locales --out-dir release/
+```
+
+Useful options:
+
+- `--template <name>` selects `resources/cart_templates/<name>.png`.
+- `--template-path <path>` uses a specific 160x205 PNG cover template.
+- `--libs-dir <path>` adds a directory of Pico8 IDE library JSON files.
+- `--workspace-root <path>` adds `<path>/.pico8libs` to library lookup.
+- `--extension-path <path>` points the CLI at a Pico8 IDE package root when running from an unpacked build.
+- `--provenance <path>` writes exact exporter and asset versions/hashes for the export.
+- `--write-provenance` writes `<output>.provenance.json` beside a single output.
+- `--frozen-provenance <path>` fails if resolved assets do not match a previous provenance file.
+
+Bundled export assets are tracked in `resources/assets.json`. Maintainer scripts keep that manifest current:
+
+```bash
+npm run assets:manifest
+npm run assets:check
+npm run assets:bump -- <kind> <id> <major|minor|patch|x.y.z>
+```
 
 ## Create Your Own Game List
 

@@ -74,6 +74,21 @@ describe('cartDataToP8Mod', () => {
         expect(text).toContain('__i18n__');
     });
 
+    it('includes __meta__ when default visible fields have p8mod requirements', () => {
+        const meta: MetaData = {
+            meta: {
+                title: '',
+                author: '',
+                template: 'default',
+                p8mod: { format: '1.0', requires: { p8modtool: '>=1.0.5' } },
+            } as any,
+            i18n: { locales: [], entries: [], outputLocale: '' }
+        };
+        const text = cartDataToP8Mod(makeCartData(), meta);
+        expect(text).toContain('__meta__');
+        expect(text).toContain('"p8modtool": ">=1.0.5"');
+    });
+
     it('omits __i18n__ when i18n is empty', () => {
         const meta: MetaData = {
             meta: { title: 'A', author: 'B', template: 'default' },

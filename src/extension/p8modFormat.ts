@@ -10,7 +10,7 @@ export function cartDataToP8Mod(cartData: CartData, metaData: MetaData | null): 
     let text = cartDataToP8(cartData);
 
     if (metaData) {
-        if (metaData.meta && (metaData.meta.title || metaData.meta.author || metaData.meta.template !== 'default')) {
+        if (metaData.meta && shouldWriteMeta(metaData.meta)) {
             text += '__meta__\n';
             text += JSON.stringify(metaData.meta, null, 2) + '\n';
         }
@@ -22,6 +22,13 @@ export function cartDataToP8Mod(cartData: CartData, metaData: MetaData | null): 
     }
 
     return text;
+}
+
+function shouldWriteMeta(meta: MetaData['meta']): boolean {
+    if (meta.title || meta.author || meta.template !== 'default') {
+        return true;
+    }
+    return Object.keys(meta).some((key) => !['title', 'author', 'template'].includes(key));
 }
 
 /**

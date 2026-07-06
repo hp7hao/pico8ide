@@ -44,6 +44,109 @@ PICO-8 IDE is a VS Code extension for browsing, viewing, editing, and running PI
 | `pico8ide.showI18nDemo` | PICO-8: Show I18n Demo | — | Create an i18n demo `.p8mod` cartridge in the workspace |
 | `pico8ide.installAgentSkills` | PICO-8: Install Agent Skills | — | Install the bundled p8mod skill into the opened workspace under `.pico8ide-skills` with thin wrappers for common agent tools |
 
+### p8modtool CLI
+
+The package exposes a Node CLI, `p8modtool`, backed by the shared
+`src/extension/p8modExporter.ts` module. The CLI is the supported headless path
+for turning Pico8 IDE `.p8mod` source cartridges into runnable `.p8` or
+`.p8.png` artifacts outside VS Code.
+
+```bash
+p8modtool game.p8mod --format p8 --out game.p8
+p8modtool game.p8mod --format p8.png --out game.p8.png
+p8modtool game.p8mod --format p8.png --locale zh --out game.zh.p8.png
+p8modtool game.p8mod --format p8.png --all-locales --out-dir release/
+```
+
+Export behavior:
+
+- Parses `.p8mod` with the Pico8 IDE format parser.
+- Generates/prepends i18n Lua for localized variants.
+- Resolves bundled `resources/libs/*.json`, optional `--libs-dir`, and
+  `<workspace-root>/.pico8libs` `--#include` libraries.
+- Resolves cover templates from `--template-path`, `--template`,
+  `__meta__.template`, then `default`.
+- Validates optional `__meta__.p8mod.requires` tool/feature requirements before
+  conversion.
+- Writes exact exporter and asset provenance when `--provenance` or
+  `--write-provenance` is used, and validates frozen release assets with
+  `--frozen-provenance`.
+- Emits non-zero exits for invalid arguments, parse errors, missing libraries,
+  missing templates, and cartridge encoding failures.
+
+The VS Code editor export path and CLI share the final code construction and
+template resolution helpers so UI export and batch export do not drift.
+
+### Headless Export Asset Contract
+
+Pico8 IDE export assets are versioned inputs, not hidden implementation
+details. This applies to bundled libraries, cover templates, fonts, and any
+future asset pack shipped with a standalone exporter package.
+
+Authoring stays simple: Lua source uses stable include ids such as
+`--#include p8go` or `--#include vec2`; include lines must not carry versions.
+When a cart needs compatibility constraints, it records them in optional
+`__meta__.export` metadata instead of the Lua source:
+
+```json
+{
+  "title": "My Game",
+  "author": "Author Name",
+  "template": "default",
+  "p8mod": {
+    "format": "1.0",
+    "producer": "pico8ide@1.0.5",
+    "requires": {
+      "p8modtool": ">=1.0.5",
+      "features": ["i18n-glyph-v1"]
+    }
+  },
+  "export": {
+    "assetPack": "pico8ide-default@^2026.07.0",
+    "libs": { "p8go": "^0.1.0", "vec2": "^1.0.0" },
+    "templates": { "default": "^1.0.0" },
+    "fonts": { "BoutiqueBitmap7x7_1.7": "^1.7.0" }
+  }
+}
+```
+
+Normal authoring does not need the optional `p8mod` or `export` blocks. They are
+only for carts that require a minimum exporter version, a required feature, or a
+compatibility constraint for a stable asset id. Exact asset hashes and resolved
+versions must not be written into `.p8mod`.
+
+Release reproducibility is recorded outside the source cart. Exporters that
+support lock/provenance output write the exact exporter package version, asset
+pack id/version, asset ids, asset versions, and asset content hashes used for
+each artifact. Frozen release builds fail when a requested asset is missing or
+when an asset's content hash differs from the lock.
+
+The package-owned asset manifest lives at `resources/assets.json` and is
+maintained by package scripts:
+
+```bash
+npm run assets:manifest
+npm run assets:check
+npm run assets:bump -- <kind> <id> <major|minor|patch|x.y.z>
+```
+
+`assets:manifest` regenerates the manifest from bundled libraries, cover
+templates, and fonts. `assets:check` fails when a tracked asset changed without
+manifest refresh. `assets:bump` changes the selected asset version and refreshes
+hashes.
+
+Resolution order is:
+
+1. Exact lock/provenance asset when running in frozen mode.
+2. `__meta__.export` compatibility constraint when present.
+3. Bundled package default asset.
+4. Explicit project asset directories only when requested by CLI/API options.
+
+If two active asset sources provide the same id with incompatible versions or
+different hashes, export must fail unless the caller explicitly allows that
+override. The npm package version alone is not sufficient release provenance;
+asset versions and hashes are part of the export contract.
+
 ### Bundled Agent Skills
 
 `pico8ide.installAgentSkills` copies the extension's bundled p8mod authoring skill from `resources/.pico8ide-skills/` into the first opened workspace folder at `.pico8ide-skills/`. The command installs:
