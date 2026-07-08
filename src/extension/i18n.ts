@@ -230,11 +230,11 @@ const en: LocaleStrings = {
     exportTitle: "Title",
     exportAuthor: "Author",
     exportTemplate: "Template",
-    exportButton: "Export .p8.png",
+    exportButton: "Export All Languages",
     exportSuccess: "Exported successfully",
     exportError: "Export failed",
     exportLocaleVariant: "Export",
-    exportAll: "Export All",
+    exportAll: "Export All Languages",
     exportCodeTooLarge: "Code exceeds 15616 bytes limit",
 
     // Library picker
@@ -352,11 +352,11 @@ const zhCN: LocaleStrings = {
     exportTitle: "标题",
     exportAuthor: "作者",
     exportTemplate: "模板",
-    exportButton: "导出 .p8.png",
+    exportButton: "导出全部语言",
     exportSuccess: "导出成功",
     exportError: "导出失败",
     exportLocaleVariant: "导出",
-    exportAll: "全部导出",
+    exportAll: "导出全部语言",
     exportCodeTooLarge: "代码超过 15616 字节限制",
 
     // Library picker

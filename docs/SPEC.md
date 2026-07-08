@@ -52,30 +52,36 @@ for turning Pico8 IDE `.p8mod` source cartridges into runnable `.p8` or
 `.p8.png` artifacts outside VS Code.
 
 ```bash
-p8modtool game.p8mod --format p8 --out game.p8
-p8modtool game.p8mod --format p8.png --out game.p8.png
-p8modtool game.p8mod --format p8.png --locale zh --out game.zh.p8.png
-p8modtool game.p8mod --format p8.png --all-locales --out-dir release/
+p8modtool game.p8mod --format p8 --out-dir release/
+p8modtool game.p8mod --format p8.png --out-dir release/
+p8modtool game.p8mod --format p8.png --lang zh-CN --out game.zh-CN.p8.png
 ```
+
+Default export is multilingual release export. It requires at least one
+language in `__i18n__.locales` and emits one artifact per declared language,
+using the language code as an infix (`game.zh-CN.p8.png`,
+`game.en-US.p8.png`). A single output requires `--lang <lang>`, and the
+requested language must be declared in `__i18n__.locales`. Non-localized base
+export is not part of the release API.
 
 Export behavior:
 
 - Parses `.p8mod` with the Pico8 IDE format parser.
-- Generates/prepends i18n Lua for localized variants.
+- Generates/prepends i18n Lua for each exported language.
 - Resolves bundled `resources/libs/*.json`, optional `--libs-dir`, and
   `<workspace-root>/.pico8libs` `--#include` libraries.
 - Resolves cover templates from `--template-path`, `--template`,
   `__meta__.template`, then `default`.
 - Validates optional `__meta__.p8mod.requires` tool/feature requirements before
   conversion.
-- Writes exact exporter and asset provenance when `--provenance` or
-  `--write-provenance` is used, and validates frozen release assets with
-  `--frozen-provenance`.
+- Writes exact exporter and asset provenance when `--provenance` is used for
+  batch export or `--write-provenance` is used with `--lang`, and validates
+  frozen release assets with `--frozen-provenance`.
 - Emits non-zero exits for invalid arguments, parse errors, missing libraries,
   missing templates, and cartridge encoding failures.
 
 The VS Code editor export path and CLI share the final code construction and
-template resolution helpers so UI export and batch export do not drift.
+template resolution helpers so UI export and headless export do not drift.
 
 ### Headless Export Asset Contract
 
@@ -832,7 +838,7 @@ PICO-8's built-in `print()` only supports ASCII + the PICO-8 extended glyph set.
 The developer's workflow:
 1. Write `tx("hello_msg")` or `tx("你好世界")` in Lua code (the argument is a text key or native-language string)
 2. Switch to the i18n tab — the editor auto-scans the code and populates a translation table
-3. Add target locales (e.g. `zh_CN`, `ja`) and fill in translations
+3. Add target locales (e.g. `zh-CN`, `en-US`, `ja`) and fill in translations
 4. On save/run, the extension processes the cart: injects a runtime decoder function and hex-encoded glyph data for the selected output locale
 
 #### Data Model
@@ -842,15 +848,15 @@ i18n data is stored alongside the cart as a JSON object (persisted separately fr
 ```typescript
 interface I18nData {
     defaultLocale: string;           // e.g. "en" — the language used in Lua source
-    outputLocale: string;            // e.g. "zh_CN" — currently selected output locale
-    locales: string[];               // ["en", "zh_CN", "ja"] — all configured locales
+    outputLocale: string;            // e.g. "zh-CN" — currently selected output locale
+    locales: string[];               // ["en-US", "zh-CN", "ja"] — all configured languages
     entries: I18nEntry[];            // extracted text entries
 }
 
 interface I18nEntry {
     key: string;                     // text key or native string from tx() call
     sourceText: string;              // original text (same as key for native strings)
-    translations: Record<string, string>;  // locale → translated text, e.g. { "zh_CN": "你好世界", "ja": "こんにちは世界" }
+    translations: Record<string, string>;  // language → translated text, e.g. { "zh-CN": "你好世界", "ja": "こんにちは世界" }
 }
 ```
 
@@ -859,12 +865,12 @@ interface I18nEntry {
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  i18n Toolbar                                                │
-│  Default locale: [en ▼]  Output locale: [zh_CN ▼]  [+ Add]  │
+│  Default locale: [en-US ▼]  Output locale: [zh-CN ▼]  [+ Add]│
 │  [↻ Scan Code]  [▶ Preview]                                  │
 ├──────────────────────────────────────────────────────────────┤
 │  Translation Table                                           │
 │  ┌──────────┬──────────────┬──────────────┬─────────────┐    │
-│  │ Key      │ en (default) │ zh_CN        │ ja          │    │
+│  │ Key      │ en-US        │ zh-CN        │ ja          │    │
 │  ├──────────┼──────────────┼──────────────┼─────────────┤    │
 │  │ greet    │ Hello!       │ 你好！       │ こんにちは！│    │
 │  │ start    │ Press START  │ 按下开始     │ スタート    │    │
@@ -872,7 +878,7 @@ interface I18nEntry {
 │  └──────────┴──────────────┴──────────────┴─────────────┘    │
 ├──────────────────────────────────────────────────────────────┤
 │  Status bar                                                  │
-│  3 entries, 2 locales  │  Output: zh_CN  │  2/3 translated   │
+│  3 entries, 2 locales  │  Output: zh-CN  │  2/3 translated   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -898,7 +904,7 @@ When the user clicks "Scan Code" (or when the i18n tab is first activated), the 
 | Tab / Enter | Move to next cell (right, then down) |
 | Escape | Cancel editing |
 | Delete key on row | Remove the entry (with confirmation if translations exist) |
-| Click "Add Locale" | Prompt for locale code (e.g. `ja`), adds a new column |
+| Click "Add Locale" | Prompt for language code (e.g. `zh-CN`), adds a new column |
 | Right-click locale header | Remove locale (with confirmation) |
 
 #### Glyph Encoding (Build-Time Processing)

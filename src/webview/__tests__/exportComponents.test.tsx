@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TemplatePicker } from '../components/export/TemplatePicker';
+import { ExportButtons } from '../components/export/ExportButtons';
 import { createMockInitData } from '../standalone/mockInitData';
 import type { LocaleStrings } from '../types';
 
@@ -88,5 +89,42 @@ describe('TemplatePicker', () => {
             />
         );
         expect(screen.getByText('Template')).toBeDefined();
+    });
+});
+
+describe('ExportButtons', () => {
+    it('uses the primary button for all-language export', () => {
+        const onExportAll = vi.fn();
+        render(
+            <ExportButtons
+                locale={locale}
+                locales={['en-US', 'zh-CN']}
+                statusMessage=""
+                statusColor="#888"
+                onExportLocale={vi.fn()}
+                onExportAll={onExportAll}
+            />
+        );
+
+        fireEvent.click(screen.getByText('Export All Languages'));
+        expect(onExportAll).toHaveBeenCalledOnce();
+    });
+
+    it('renders single-language buttons with language infix labels', () => {
+        const onExportLocale = vi.fn();
+        render(
+            <ExportButtons
+                locale={locale}
+                locales={['en-US', 'zh-CN']}
+                statusMessage=""
+                statusColor="#888"
+                onExportLocale={onExportLocale}
+                onExportAll={vi.fn()}
+            />
+        );
+
+        fireEvent.click(screen.getByText('Locale Variant zh-CN.p8.png'));
+        expect(onExportLocale).toHaveBeenCalledWith('zh-CN');
+        expect(screen.queryByText('Export .p8.png')).toBeNull();
     });
 });

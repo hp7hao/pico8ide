@@ -32,12 +32,12 @@ function makeMetaData(template = 'default'): MetaData {
     return {
         meta: { title: 'Headless', author: 'tester', template },
         i18n: {
-            locales: ['en', 'zh'],
-            outputLocale: 'zh',
+            locales: ['en-US', 'zh-CN'],
+            outputLocale: 'zh-CN',
             entries: [
-                { key: 'hello', translations: { en: 'Hello', zh: '你好' } },
-                { key: '_title', translations: { en: 'Headless', zh: '无界面' } },
-                { key: '_author', translations: { en: 'tester', zh: '测试者' } },
+                { key: 'hello', translations: { 'en-US': 'Hello', 'zh-CN': '你好' } },
+                { key: '_title', translations: { 'en-US': 'Headless', 'zh-CN': '无界面' } },
+                { key: '_author', translations: { 'en-US': 'tester', 'zh-CN': '测试者' } },
             ],
         },
     };
@@ -83,7 +83,7 @@ describe('p8modtool export API', () => {
             inputPath,
             outputPath,
             format: 'p8',
-            locale: 'zh',
+            lang: 'zh-CN',
             extensionPath: PROJECT_ROOT,
         });
 
@@ -114,7 +114,7 @@ describe('p8modtool export API', () => {
             inputPath,
             outputPath,
             format: 'p8.png',
-            locale: 'zh',
+            lang: 'zh-CN',
             extensionPath: PROJECT_ROOT,
         });
 
@@ -136,6 +136,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'game.p8'),
                 format: 'p8',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Library not found: missing_lib/);
@@ -150,6 +151,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'game.p8.png'),
                 format: 'p8.png',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Template not found: not-a-template/);
@@ -174,6 +176,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'game.p8'),
                 format: 'p8',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/requires p8modtool >=99\.0\.0/);
@@ -197,6 +200,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'game.p8'),
                 format: 'p8',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Unsupported required p8mod feature: future-runtime-v9/);
@@ -219,6 +223,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'game.p8'),
                 format: 'p8',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Asset lib:vec2 version 1\.0\.0 does not satisfy >=9\.0\.0/);
@@ -238,6 +243,7 @@ describe('p8modtool export API', () => {
             inputPath,
             outputPath,
             format: 'p8.png',
+            lang: 'zh-CN',
             extensionPath: PROJECT_ROOT,
             provenancePath,
         } as any);
@@ -264,6 +270,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'too-large.p8.png'),
                 format: 'p8.png',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Code does not fit/);
@@ -279,6 +286,7 @@ describe('p8modtool export API', () => {
                 inputPath,
                 outputPath: path.join(tmp, 'length-wrap.p8.png'),
                 format: 'p8.png',
+                lang: 'zh-CN',
                 extensionPath: PROJECT_ROOT,
             })
         ).rejects.toThrow(/Code does not fit/);
@@ -294,10 +302,48 @@ describe('p8modtool export API', () => {
             inputPath,
             outputPath,
             format: 'p8',
+            lang: 'zh-CN',
             extensionPath: PROJECT_ROOT,
         });
 
         expect(readFileSync(outputPath, 'utf-8')).toContain(noisyCode.slice(0, 64));
+    });
+
+    it('exports every declared language by default with language infix names', async () => {
+        const tmp = mkdtempSync(path.join(tmpdir(), 'p8modtool-api-'));
+        const inputPath = writeFixture(
+            tmp,
+            'function _init()\n _txi()\nend\nfunction _draw()\n tx("hello",0,0,7)\nend\n'
+        );
+
+        const result = await exportP8Mod({
+            inputPath,
+            format: 'p8',
+            extensionPath: PROJECT_ROOT,
+        });
+
+        expect(result.outputs.map((output) => path.basename(output))).toEqual([
+            'game.en-US.p8',
+            'game.zh-CN.p8',
+        ]);
+        expect(readFileSync(result.outputs[0], 'utf-8')).toContain('-- locale: en-US');
+        expect(readFileSync(result.outputs[1], 'utf-8')).toContain('-- locale: zh-CN');
+    });
+
+    it('requires at least one declared language for default export', async () => {
+        const tmp = mkdtempSync(path.join(tmpdir(), 'p8modtool-api-'));
+        const inputPath = writeFixture(tmp, 'print("x")\n', {
+            meta: { title: 'Headless', author: 'tester', template: 'default' },
+            i18n: { locales: [], outputLocale: '', entries: [] },
+        });
+
+        await expect(
+            exportP8Mod({
+                inputPath,
+                format: 'p8',
+                extensionPath: PROJECT_ROOT,
+            })
+        ).rejects.toThrow(/Export requires at least one language/);
     });
 
     it('parses CLI arguments for single-file export', () => {
@@ -307,9 +353,9 @@ describe('p8modtool export API', () => {
                 '--format',
                 'p8.png',
                 '--out',
-                'game.p8.png',
-                '--locale',
-                'zh',
+                'game.zh-CN.p8.png',
+                '--lang',
+                'zh-CN',
                 '--template',
                 'cyan',
                 '--provenance',
@@ -320,14 +366,23 @@ describe('p8modtool export API', () => {
             ])
         ).toMatchObject({
             inputPath: 'game.p8mod',
-            outputPath: 'game.p8.png',
+            outputPath: 'game.zh-CN.p8.png',
             format: 'p8.png',
-            locale: 'zh',
+            lang: 'zh-CN',
             template: 'cyan',
             provenancePath: 'game.provenance.json',
             frozenProvenancePath: 'release.provenance.json',
             writeProvenance: true,
         });
+    });
+
+    it('rejects retired locale and all-locales CLI arguments', () => {
+        expect(() => parseP8ModExportArgs(['game.p8mod', '--locale', 'zh-CN'])).toThrow(/Unknown argument: --locale/);
+        expect(() => parseP8ModExportArgs(['game.p8mod', '--all-locales'])).toThrow(/Unknown argument: --all-locales/);
+    });
+
+    it('rejects single-output provenance for default multi-language export', () => {
+        expect(() => parseP8ModExportArgs(['game.p8mod', '--write-provenance'])).toThrow(/--write-provenance requires --lang/);
     });
 
     it('runs through the compiled p8modtool entrypoint after build', () => {
@@ -344,6 +399,8 @@ describe('p8modtool export API', () => {
             inputPath,
             '--format',
             'p8',
+            '--lang',
+            'en-US',
             '--out',
             outputPath,
             '--extension-path',

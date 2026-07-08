@@ -5,7 +5,6 @@ interface ExportButtonsProps {
     locales: string[];
     statusMessage: string;
     statusColor: string;
-    onExportBase: () => void;
     onExportLocale: (loc: string) => void;
     onExportAll: () => void;
 }
@@ -15,14 +14,13 @@ export function ExportButtons({
     locales,
     statusMessage,
     statusColor,
-    onExportBase,
     onExportLocale,
     onExportAll,
 }: ExportButtonsProps) {
     return (
         <>
             <div className="export-buttons">
-                <button onClick={onExportBase}>{locale.exportButton}</button>
+                <button onClick={onExportAll} disabled={locales.length === 0}>{locale.exportButton}</button>
                 {locales.length > 0 && (
                     <>
                         {locales.map((loc) => (
@@ -34,9 +32,6 @@ export function ExportButtons({
                                 {locale.exportLocaleVariant} {loc}.p8.png
                             </button>
                         ))}
-                        <button className="secondary" onClick={onExportAll}>
-                            {locale.exportAll}
-                        </button>
                     </>
                 )}
             </div>

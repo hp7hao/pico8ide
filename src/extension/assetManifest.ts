@@ -39,8 +39,7 @@ export interface ExportProvenance {
     input: string;
     outputs: string[];
     format: string;
-    locale?: string;
-    allLocales?: boolean;
+    lang?: string;
     assets: ProvenanceAsset[];
 }
 

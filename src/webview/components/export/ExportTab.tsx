@@ -110,38 +110,22 @@ export function ExportTab({ locale }: ExportTabProps) {
         [i18n.entries, meta.title, meta.author]
     );
 
-    const handleExportBase = useCallback(() => {
-        setStatusMessage('Exporting...');
-        setStatusColor('#888');
-
-        const allText = (meta.title || '') + (meta.author || '');
-        const glyphs = collectGlyphs(allText);
-
-        postMessage({
-            type: 'exportCart',
-            variant: 'base',
-            glyphs,
-            i18nLuaCode: null,
-            localeMeta: null,
-        });
-    }, [meta.title, meta.author, collectGlyphs]);
-
     const handleExportLocale = useCallback(
-        (variant: string) => {
+        (lang: string) => {
             setStatusMessage('Exporting...');
             setStatusColor('#888');
 
-            const localeMeta = getLocaleMeta(variant);
+            const localeMeta = getLocaleMeta(lang);
             const allText = localeMeta
                 ? localeMeta.title + localeMeta.author
                 : (meta.title || '') + (meta.author || '');
             const glyphs = collectGlyphs(allText);
 
-            const i18nLuaCode = generateI18nLua(variant, i18n, fontCtx);
+            const i18nLuaCode = generateI18nLua(lang, i18n, fontCtx);
 
             postMessage({
                 type: 'exportCart',
-                variant,
+                lang,
                 glyphs,
                 i18nLuaCode,
                 localeMeta,
@@ -154,22 +138,16 @@ export function ExportTab({ locale }: ExportTabProps) {
         setStatusMessage('Exporting all...');
         setStatusColor('#888');
 
-        const variants = ['base', ...i18n.locales];
-        const items = variants.map((variant) => {
-            let localeMeta: { title: string; author: string } | null = null;
-            let i18nLuaCode: string | null = null;
+        const items = i18n.locales.map((lang) => {
+            let localeMeta: { title: string; author: string } | null = getLocaleMeta(lang);
             let allText = (meta.title || '') + (meta.author || '');
-
-            if (variant !== 'base') {
-                localeMeta = getLocaleMeta(variant);
-                if (localeMeta) {
-                    allText = localeMeta.title + localeMeta.author;
-                }
-                i18nLuaCode = generateI18nLua(variant, i18n, fontCtx);
+            if (localeMeta) {
+                allText = localeMeta.title + localeMeta.author;
             }
+            const i18nLuaCode = generateI18nLua(lang, i18n, fontCtx);
 
             const glyphs = collectGlyphs(allText);
-            return { variant, glyphs, i18nLuaCode, localeMeta };
+            return { lang, glyphs, i18nLuaCode, localeMeta };
         });
 
         postMessage({ type: 'exportCartBatch', items });
@@ -256,7 +234,6 @@ export function ExportTab({ locale }: ExportTabProps) {
                         locales={i18n.locales}
                         statusMessage={statusMessage}
                         statusColor={statusColor}
-                        onExportBase={handleExportBase}
                         onExportLocale={handleExportLocale}
                         onExportAll={handleExportAll}
                     />

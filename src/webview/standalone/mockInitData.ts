@@ -95,11 +95,11 @@ const mockLocale: LocaleStrings = {
     exportTitle: 'Title',
     exportAuthor: 'Author',
     exportTemplate: 'Template',
-    exportButton: 'Export',
+    exportButton: 'Export All Languages',
     exportSuccess: 'Export success',
     exportError: 'Export error',
     exportLocaleVariant: 'Locale Variant',
-    exportAll: 'Export All',
+    exportAll: 'Export All Languages',
     exportCodeTooLarge: 'Code too large',
 
     libPanelTitle: 'Libraries',

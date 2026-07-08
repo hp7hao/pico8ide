@@ -242,15 +242,14 @@ workspace, or `--user-data-dir` seeded settings). Each suite awaits activation.
   extension.ts:1191-1193). Re-running overwrites only the known skill dir.
 
 ### A9. Export (`.p8mod` editor → `.p8.png`)
-- **A9.1** `exportCart` (variant `base`): writes `<base>.p8.png` next to the
-  source; the emitted PNG decodes back (via `Pico8Decoder.decode`) to the same
-  code (cartEditorProvider.ts:65-129, 330-349). Round-trip is the key assertion.
-- **A9.2** `exportCart` with a non-`base` variant + `i18nLuaCode`: output name is
-  `<base>.<variant>.p8.png`; injected i18n prelude present after decode
-  (cartEditorProvider.ts:80-83, 120-124).
-- **A9.3** `exportCartBatch`: multiple variants → `exportBatchComplete` with all
-  paths; a deliberately failing item lands in `errors[]` while others still write
-  (cartEditorProvider.ts:350-376).
+- **A9.1** `exportCart` with `lang` + `i18nLuaCode`: writes
+  `<base>.<lang>.p8.png` next to the source; the emitted PNG decodes back (via
+  `Pico8Decoder.decode`) to the same cart data plus injected i18n prelude.
+- **A9.2** `exportCartBatch`: writes one `<base>.<lang>.p8.png` file for every
+  declared language in `__i18n__.locales`, then posts `exportBatchComplete` with
+  all paths.
+- **A9.3** Batch error handling: a deliberately failing item lands in `errors[]`
+  while other language outputs still write.
 - **A9.4** Library includes: code with `--#include vec2` resolves through
   `libManager.resolveIncludes` before assembly — exported cart contains the lib
   code and no raw directive line (cartEditorProvider.ts:84-88, 400-411).

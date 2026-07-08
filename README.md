@@ -49,28 +49,31 @@ The extension contributes these commands:
 The npm package exposes `p8modtool` for batch export outside VS Code. It uses the same `.p8mod` parser, bundled library resolver, i18n code generation, and cartridge cover templates as Pico8 IDE.
 
 ```bash
-# Export a runnable text cartridge
-p8modtool game.p8mod --format p8 --out game.p8
+# Export one runnable text cartridge per language declared in __i18n__
+p8modtool game.p8mod --format p8 --out-dir release/
 
-# Export a runtime PNG cartridge with the template from __meta__.template
-p8modtool game.p8mod --format p8.png --out game.p8.png
+# Export one runtime PNG cartridge per language declared in __i18n__
+p8modtool game.p8mod --format p8.png --out-dir release/
 
-# Export a localized runtime variant
-p8modtool game.p8mod --format p8.png --locale zh --out game.zh.p8.png
-
-# Export base plus every locale declared in __i18n__
-p8modtool game.p8mod --format p8.png --all-locales --out-dir release/
+# Export one language explicitly
+p8modtool game.p8mod --format p8.png --lang zh-CN --out game.zh-CN.p8.png
 ```
+
+Default export requires at least one language in `__i18n__.locales` and emits
+language-infix filenames such as `game.zh-CN.p8.png` and `game.en-US.p8.png`.
+Single-output export is explicit through `--lang`; non-localized base export is
+not part of the release API.
 
 Useful options:
 
+- `--lang <lang>` exports only one declared language.
 - `--template <name>` selects `resources/cart_templates/<name>.png`.
 - `--template-path <path>` uses a specific 160x205 PNG cover template.
 - `--libs-dir <path>` adds a directory of Pico8 IDE library JSON files.
 - `--workspace-root <path>` adds `<path>/.pico8libs` to library lookup.
 - `--extension-path <path>` points the CLI at a Pico8 IDE package root when running from an unpacked build.
 - `--provenance <path>` writes exact exporter and asset versions/hashes for the export.
-- `--write-provenance` writes `<output>.provenance.json` beside a single output.
+- `--write-provenance` writes `<output>.provenance.json` beside a `--lang` single output.
 - `--frozen-provenance <path>` fails if resolved assets do not match a previous provenance file.
 
 Bundled export assets are tracked in `resources/assets.json`. Maintainer scripts keep that manifest current:

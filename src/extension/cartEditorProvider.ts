@@ -72,12 +72,15 @@ function exportSingleCart(
     if (!document.cartData) {
         throw new Error('No cart data');
     }
-    const variant: string = message.variant || 'base';
+    const lang: string = message.lang;
+    if (!lang) {
+        throw new Error('Export requires a language code.');
+    }
     const glyphs: { [char: string]: number[] } = message.glyphs || {};
 
     const finalCode = buildFinalCode(
         document.currentCode ?? document.cartData.code,
-        { i18nLuaCode: variant !== 'base' ? message.i18nLuaCode : null },
+        { i18nLuaCode: message.i18nLuaCode },
         { includeResolver: makeIncludeResolver(libManager) },
         context.extensionPath
     );
@@ -89,7 +92,7 @@ function exportSingleCart(
     const meta = document.metaData?.meta;
     let coverTitle = meta?.title || '';
     let coverAuthor = meta?.author || '';
-    if (variant !== 'base' && message.localeMeta) {
+    if (message.localeMeta) {
         coverTitle = message.localeMeta.title || coverTitle;
         coverAuthor = message.localeMeta.author || coverAuthor;
     }
@@ -110,12 +113,7 @@ function exportSingleCart(
     // Determine output path
     const cartDir = path.dirname(document.uri.fsPath);
     const baseName = path.basename(document.uri.fsPath).replace(/\.(p8mod|p8|p8\.png)$/i, '');
-    let outName: string;
-    if (variant === 'base') {
-        outName = `${baseName}.p8.png`;
-    } else {
-        outName = `${baseName}.${variant}.p8.png`;
-    }
+    const outName = `${baseName}.${lang}.p8.png`;
     const outPath = path.join(cartDir, outName);
     fs.writeFileSync(outPath, finalPngBuf);
 
@@ -357,7 +355,7 @@ function setupEditableWebview(
                     const outName = exportSingleCart(document, item, context, libManager);
                     results.push(outName);
                 } catch (e: any) {
-                    errors.push(`${item.variant}: ${e.message}`);
+                    errors.push(`${item.lang || 'unknown'}: ${e.message}`);
                 }
             }
             if (errors.length === 0) {

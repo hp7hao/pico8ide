@@ -24,8 +24,7 @@ export interface P8ModExportOptions {
     outputPath?: string;
     outDir?: string;
     format: P8ModExportFormat;
-    locale?: string;
-    allLocales?: boolean;
+    lang?: string;
     template?: string;
     templatePath?: string;
     libsDirs?: string[];
@@ -54,8 +53,7 @@ interface LoadedLib extends Pico8Lib {
 }
 
 interface ExportVariant {
-    variant: string;
-    locale?: string;
+    lang: string;
     outputPath: string;
     i18nLuaCode?: string | null;
     localeMeta?: { title?: string; author?: string } | null;
@@ -114,11 +112,8 @@ export function parseP8ModExportArgs(argv: string[]): P8ModExportOptions {
             case '--out-dir':
                 options.outDir = requireValue(arg, args.shift());
                 break;
-            case '--locale':
-                options.locale = requireValue(arg, args.shift());
-                break;
-            case '--all-locales':
-                options.allLocales = true;
+            case '--lang':
+                options.lang = requireValue(arg, args.shift());
                 break;
             case '--template':
                 options.template = requireValue(arg, args.shift());
@@ -152,8 +147,11 @@ export function parseP8ModExportArgs(argv: string[]): P8ModExportOptions {
     if (options.outputPath && options.outDir) {
         throw new Error('Use either --out or --out-dir, not both.');
     }
-    if (options.allLocales && options.outputPath) {
-        throw new Error('--all-locales requires --out-dir or default per-locale outputs.');
+    if (options.outputPath && !options.lang) {
+        throw new Error('--out requires --lang because default export emits one file per declared language.');
+    }
+    if (options.writeProvenance && !options.lang) {
+        throw new Error('--write-provenance requires --lang because default export emits one file per declared language; use --provenance for batch exports.');
     }
 
     return options;
@@ -470,17 +468,16 @@ export function usage(): string {
         '',
         'Options:',
         '  --format <p8|p8.png>       Output format (default: p8.png)',
-        '  --out <path>               Output file for a single export',
-        '  --out-dir <path>           Output directory for generated names',
-        '  --locale <locale>          Generate a localized variant',
-        '  --all-locales              Export base plus every locale in __i18n__',
+        '  --out <path>               Output file for a single-language export; requires --lang',
+        '  --out-dir <path>           Output directory for generated language-infix names',
+        '  --lang <lang>              Export only one declared language',
         '  --template <name>          Use resources/cart_templates/<name>.png',
         '  --template-path <path>     Use an explicit cover template PNG',
         '  --libs-dir <path>          Add a directory of Pico8 IDE library JSON files',
         '  --workspace-root <path>    Add <path>/.pico8libs to library lookup',
         '  --extension-path <path>    Pico8 IDE package root (defaults from CLI location)',
         '  --provenance <path>        Write exact exporter/asset provenance JSON',
-        '  --write-provenance         Write <output>.provenance.json beside single-output exports',
+        '  --write-provenance         Write <output>.provenance.json beside a --lang single-output export',
         '  --frozen-provenance <path> Validate resolved assets against provenance JSON',
     ].join('\n');
 }
@@ -496,32 +493,30 @@ async function buildVariants(
     const inputDir = path.dirname(options.inputPath);
     const outDir = options.outDir || inputDir;
 
-    const variants: Array<{ variant: string; locale?: string }> = [];
-    if (options.allLocales) {
-        variants.push({ variant: 'base' });
-        for (const loc of metaData?.i18n.locales || []) {
-            variants.push({ variant: loc, locale: loc });
-        }
-    } else if (options.locale) {
-        variants.push({ variant: options.locale, locale: options.locale });
-    } else {
-        variants.push({ variant: 'base' });
+    const declaredLanguages = metaData?.i18n.locales || [];
+    if (declaredLanguages.length === 0) {
+        throw new Error('Export requires at least one language declared in __i18n__.locales.');
     }
 
-    return Promise.all(variants.map(async (variant) => {
-        const outputPath = options.outputPath || defaultOutputPath(outDir, baseName, variant.variant, options.format);
+    const languages = options.lang ? [options.lang] : declaredLanguages;
+    for (const lang of languages) {
+        if (!declaredLanguages.includes(lang)) {
+            throw new Error(`Language not declared in __i18n__.locales: ${lang}`);
+        }
+    }
+
+    return Promise.all(languages.map(async (lang) => {
+        const outputPath = options.outputPath || defaultOutputPath(outDir, baseName, lang, options.format);
         let i18nLuaCode = options.i18nLuaCode || null;
         let localeMeta = options.localeMeta || null;
         let glyphs = options.glyphs;
 
-        if (variant.locale && metaData) {
-            i18nLuaCode = options.i18nLuaCode === undefined
-                ? await generateI18nLuaHeadless(variant.locale, metaData, extensionPath, tracker, constraints)
-                : options.i18nLuaCode;
-            localeMeta = options.localeMeta === undefined
-                ? getLocaleMeta(metaData, variant.locale)
-                : options.localeMeta;
-        }
+        i18nLuaCode = options.i18nLuaCode === undefined
+            ? await generateI18nLuaHeadless(lang, metaData!, extensionPath, tracker, constraints)
+            : options.i18nLuaCode;
+        localeMeta = options.localeMeta === undefined
+            ? getLocaleMeta(metaData!, lang)
+            : options.localeMeta;
 
         if (!glyphs) {
             const title = localeMeta?.title || metaData?.meta.title || '';
@@ -529,7 +524,7 @@ async function buildVariants(
             glyphs = await collectCoverGlyphs(title + author, extensionPath, tracker, constraints);
         }
 
-        return { ...variant, outputPath, i18nLuaCode, localeMeta, glyphs };
+        return { lang, outputPath, i18nLuaCode, localeMeta, glyphs };
     }));
 }
 
@@ -551,9 +546,6 @@ async function collectCoverGlyphs(
 }
 
 function defaultOutputPath(outDir: string, baseName: string, variant: string, format: P8ModExportFormat): string {
-    if (variant === 'base') {
-        return path.join(outDir, `${baseName}.${format}`);
-    }
     return path.join(outDir, `${baseName}.${variant}.${format}`);
 }
 
@@ -736,8 +728,7 @@ function buildProvenance(
         input: path.resolve(options.inputPath),
         outputs,
         format: options.format,
-        locale: options.locale,
-        allLocales: options.allLocales || undefined,
+        lang: options.lang,
         assets: sortedProvenanceAssets(tracker),
     };
 }

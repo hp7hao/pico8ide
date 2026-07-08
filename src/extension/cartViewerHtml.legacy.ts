@@ -5703,13 +5703,12 @@ function getAudioEngineScript(): string {
 
                         // Export buttons
                         html += '<div class="export-buttons">';
-                        html += '<button id="export-base-btn">' + LOCALE.exportButton + '</button>';
+                        html += '<button id="export-all-btn"' + (!(i18nData.locales && i18nData.locales.length > 0) ? ' disabled' : '') + '>' + LOCALE.exportButton + '</button>';
                         // Per-locale variant buttons
                         if (i18nData.locales && i18nData.locales.length > 0) {
                             i18nData.locales.forEach(function(loc) {
                                 html += '<button class="secondary export-locale-btn" data-locale="' + loc + '">' + LOCALE.exportLocaleVariant + ' ' + loc + '.p8.png</button>';
                             });
-                            html += '<button class="secondary" id="export-all-btn">' + LOCALE.exportAll + '</button>';
                         }
                         html += '</div>';
 
@@ -5741,11 +5740,6 @@ function getAudioEngineScript(): string {
                                 notifyMetaChanged();
                                 exportRenderPreview();
                             });
-                        });
-
-                        var baseBtn = document.getElementById('export-base-btn');
-                        if (baseBtn) baseBtn.addEventListener('click', function() {
-                            exportDoExport('base');
                         });
 
                         document.querySelectorAll('.export-locale-btn').forEach(function(btn) {
@@ -5823,7 +5817,7 @@ function getAudioEngineScript(): string {
                         }
                     }
 
-                    function exportDoExport(variant) {
+                    function exportDoExport(lang) {
                         var msg = document.getElementById('export-msg');
                         if (msg) msg.textContent = 'Exporting...';
                         if (msg) msg.style.color = '#888';
@@ -5834,20 +5828,17 @@ function getAudioEngineScript(): string {
                         var glyphs = {};
                         var allText = title + author;
 
-                        // For locale variant, use locale-specific title/author if available
+                        // Use locale-specific title/author if available
                         var localeMeta = null;
-                        if (variant !== 'base' && variant) {
-                            // Check for locale-specific title/author in i18n entries
-                            var locTitle = '';
-                            var locAuthor = '';
-                            i18nData.entries.forEach(function(e) {
-                                if (e.key === '_title' && e.translations && e.translations[variant]) locTitle = e.translations[variant];
-                                if (e.key === '_author' && e.translations && e.translations[variant]) locAuthor = e.translations[variant];
-                            });
-                            if (locTitle || locAuthor) {
-                                localeMeta = { title: locTitle || title, author: locAuthor || author };
-                                allText = localeMeta.title + localeMeta.author;
-                            }
+                        var locTitle = '';
+                        var locAuthor = '';
+                        i18nData.entries.forEach(function(e) {
+                            if (e.key === '_title' && e.translations && e.translations[lang]) locTitle = e.translations[lang];
+                            if (e.key === '_author' && e.translations && e.translations[lang]) locAuthor = e.translations[lang];
+                        });
+                        if (locTitle || locAuthor) {
+                            localeMeta = { title: locTitle || title, author: locAuthor || author };
+                            allText = localeMeta.title + localeMeta.author;
                         }
 
                         for (var i = 0; i < allText.length; i++) {
@@ -5857,15 +5848,11 @@ function getAudioEngineScript(): string {
                             }
                         }
 
-                        // For locale variant, generate i18n Lua runtime
-                        var i18nLuaCode = null;
-                        if (variant !== 'base' && variant) {
-                            i18nLuaCode = exportGenerateI18nLua(variant);
-                        }
+                        var i18nLuaCode = exportGenerateI18nLua(lang);
 
                         vscodeApi.postMessage({
                             type: 'exportCart',
-                            variant: variant,
+                            lang: lang,
                             glyphs: glyphs,
                             i18nLuaCode: i18nLuaCode,
                             localeMeta: localeMeta
@@ -5876,32 +5863,24 @@ function getAudioEngineScript(): string {
                         var msg = document.getElementById('export-msg');
                         if (msg) { msg.textContent = 'Exporting all...'; msg.style.color = '#888'; }
 
-                        var variants = ['base'];
-                        if (i18nData.locales) {
-                            i18nData.locales.forEach(function(loc) { variants.push(loc); });
-                        }
-
                         var items = [];
-                        variants.forEach(function(variant) {
+                        (i18nData.locales || []).forEach(function(lang) {
                             var title = metaObj.meta.title || '';
                             var author = metaObj.meta.author || '';
                             var glyphs = {};
                             var allText = title + author;
                             var localeMeta = null;
-                            var i18nLuaCode = null;
+                            var i18nLuaCode = exportGenerateI18nLua(lang);
 
-                            if (variant !== 'base') {
-                                var locTitle = '';
-                                var locAuthor = '';
-                                i18nData.entries.forEach(function(e) {
-                                    if (e.key === '_title' && e.translations && e.translations[variant]) locTitle = e.translations[variant];
-                                    if (e.key === '_author' && e.translations && e.translations[variant]) locAuthor = e.translations[variant];
-                                });
-                                if (locTitle || locAuthor) {
-                                    localeMeta = { title: locTitle || title, author: locAuthor || author };
-                                    allText = localeMeta.title + localeMeta.author;
-                                }
-                                i18nLuaCode = exportGenerateI18nLua(variant);
+                            var locTitle = '';
+                            var locAuthor = '';
+                            i18nData.entries.forEach(function(e) {
+                                if (e.key === '_title' && e.translations && e.translations[lang]) locTitle = e.translations[lang];
+                                if (e.key === '_author' && e.translations && e.translations[lang]) locAuthor = e.translations[lang];
+                            });
+                            if (locTitle || locAuthor) {
+                                localeMeta = { title: locTitle || title, author: locAuthor || author };
+                                allText = localeMeta.title + localeMeta.author;
                             }
 
                             for (var i = 0; i < allText.length; i++) {
@@ -5909,7 +5888,7 @@ function getAudioEngineScript(): string {
                                 if (!glyphs[ch]) glyphs[ch] = renderGlyphBytes(ch);
                             }
 
-                            items.push({ variant: variant, glyphs: glyphs, i18nLuaCode: i18nLuaCode, localeMeta: localeMeta });
+                            items.push({ lang: lang, glyphs: glyphs, i18nLuaCode: i18nLuaCode, localeMeta: localeMeta });
                         });
 
                         vscodeApi.postMessage({ type: 'exportCartBatch', items: items });

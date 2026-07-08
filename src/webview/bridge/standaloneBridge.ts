@@ -17,14 +17,14 @@ export const standaloneBridge: HostBridge = {
             setTimeout(() => {
                 simulateHostMessage({
                     type: 'exportComplete',
-                    path: `standalone/${msg.variant || 'base'}.p8.png`,
+                    path: `standalone/game.${msg.lang}.p8.png`,
                 });
             }, 300);
         }
         if (msg.type === 'exportCartBatch') {
             setTimeout(() => {
                 const paths = (msg.items || []).map(
-                    (item: any) => `standalone/${item.variant || 'base'}.p8.png`
+                    (item: any) => `standalone/game.${item.lang}.p8.png`
                 );
                 simulateHostMessage({
                     type: 'exportBatchComplete',
