@@ -25,7 +25,7 @@ import { FIXTURE_DIR } from '../helpers';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { Pico8Encoder, Pico8Decoder } = require('../../extension/pngDecoder');
 
-const CARTS_DIR = path.join(FIXTURE_DIR, 'fcdb', 'platforms', 'pico8', 'carts', 'bbs');
+const CARTS_DIR = path.join(FIXTURE_DIR, 'fcdb', 'platforms', 'pico8', 'artifacts', 'carts', 'bbs');
 
 function assertBytesEqual(a: number[], b: number[], label: string): void {
     assert.strictEqual(a.length, b.length, `${label}: section length preserved`);

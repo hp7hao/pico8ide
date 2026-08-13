@@ -43,14 +43,13 @@ The extension is fully E2E-able because every external dependency is behind a se
    ```
    <tmp>/fcdb/dist/pico8/db.json            # array of GameMetadata
    <tmp>/fcdb/dist/pico8/lists/curated.json # { meta, games }
-   <tmp>/fcdb/platforms/pico8/carts/bbs/<id>.p8.png   # generated synthetic cart fixture
-   <tmp>/fcdb/platforms/pico8/sources/bbs/<id>.p8mod  # optional source for fork
+   <tmp>/fcdb/platforms/pico8/artifacts/carts/bbs/<id>.p8.png   # generated synthetic cart fixture
+   <tmp>/fcdb/platforms/pico8/artifacts/sources/bbs/<id>.p8mod  # optional source for fork
    ```
-   `getAssetPath(game,'cart')` resolves `platforms/pico8/carts/<source>/<cart_file>`
-   locally (dataManager.ts:494) → never hits `lexaloffle.com` / GitHub.
-   Note: `dist/pico8` and `platforms/pico8` must be siblings under the same
-   `fcdb/` root because `getLocalPlatformsPath()` walks `../../platforms/pico8`
-   from the configured `dist/pico8` path (dataManager.ts:87-97).
+   `getAssetPath(game,'cart')` resolves package-relative paths below
+   `platforms/pico8/artifacts/` locally (dataManager.ts:494) and never hits
+   `lexaloffle.com` or GitHub. `dist/pico8` and `platforms/pico8` remain siblings
+   under the same `fcdb/` root.
 
 2. **No real emulator.** `runGameInPico8` (extension.ts:927) only requires
    `pico8ide.pico8Path` to exist on disk, then `spawn(pico8Path,['-run',cartPath])`.

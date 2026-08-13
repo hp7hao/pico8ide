@@ -88,7 +88,7 @@ npm run assets:bump -- <kind> <id> <major|minor|patch|x.y.z>
 
 The extension supports curated game lists powered by the [fcdb](https://github.com/hp7hao/fcdb) project. You can create your own list and contribute it to the database.
 
-Add a JSON file to `fcdb/curated/pico8/lists/` with any name (e.g. `mylist.json`). Four formats are supported:
+Add a JSON file to `fcdb/platforms/pico8/metadata/collections/` with any name (e.g. `mylist.json`). Four formats are supported:
 
 ### Format 1 — Simple array
 

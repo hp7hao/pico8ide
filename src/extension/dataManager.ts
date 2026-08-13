@@ -81,15 +81,15 @@ export class DataManager {
     }
 
     /**
-     * Resolve the local platforms path (for carts/thumbs).
-     * In local mode, assets are under fcdb/platforms/pico8/ (sibling to dist).
+     * Resolve the local package path for carts/thumbs.
+     * In local mode, package assets are under fcdb/platforms/pico8/artifacts/.
      */
     private getLocalPlatformsPath(): string | undefined {
         const dataPath = this.getLocalDataPath();
         if (!dataPath) return undefined;
 
-        // dataPath = .../fcdb/dist/pico8, platforms = .../fcdb/platforms/pico8
-        const platformsPath = path.join(dataPath, '..', '..', 'platforms', 'pico8');
+        // dataPath = .../fcdb/dist/pico8, artifacts = .../fcdb/platforms/pico8/artifacts
+        const platformsPath = path.join(dataPath, '..', '..', 'platforms', 'pico8', 'artifacts');
         if (fs.existsSync(platformsPath)) {
             return platformsPath;
         }

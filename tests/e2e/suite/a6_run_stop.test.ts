@@ -17,7 +17,7 @@ import {
 // (extension.ts:1018), so we drive it with an absolute fixture cart path.
 
 const CART_FS_PATH = path.join(
-    FIXTURE_DIR, 'fcdb', 'platforms', 'pico8', 'carts', 'bbs', 'synthetic-pxa.p8.png'
+    FIXTURE_DIR, 'fcdb', 'platforms', 'pico8', 'artifacts', 'carts', 'bbs', 'synthetic-pxa.p8.png'
 );
 
 suite('A6: run / stop (fake pico8)', () => {

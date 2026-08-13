@@ -102,6 +102,20 @@ Cart panel uses inline JavaScript (no external scripts) for:
 - SFX/Music tracker display with Web Audio API playback
 - Tab navigation between Code, Sprites, Map, SFX, Music views
 
+## FCDB Compatibility
+
+Pico8IDE owns its exact supported FCDB schema declaration and package-ingestion
+tests. Before changing that declaration, run a producer-generated candidate ZIP
+through the complete DataManager suite: manifest and exact-version rejection,
+record/list/locale parsing, declared carts/sources/thumbnails, unsafe or missing
+members, staging and atomic replacement, last-working-cache rollback, and the
+extension-host fixture flow. FCDB producer tests or a producer-owned readiness
+registry are not consumer compatibility evidence.
+
+Current implementation still consumes the legacy FCDB record/list shape and
+must not be treated as schema `0.5.0` compatible until that suite and migration
+are implemented.
+
 ## Extension Settings
 
 Defined in `package.json` under `contributes.configuration`:

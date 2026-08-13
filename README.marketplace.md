@@ -45,7 +45,7 @@ The extension contributes these commands:
 
 The extension supports curated game lists powered by the [fcdb](https://github.com/hp7hao/fcdb) project. You can create your own list and contribute it to the database.
 
-Add a JSON file to `fcdb/curated/pico8/lists/` with any name (e.g. `mylist.json`). Four formats are supported:
+Add a JSON file to `fcdb/platforms/pico8/metadata/collections/` with any name (e.g. `mylist.json`). Four formats are supported:
 
 ### Format 1 — Simple array
 
@@ -191,7 +191,7 @@ If you're interested in PICO-8, please visit the official website: https://www.l
 
 本扩展支持由 [fcdb](https://github.com/hp7hao/fcdb) 项目驱动的精选游戏列表。你可以创建自己的列表并贡献到数据库中。
 
-在 `fcdb/curated/pico8/lists/` 目录下添加一个 JSON 文件，文件名任意（例如 `mylist.json`）。支持四种格式：
+在 `fcdb/platforms/pico8/metadata/collections/` 目录下添加一个 JSON 文件，文件名任意（例如 `mylist.json`）。支持四种格式：
 
 ### 格式 1 — 简单数组
 
