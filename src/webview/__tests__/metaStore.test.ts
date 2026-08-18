@@ -22,11 +22,11 @@ describe('metaStore', () => {
     });
 
     it('setMeta replaces the full meta object', () => {
-        useMetaStore.getState().setMeta({ title: 'My Game', author: 'Me', template: 'cyan' });
+        useMetaStore.getState().setMeta({ title: 'My Game', author: 'Me', template: 'pico8pixelbomb' });
         const state = useMetaStore.getState();
         expect(state.meta.title).toBe('My Game');
         expect(state.meta.author).toBe('Me');
-        expect(state.meta.template).toBe('cyan');
+        expect(state.meta.template).toBe('pico8pixelbomb');
     });
 
     it('setMetaField updates a single field', () => {

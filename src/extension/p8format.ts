@@ -1,4 +1,11 @@
-import { CartData } from './cartData';
+import { PNG } from 'pngjs';
+import { CartData, PICO8_PALETTE } from './cartData';
+
+const PICO8_RGB = PICO8_PALETTE.map((hex) => [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+]);
 
 // Encode CartData to .p8 text format
 export function cartDataToP8(cartData: CartData): string {
@@ -24,6 +31,12 @@ export function cartDataToP8(cartData: CartData): string {
             line += (v & 0x0f).toString(16) + ((v >> 4) & 0x0f).toString(16);
         }
         lines.push(line);
+    }
+
+    // __label__ - optional 128x128 cartridge artwork, one palette nibble per pixel
+    if (cartData.label) {
+        lines.push('__label__');
+        lines.push(...labelDataUrlToP8Lines(cartData.label));
     }
 
     // __gff__ - 2 lines x 256 hex chars (128 bytes per line, standard hex)
@@ -153,6 +166,10 @@ export function p8ToCartData(text: string): CartData {
         }
     }
 
+    // Parse optional 128x128 cartridge artwork.
+    const labelLines = (sectionLines['label'] || []).filter((line) => line.length > 0);
+    const label = labelLines.length > 0 ? p8LabelLinesToDataUrl(labelLines) : '';
+
     // Parse gff (gfx flags) - 2 lines x 256 hex chars
     const gfxFlags = new Array(256).fill(0);
     const gffLines = sectionLines['gff'] || [];
@@ -248,6 +265,64 @@ export function p8ToCartData(text: string): CartData {
         gfxFlags,
         music,
         sfx,
-        label: '' // .p8 files don't contain label images
+        label
     };
+}
+
+export function labelDataUrlToP8Lines(labelDataUrl: string): string[] {
+    const match = labelDataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/]*={0,2})$/);
+    if (!match || match[1].length % 4 !== 0) {
+        throw new Error('Cartridge label must be a base64 PNG data URL.');
+    }
+    const png = PNG.sync.read(Buffer.from(match[1], 'base64'));
+    if (png.width !== 128 || png.height !== 128) {
+        throw new Error(`Cartridge label must be 128x128 pixels, got ${png.width}x${png.height}.`);
+    }
+
+    const lines: string[] = [];
+    for (let y = 0; y < 128; y++) {
+        let line = '';
+        for (let x = 0; x < 128; x++) {
+            const offset = (y * png.width + x) << 2;
+            line += nearestPaletteIndex(
+                png.data[offset],
+                png.data[offset + 1],
+                png.data[offset + 2]
+            ).toString(16);
+        }
+        lines.push(line);
+    }
+    return lines;
+}
+
+export function p8LabelLinesToDataUrl(lines: string[]): string {
+    if (lines.length !== 128 || lines.some((line) => !/^[0-9a-fA-F]{128}$/.test(line))) {
+        throw new Error('Cartridge __label__ must contain 128 lines of 128 hexadecimal palette indices.');
+    }
+    const png = new PNG({ width: 128, height: 128 });
+    for (let y = 0; y < 128; y++) {
+        for (let x = 0; x < 128; x++) {
+            const color = PICO8_RGB[parseInt(lines[y][x], 16)];
+            const offset = (y * 128 + x) << 2;
+            png.data[offset] = color[0];
+            png.data[offset + 1] = color[1];
+            png.data[offset + 2] = color[2];
+            png.data[offset + 3] = 255;
+        }
+    }
+    return `data:image/png;base64,${PNG.sync.write(png).toString('base64')}`;
+}
+
+function nearestPaletteIndex(r: number, g: number, b: number): number {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < PICO8_RGB.length; index++) {
+        const color = PICO8_RGB[index];
+        const distance = (r - color[0]) ** 2 + (g - color[1]) ** 2 + (b - color[2]) ** 2;
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+        }
+    }
+    return bestIndex;
 }

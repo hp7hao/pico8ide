@@ -129,7 +129,7 @@ describe('Tier C: .p8mod format round-trip with metadata', () => {
     it('cartDataToP8Mod → p8ModToCartData preserves meta + i18n', () => {
         const cart = blankCart('print(tx("greet"))');
         const meta: MetaData = {
-            meta: { title: 'Golden', author: 'tester', template: 'cyan' },
+            meta: { title: 'Golden', author: 'tester', template: 'pico8pixelbomb' },
             i18n: {
                 locales: ['en', 'zh_CN'],
                 entries: [
@@ -145,7 +145,7 @@ describe('Tier C: .p8mod format round-trip with metadata', () => {
         expect(cartData.code).toBe(cart.code);
         expect(metaData?.meta.title).toBe('Golden');
         expect(metaData?.meta.author).toBe('tester');
-        expect(metaData?.meta.template).toBe('cyan');
+        expect(metaData?.meta.template).toBe('pico8pixelbomb');
         expect(metaData?.i18n.outputLocale).toBe('zh_CN');
         expect(metaData?.i18n.entries[0].translations.zh_CN).toBe('你好');
     });

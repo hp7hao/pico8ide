@@ -16,7 +16,7 @@ function createTempAssetRoot(): string {
     mkdirSync(path.join(root, 'resources', 'fonts'), { recursive: true });
     cpSync(SCRIPT_PATH, path.join(root, 'scripts', 'asset-manifest.mjs'));
     cpSync(path.join(PROJECT_ROOT, 'resources', 'libs', 'vec2.json'), path.join(root, 'resources', 'libs', 'vec2.json'));
-    cpSync(path.join(PROJECT_ROOT, 'resources', 'cart_templates', 'cyan.png'), path.join(root, 'resources', 'cart_templates', 'cyan.png'));
+    cpSync(path.join(PROJECT_ROOT, 'resources', 'cart_templates', 'pico8pixelbomb.png'), path.join(root, 'resources', 'cart_templates', 'pico8pixelbomb.png'));
     cpSync(
         path.join(PROJECT_ROOT, 'resources', 'fonts', 'BoutiqueBitmap7x7_1.7.ttf'),
         path.join(root, 'resources', 'fonts', 'BoutiqueBitmap7x7_1.7.ttf')
@@ -68,11 +68,11 @@ describe('asset manifest package script', () => {
         const root = createTempAssetRoot();
         expect(runAssetScript(root, ['write']).status).toBe(0);
 
-        const bump = runAssetScript(root, ['bump', 'template', 'cyan', 'minor']);
+        const bump = runAssetScript(root, ['bump', 'template', 'pico8pixelbomb', 'minor']);
 
         expect(bump.status, bump.stderr || bump.stdout).toBe(0);
-        expect(bump.stdout).toContain('Bumped template:cyan to 1.1.0.');
-        expect(assetVersion(root, 'template', 'cyan')).toBe('1.1.0');
+        expect(bump.stdout).toContain('Bumped template:pico8pixelbomb to 1.1.0.');
+        expect(assetVersion(root, 'template', 'pico8pixelbomb')).toBe('1.1.0');
         expect(runAssetScript(root, ['check']).status).toBe(0);
     });
 
@@ -102,17 +102,17 @@ describe('asset manifest package script', () => {
     it('detects stale hashes and write refreshes them without resetting bumped versions', () => {
         const root = createTempAssetRoot();
         expect(runAssetScript(root, ['write']).status).toBe(0);
-        expect(runAssetScript(root, ['bump', 'template', 'cyan', 'minor']).status).toBe(0);
-        const oldHash = assetHash(root, 'template', 'cyan');
-        writeFileSync(path.join(root, 'resources', 'cart_templates', 'cyan.png'), Buffer.from([0]), { flag: 'a' });
+        expect(runAssetScript(root, ['bump', 'template', 'pico8pixelbomb', 'minor']).status).toBe(0);
+        const oldHash = assetHash(root, 'template', 'pico8pixelbomb');
+        writeFileSync(path.join(root, 'resources', 'cart_templates', 'pico8pixelbomb.png'), Buffer.from([0]), { flag: 'a' });
 
         const stale = runAssetScript(root, ['check']);
         expect(stale.status).not.toBe(0);
         expect(stale.stderr).toContain('resources/assets.json is stale');
 
         expect(runAssetScript(root, ['write']).status).toBe(0);
-        expect(assetVersion(root, 'template', 'cyan')).toBe('1.1.0');
-        expect(assetHash(root, 'template', 'cyan')).not.toBe(oldHash);
+        expect(assetVersion(root, 'template', 'pico8pixelbomb')).toBe('1.1.0');
+        expect(assetHash(root, 'template', 'pico8pixelbomb')).not.toBe(oldHash);
         expect(runAssetScript(root, ['check']).status).toBe(0);
     });
 
@@ -122,7 +122,7 @@ describe('asset manifest package script', () => {
         const manifestPath = path.join(root, 'resources', 'assets.json');
         const before = readFileSync(manifestPath, 'utf-8');
 
-        const bump = runAssetScript(root, ['bump', 'template', 'cyan', 'banana']);
+        const bump = runAssetScript(root, ['bump', 'template', 'pico8pixelbomb', 'banana']);
 
         expect(bump.status).not.toBe(0);
         expect(bump.stderr).toContain('Bump must be major, minor, patch');

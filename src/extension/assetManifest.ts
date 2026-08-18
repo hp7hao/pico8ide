@@ -22,7 +22,7 @@ export interface AssetManifest {
 }
 
 export interface ProvenanceAsset extends AssetManifestEntry {
-    source: 'bundled' | 'external';
+    source: 'bundled' | 'external' | 'embedded';
 }
 
 export interface ExportProvenance {
@@ -48,6 +48,7 @@ export interface AssetUsageTracker {
     assets: Map<string, ProvenanceAsset>;
     recordManifestAsset(kind: AssetKind, id: string): ProvenanceAsset;
     recordExternalAsset(kind: AssetKind, id: string, filePath: string, version?: string): ProvenanceAsset;
+    recordEmbeddedAsset(kind: AssetKind, id: string, bytes: Buffer, version?: string): ProvenanceAsset;
 }
 
 export function loadAssetManifest(extensionPath: string): AssetManifest {
@@ -96,6 +97,18 @@ export function createAssetUsageTracker(extensionPath: string): AssetUsageTracke
                 path: absolute,
                 sha256: sha256File(absolute),
                 source: 'external',
+            };
+            assets.set(assetKey(kind, id), provenanceAsset);
+            return provenanceAsset;
+        },
+        recordEmbeddedAsset(kind: AssetKind, id: string, bytes: Buffer, version = '1.0.0'): ProvenanceAsset {
+            const provenanceAsset: ProvenanceAsset = {
+                kind,
+                id,
+                version,
+                path: `__meta__.templates[${id}]`,
+                sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+                source: 'embedded',
             };
             assets.set(assetKey(kind, id), provenanceAsset);
             return provenanceAsset;

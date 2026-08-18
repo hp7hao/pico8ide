@@ -1065,10 +1065,11 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 const sourcePath = await dataManager.getAssetPath(game, 'source');
                 if (sourcePath.endsWith('.p8mod')) {
-                    sourceContent = fs.readFileSync(sourcePath, 'utf-8');
+                    const parsed = p8ModToCartData(fs.readFileSync(sourcePath, 'utf-8'));
+                    sourceContent = cartDataToP8Mod(parsed.cartData, parsed.metaData, context.extensionPath);
                 } else if (sourcePath.endsWith('.p8')) {
                     const cartData = p8ToCartData(fs.readFileSync(sourcePath, 'utf-8'));
-                    sourceContent = cartDataToP8Mod(cartData, null);
+                    sourceContent = cartDataToP8Mod(cartData, null, context.extensionPath);
                 }
             } catch {
                 // Source artifacts are optional; fall back to decoding the runtime cart.
@@ -1089,13 +1090,14 @@ export function activate(context: vscode.ExtensionContext) {
             if (!content) {
                 const cartPath = await dataManager.getAssetPath(game, 'cart');
                 if (cartPath.endsWith('.p8mod')) {
-                    content = fs.readFileSync(cartPath, 'utf-8');
+                    const parsed = p8ModToCartData(fs.readFileSync(cartPath, 'utf-8'));
+                    content = cartDataToP8Mod(parsed.cartData, parsed.metaData, context.extensionPath);
                 } else if (cartPath.endsWith('.p8')) {
                     const cartData = p8ToCartData(fs.readFileSync(cartPath, 'utf-8'));
-                    content = cartDataToP8Mod(cartData, null);
+                    content = cartDataToP8Mod(cartData, null, context.extensionPath);
                 } else {
                     const cartData = await Pico8Decoder.decode(cartPath);
-                    content = cartDataToP8Mod(cartData, null);
+                    content = cartDataToP8Mod(cartData, null, context.extensionPath);
                 }
             }
 
@@ -1130,7 +1132,7 @@ export function activate(context: vscode.ExtensionContext) {
             fs.mkdirSync(tempDir, { recursive: true });
             const baseName = path.basename(uri.fsPath).replace(/\.(p8\.png|p8)$/i, '');
             const tempPath = path.join(tempDir, `${baseName}.p8mod`);
-            const content = cartDataToP8Mod(cartData, metaData);
+            const content = cartDataToP8Mod(cartData, metaData, context.extensionPath);
             fs.writeFileSync(tempPath, content, 'utf-8');
 
             const tempUri = vscode.Uri.file(tempPath);
@@ -1168,7 +1170,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
         if (!dest) { return; }
 
-        fs.writeFileSync(dest.fsPath, blankP8Mod(), 'utf-8');
+        fs.writeFileSync(dest.fsPath, blankP8Mod(context.extensionPath), 'utf-8');
         await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
     });
 
@@ -1183,7 +1185,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
         if (!dest) { return; }
 
-        fs.writeFileSync(dest.fsPath, i18nDemoP8Mod(), 'utf-8');
+        fs.writeFileSync(dest.fsPath, i18nDemoP8Mod(context.extensionPath), 'utf-8');
         await vscode.commands.executeCommand('vscode.openWith', dest, Pico8P8EditorProvider.viewType);
     });
 

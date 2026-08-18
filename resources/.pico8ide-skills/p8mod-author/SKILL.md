@@ -5,7 +5,7 @@ description: Use when creating, editing, generating, or validating .p8mod files 
 
 # p8mod Author
 
-Create valid `.p8mod` files for Pico-8 IDE. A `.p8mod` is a plain-text PICO-8 cartridge with optional `__meta__` and `__i18n__` sections after the standard cartridge sections. Prefer `.p8mod` when the user wants Pico-8 IDE editing, localized games, translation tables, or reusable source cartridges.
+Create valid `.p8mod` files for Pico-8 IDE. A `.p8mod` is a plain-text PICO-8 cartridge with optional `__meta__` and `__i18n__` sections after the standard cartridge sections. Current Pico8 IDE output embeds the `default` and `pico8pixelbomb` PNG export templates in `__meta__.templates` so the cartridge owns its cover-template bytes. Prefer `.p8mod` when the user wants Pico-8 IDE editing, localized games, translation tables, or reusable source cartridges.
 
 ## Authoring Goal
 
@@ -22,6 +22,8 @@ __lua__
 <lua source>
 __gfx__
 <sprite sheet hex>
+__label__
+<optional 128x128 cartridge artwork as palette hex>
 __gff__
 <sprite flag hex>
 __map__
@@ -40,9 +42,9 @@ __i18n__
 
 - The first line must be exactly `pico-8 cartridge // http://www.pico-8.com`.
 - The second line must be `version 42`.
-- Standard sections must appear in this order: `__lua__`, `__gfx__`, `__gff__`, `__map__`, `__sfx__`, `__music__`.
+- Standard sections must appear in this order: `__lua__`, `__gfx__`, optional `__label__`, `__gff__`, `__map__`, `__sfx__`, `__music__`.
 - Custom sections, when present, must appear after the standard sections.
-- Include all six standard sections even when their bodies are empty or zero-filled.
+- Include the six required standard sections even when their bodies are empty or zero-filled. Include `__label__` when cartridge artwork exists; it contains 128 lines of 128 lowercase PICO-8 palette nibbles.
 - End the file with a newline.
 
 ## Metadata
@@ -57,7 +59,7 @@ Use `__meta__` for Pico-8 IDE metadata:
 }
 ```
 
-Omit `__meta__` only when title and author are empty and the template is `default`.
+Omit `__meta__` only for legacy/minimal files when title and author are empty and the template is `default`. New Pico8 IDE cartridges retain `__meta__` because they embed `default` and `pico8pixelbomb`; `e-zombie16` is accepted only as a legacy alias for `pico8pixelbomb`.
 
 Use optional `__meta__.export` only when the cart needs Pico8 IDE exporter
 asset compatibility constraints. Keep Lua include directives simple, such as

@@ -1,27 +1,82 @@
-import { CartData, MetaData } from './cartData';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { CartData, EmbeddedCartTemplate, MetaData } from './cartData';
 import { cartDataToP8, p8ToCartData } from './p8format';
+
+export const EMBEDDED_TEMPLATE_IDS = ['default', 'pico8pixelbomb'] as const;
+const LEGACY_TEMPLATE_ALIASES: Record<string, string> = { 'e-zombie16': 'pico8pixelbomb' };
 
 /**
  * Serialize CartData + MetaData to .p8mod text format.
  * Standard sections are identical to .p8, with optional __meta__ and __i18n__ JSON sections appended.
  */
-export function cartDataToP8Mod(cartData: CartData, metaData: MetaData | null): string {
+export function cartDataToP8Mod(
+    cartData: CartData,
+    metaData: MetaData | null,
+    extensionPath?: string
+): string {
     // Get standard .p8 content (ends with trailing newline)
     let text = cartDataToP8(cartData);
+    const normalizedMetaData = normalizeMetaData(metaData, extensionPath);
 
-    if (metaData) {
-        if (metaData.meta && shouldWriteMeta(metaData.meta)) {
+    if (normalizedMetaData) {
+        if (normalizedMetaData.meta && shouldWriteMeta(normalizedMetaData.meta)) {
             text += '__meta__\n';
-            text += JSON.stringify(metaData.meta, null, 2) + '\n';
+            text += JSON.stringify(normalizedMetaData.meta, null, 2) + '\n';
         }
 
-        if (metaData.i18n && (metaData.i18n.locales.length > 0 || metaData.i18n.entries.length > 0)) {
+        const metaI18n = normalizedMetaData.i18n;
+        if (metaI18n && (metaI18n.locales.length > 0 || metaI18n.entries.length > 0)) {
             text += '__i18n__\n';
-            text += JSON.stringify(metaData.i18n, null, 2) + '\n';
+            text += JSON.stringify(metaI18n, null, 2) + '\n';
         }
     }
 
     return text;
+}
+
+export function createEmbeddedCartTemplates(extensionPath: string): EmbeddedCartTemplate[] {
+    return EMBEDDED_TEMPLATE_IDS.map((id) => {
+        const templatePath = path.join(extensionPath, 'resources', 'cart_templates', `${id}.png`);
+        const bytes = fs.readFileSync(templatePath);
+        return {
+            id,
+            mediaType: 'image/png' as const,
+            encoding: 'base64' as const,
+            sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+            data: bytes.toString('base64'),
+        };
+    });
+}
+
+export function normalizeMetaData(metaData: MetaData | null, extensionPath?: string): MetaData | null {
+    if (!metaData && !extensionPath) {
+        return null;
+    }
+    const meta = metaData?.meta || { title: '', author: '', template: 'default' };
+    const template = LEGACY_TEMPLATE_ALIASES[meta.template] || meta.template || 'default';
+    const embeddedById = new Map((meta.templates || []).map((entry) => {
+        const id = LEGACY_TEMPLATE_ALIASES[entry.id] || entry.id;
+        return [id, { ...entry, id }];
+    }));
+    if (extensionPath) {
+        for (const bundledTemplate of createEmbeddedCartTemplates(extensionPath)) {
+            if (!embeddedById.has(bundledTemplate.id)) {
+                embeddedById.set(bundledTemplate.id, bundledTemplate);
+            }
+        }
+    }
+    const templates = embeddedById.size > 0 ? [...embeddedById.values()] : undefined;
+
+    const normalizedMeta: MetaData['meta'] = { ...meta, template };
+    if (templates) {
+        normalizedMeta.templates = templates;
+    }
+    return {
+        meta: normalizedMeta,
+        i18n: metaData?.i18n || { locales: [], entries: [], outputLocale: '' },
+    };
 }
 
 function shouldWriteMeta(meta: MetaData['meta']): boolean {
@@ -85,6 +140,15 @@ export function p8ModToCartData(text: string): { cartData: CartData; metaData: M
     let metaData: MetaData | null = null;
 
     const parsedMeta = metaJson ? tryParseJson(metaJson) : null;
+    if (parsedMeta?.template) {
+        parsedMeta.template = LEGACY_TEMPLATE_ALIASES[parsedMeta.template] || parsedMeta.template;
+    }
+    if (Array.isArray(parsedMeta?.templates)) {
+        parsedMeta.templates = parsedMeta.templates.map((entry: EmbeddedCartTemplate) => ({
+            ...entry,
+            id: LEGACY_TEMPLATE_ALIASES[entry.id] || entry.id,
+        }));
+    }
     const parsedI18n = i18nJson ? tryParseJson(i18nJson) : null;
 
     if (parsedMeta || parsedI18n) {
@@ -101,14 +165,14 @@ export function p8ModToCartData(text: string): { cartData: CartData; metaData: M
  * Convert a CartData + MetaData into .p8mod text.
  * Convenience alias for cartDataToP8Mod.
  */
-export function convertToP8Mod(cartData: CartData, metaData: MetaData | null): string {
-    return cartDataToP8Mod(cartData, metaData);
+export function convertToP8Mod(cartData: CartData, metaData: MetaData | null, extensionPath?: string): string {
+    return cartDataToP8Mod(cartData, metaData, extensionPath);
 }
 
 /**
  * Generate a blank .p8mod template for new cartridges.
  */
-export function blankP8Mod(): string {
+export function blankP8Mod(extensionPath?: string): string {
     const cartData: CartData = {
         code: '--#include vec2\n-- new cartridge\n-- use tx() for i18n strings\n-- use --#include to add libs\n\nfunction _init()\n _txi()\n pos=v2(64,64)\n spd=v2(1,0.5)\n t=0\nend\n\nfunction _update()\n t+=1\n pos=v2add(pos,spd)\n if pos.x>120 or pos.x<8 then spd.x=-spd.x end\n if pos.y>120 or pos.y<8 then spd.y=-spd.y end\nend\n\nfunction _draw()\n cls(1)\n circfill(pos.x,pos.y,4,7)\n tx("hello",40,60,10)\nend\n',
         gfx: new Array(8192).fill(0),
@@ -128,14 +192,14 @@ export function blankP8Mod(): string {
             outputLocale: 'zh'
         }
     };
-    return cartDataToP8Mod(cartData, metaData);
+    return cartDataToP8Mod(cartData, metaData, extensionPath);
 }
 
 /**
  * Generate an i18n demo .p8mod with a "daily poetry" themed game
  * featuring hundreds of unique Chinese characters from classical poems.
  */
-export function i18nDemoP8Mod(): string {
+export function i18nDemoP8Mod(extensionPath?: string): string {
     // Daily motto / inspirational quotes game
     // Each quote uses many unique Chinese characters
     const quotes: { key: string; zh: string }[] = [
@@ -557,7 +621,7 @@ end
             outputLocale: 'zh'
         }
     };
-    return cartDataToP8Mod(cartData, metaData);
+    return cartDataToP8Mod(cartData, metaData, extensionPath);
 }
 
 function tryParseJson(text: string): any {

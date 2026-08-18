@@ -8,7 +8,7 @@ import type { LocaleStrings } from '../types';
 const locale: LocaleStrings = createMockInitData().locale;
 
 describe('TemplatePicker', () => {
-    it('renders 4 template options', () => {
+    it('renders the two cartridge-owned template options', () => {
         const { container } = render(
             <TemplatePicker
                 locale={locale}
@@ -18,7 +18,7 @@ describe('TemplatePicker', () => {
             />
         );
         const options = container.querySelectorAll('.template-option');
-        expect(options).toHaveLength(4);
+        expect(options).toHaveLength(2);
     });
 
     it('displays template names', () => {
@@ -31,25 +31,23 @@ describe('TemplatePicker', () => {
             />
         );
         expect(screen.getByText('default')).toBeDefined();
-        expect(screen.getByText('cyan')).toBeDefined();
-        expect(screen.getByText('e-zombie')).toBeDefined();
-        expect(screen.getByText('e-zombie16')).toBeDefined();
+        expect(screen.getByText('pico8pixelbomb')).toBeDefined();
     });
 
     it('marks selected template with "selected" class', () => {
         const { container } = render(
             <TemplatePicker
                 locale={locale}
-                selected="cyan"
+                selected="pico8pixelbomb"
                 templatePreviews={{}}
                 onSelect={vi.fn()}
             />
         );
         const options = container.querySelectorAll('.template-option');
-        const cyanOption = Array.from(options).find(
-            (o) => o.textContent?.includes('cyan') && !o.textContent?.includes('e-zombie')
+        const pico8pixelbombOption = Array.from(options).find(
+            (o) => o.textContent?.includes('pico8pixelbomb')
         );
-        expect(cyanOption?.className).toContain('selected');
+        expect(pico8pixelbombOption?.className).toContain('selected');
     });
 
     it('calls onSelect when clicking a template', () => {
@@ -62,8 +60,8 @@ describe('TemplatePicker', () => {
                 onSelect={onSelect}
             />
         );
-        fireEvent.click(screen.getByText('e-zombie'));
-        expect(onSelect).toHaveBeenCalledWith('e-zombie');
+        fireEvent.click(screen.getByText('pico8pixelbomb'));
+        expect(onSelect).toHaveBeenCalledWith('pico8pixelbomb');
     });
 
     it('renders preview images when provided', () => {

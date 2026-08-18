@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import * as path from 'path';
 import { cartDataToP8Mod, p8ModToCartData, blankP8Mod } from '../../extension/p8modFormat';
-import { cartDataToP8, p8ToCartData } from '../../extension/p8format';
+import { labelDataUrlToP8Lines, cartDataToP8, p8LabelLinesToDataUrl, p8ToCartData } from '../../extension/p8format';
 import type { CartData, MetaData } from '../../extension/cartData';
+
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 
 function makeCartData(code: string = 'print("hello")'): CartData {
     return {
@@ -36,16 +40,45 @@ describe('cartDataToP8Mod', () => {
         expect(text).toContain('version 42');
     });
 
+    it('preserves optional native __label__ artwork', () => {
+        const labelLines = Array.from({ length: 128 }, (_, y) =>
+            Array.from({ length: 128 }, (_, x) => ((x + y) % 16).toString(16)).join('')
+        );
+        const cart = makeCartData();
+        cart.label = p8LabelLinesToDataUrl(labelLines);
+        const text = cartDataToP8Mod(cart, null);
+        expect(text).toContain('__label__');
+
+        const { cartData } = p8ModToCartData(text);
+        expect(labelDataUrlToP8Lines(cartData.label)).toEqual(labelLines);
+    });
+
     it('includes __lua__ section with code', () => {
         const text = cartDataToP8Mod(makeCartData('print("test")'), null);
         expect(text).toContain('__lua__');
         expect(text).toContain('print("test")');
     });
 
-    it('omits __meta__ and __i18n__ when metaData is null', () => {
+    it('omits __meta__ and __i18n__ when no package root is supplied', () => {
         const text = cartDataToP8Mod(makeCartData(), null);
         expect(text).not.toContain('__meta__');
         expect(text).not.toContain('__i18n__');
+    });
+
+    it('embeds the default and pico8pixelbomb templates when a package root is supplied', () => {
+        const text = cartDataToP8Mod(makeCartData(), null, PROJECT_ROOT);
+        const { metaData } = p8ModToCartData(text);
+        expect(metaData?.meta.template).toBe('default');
+        expect(metaData?.meta.templates?.map((template) => template.id)).toEqual([
+            'default',
+            'pico8pixelbomb',
+        ]);
+        expect(Buffer.from(metaData!.meta.templates![0].data, 'base64')).toEqual(
+            readFileSync(path.join(PROJECT_ROOT, 'resources', 'cart_templates', 'default.png'))
+        );
+        expect(Buffer.from(metaData!.meta.templates![1].data, 'base64')).toEqual(
+            readFileSync(path.join(PROJECT_ROOT, 'resources', 'cart_templates', 'pico8pixelbomb.png'))
+        );
     });
 
     it('includes __meta__ when meta has content', () => {
@@ -128,16 +161,24 @@ describe('p8ModToCartData', () => {
         expect(metaData!.i18n.entries[0].translations.zh).toBe('你好');
     });
 
+    it('renames the legacy e-zombie16 template id on parse', () => {
+        const meta = makeMetaData();
+        meta.meta.template = 'e-zombie16';
+        const text = cartDataToP8Mod(makeCartData(), meta);
+        const { metaData } = p8ModToCartData(text);
+        expect(metaData?.meta.template).toBe('pico8pixelbomb');
+    });
+
     it('parses file with meta only (no i18n)', () => {
         const meta: MetaData = {
-            meta: { title: 'Only Meta', author: 'me', template: 'cyan' },
+            meta: { title: 'Only Meta', author: 'me', template: 'pico8pixelbomb' },
             i18n: { locales: [], entries: [], outputLocale: '' }
         };
         const text = cartDataToP8Mod(makeCartData(), meta);
         const { metaData } = p8ModToCartData(text);
         expect(metaData).not.toBeNull();
         expect(metaData!.meta.title).toBe('Only Meta');
-        expect(metaData!.meta.template).toBe('cyan');
+        expect(metaData!.meta.template).toBe('pico8pixelbomb');
     });
 
     it('parses file with i18n only (no meta)', () => {
@@ -202,10 +243,12 @@ describe('round-trip', () => {
 });
 
 describe('blankP8Mod', () => {
-    it('produces a valid .p8mod string', () => {
-        const text = blankP8Mod();
+    it('produces a valid self-contained .p8mod string', () => {
+        const text = blankP8Mod(PROJECT_ROOT);
         expect(text).toMatch(/^pico-8 cartridge/);
         expect(text).toContain('__lua__');
+        expect(text).toContain('__meta__');
+        expect(text).toContain('"pico8pixelbomb"');
         expect(text).toContain('__i18n__');
     });
 

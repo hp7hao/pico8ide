@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 // Validate Pico-8 IDE .p8mod structure.
-// Usage: node .codex/skills/p8mod-author/scripts/validate-p8mod.mjs path/to/game.p8mod
+// Usage: node .agents/skills/p8mod-author/scripts/validate-p8mod.mjs path/to/game.p8mod
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 
 const HEADER = 'pico-8 cartridge // http://www.pico-8.com';
-const STANDARD_SECTIONS = ['lua', 'gfx', 'gff', 'map', 'sfx', 'music'];
+const STANDARD_SECTIONS = ['lua', 'gfx', 'label', 'gff', 'map', 'sfx', 'music'];
+const REQUIRED_SECTIONS = ['lua', 'gfx', 'gff', 'map', 'sfx', 'music'];
 const CUSTOM_SECTIONS = ['meta', 'i18n'];
 const SECTION_RE = /^__(\w+)__$/;
 
 function usage() {
-  console.log('Usage: node .codex/skills/p8mod-author/scripts/validate-p8mod.mjs path/to/game.p8mod');
+  console.log('Usage: node .agents/skills/p8mod-author/scripts/validate-p8mod.mjs path/to/game.p8mod');
 }
 
 function parseSections(lines) {
@@ -53,12 +55,43 @@ function parseJsonSection(name, lines, errors) {
   }
 }
 
-function validateMeta(meta, errors) {
+function validateMeta(meta, errors, warnings) {
   if (!meta) return;
   for (const key of ['title', 'author', 'template']) {
     if (key in meta && typeof meta[key] !== 'string') {
       errors.push(`ERROR: __meta__.${key} must be a string`);
     }
+  }
+  if (!Array.isArray(meta.templates)) {
+    warnings.push('WARNING: legacy .p8mod does not embed __meta__.templates');
+    return;
+  }
+  const ids = new Set();
+  meta.templates.forEach((template, index) => {
+    if (!template || Array.isArray(template) || typeof template !== 'object') {
+      errors.push(`ERROR: __meta__.templates[${index}] must be an object`);
+      return;
+    }
+    for (const key of ['id', 'mediaType', 'encoding', 'sha256', 'data']) {
+      if (typeof template[key] !== 'string' || !template[key]) {
+        errors.push(`ERROR: __meta__.templates[${index}].${key} must be a non-empty string`);
+      }
+    }
+    if (template.mediaType !== 'image/png') errors.push(`ERROR: embedded template "${template.id}" mediaType must be image/png`);
+    if (template.encoding !== 'base64') errors.push(`ERROR: embedded template "${template.id}" encoding must be base64`);
+    if (typeof template.data === 'string' && typeof template.sha256 === 'string') {
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(template.data) || template.data.length % 4 !== 0) {
+        errors.push(`ERROR: embedded template "${template.id}" data must be valid base64`);
+      } else {
+        const bytes = Buffer.from(template.data, 'base64');
+        const actual = crypto.createHash('sha256').update(bytes).digest('hex');
+        if (actual !== template.sha256) errors.push(`ERROR: embedded template "${template.id}" sha256 mismatch`);
+      }
+    }
+    ids.add(template.id);
+  });
+  for (const id of ['default', 'pico8pixelbomb']) {
+    if (!ids.has(id)) errors.push(`ERROR: __meta__.templates must embed "${id}"`);
   }
 }
 
@@ -151,7 +184,7 @@ function validate(path) {
 
   const { sections, order, duplicates } = parseSections(lines);
   for (const duplicate of duplicates) errors.push(`ERROR: duplicate section __${duplicate}__`);
-  for (const section of STANDARD_SECTIONS) {
+  for (const section of REQUIRED_SECTIONS) {
     if (!sections.has(section)) errors.push(`ERROR: missing required section __${section}__`);
   }
 
@@ -172,6 +205,7 @@ function validate(path) {
   }
 
   validateHexLines('gfx', sections.get('gfx') ?? [], 128, /^[0-9a-f]{128}$/, errors);
+  if (sections.has('label')) validateHexLines('label', sections.get('label') ?? [], 128, /^[0-9a-f]{128}$/, errors);
   validateHexLines('gff', sections.get('gff') ?? [], 2, /^[0-9a-f]{256}$/, errors);
 
   const mapLines = sections.get('map') ?? [];
@@ -186,7 +220,7 @@ function validate(path) {
   if (musicLines.length > 64) errors.push('ERROR: __music__ must not contain more than 64 lines');
   validateHexLines('music', musicLines, null, /^[0-9a-f]{2} [0-9a-f]{8}$/, errors);
 
-  if (sections.has('meta')) validateMeta(parseJsonSection('meta', sections.get('meta'), errors), errors);
+  if (sections.has('meta')) validateMeta(parseJsonSection('meta', sections.get('meta'), errors), errors, warnings);
   if (sections.has('i18n')) {
     validateI18n(parseJsonSection('i18n', sections.get('i18n'), errors), (sections.get('lua') ?? []).join('\n'), errors, warnings);
   }

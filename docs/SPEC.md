@@ -70,8 +70,9 @@ Export behavior:
 - Generates/prepends i18n Lua for each exported language.
 - Resolves bundled `resources/libs/*.json`, optional `--libs-dir`, and
   `<workspace-root>/.pico8libs` `--#include` libraries.
-- Resolves cover templates from `--template-path`, `--template`,
-  `__meta__.template`, then `default`.
+- Resolves cover template selection from `--template-path`, `--template`,
+  `__meta__.template`, then `default`; named templates use cartridge-embedded
+  `__meta__.templates` bytes before package fallback assets.
 - Validates optional `__meta__.p8mod.requires` tool/feature requirements before
   conversion.
 - Writes exact exporter and asset provenance when `--provenance` is used for
@@ -84,6 +85,19 @@ The VS Code editor export path and CLI share the final code construction and
 template resolution helpers so UI export and headless export do not drift.
 
 ### Headless Export Asset Contract
+
+A `.p8mod` preserves optional native PICO-8 `__label__` artwork as 128 lines of
+128 palette nibbles. Conversion from `.p8.png` extracts that artwork, save keeps
+it inline, and `.p8.png` export composites it into the selected cover template.
+A cart without `__label__` remains valid but exports the template's generic label
+area.
+
+Every newly created or resaved `.p8mod` embeds the exact `default` and
+`pico8pixelbomb` PNG templates in `__meta__.templates`; these are the only
+current authoring choices. `pico8pixelbomb` is the current name for the former
+`e-zombie16` preset. Those embedded bytes are the cartridge-owned export
+authority. Package templates are authoring defaults and legacy fallback assets,
+while `e-zombie16` remains an input compatibility alias.
 
 Pico8 IDE export assets are versioned inputs, not hidden implementation
 details. This applies to bundled libraries, cover templates, fonts, and any

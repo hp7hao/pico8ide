@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseOpenType, type Font, type GlyphPath, type PathCommand } from 'opentype.js';
@@ -176,12 +177,12 @@ export async function exportP8Mod(options: P8ModExportOptions): Promise<P8ModExp
         if (options.format === 'p8') {
             fs.writeFileSync(variant.outputPath, cartDataToP8(saveData), 'utf-8');
         } else {
-            const templatePath = resolveTemplatePath(options, extensionPath, metaData, tracker, exportConstraints);
+            const templateSource = resolveTemplateSource(options, extensionPath, metaData, tracker, exportConstraints);
             const coverTitle = variant.localeMeta?.title || metaData?.meta.title || '';
             const coverAuthor = variant.localeMeta?.author || metaData?.meta.author || '';
             const glyphs = variant.glyphs || await collectCoverGlyphs(coverTitle + coverAuthor, extensionPath, tracker, exportConstraints);
             const coverPng = Pico8Encoder.generateCover(
-                templatePath,
+                templateSource,
                 cartData.label,
                 coverTitle,
                 coverAuthor,
@@ -287,13 +288,13 @@ export function loadLibs(extensionPath: string, libsDirs?: string[], workspaceRo
     return libs;
 }
 
-export function resolveTemplatePath(
+export function resolveTemplateSource(
     options: Pick<P8ModExportOptions, 'templatePath' | 'template'>,
     extensionPath: string,
     metaData: MetaData | null,
     tracker?: AssetUsageTracker,
     constraints?: ExportMetaConstraints
-): string {
+): string | Buffer {
     if (options.templatePath) {
         if (!fs.existsSync(options.templatePath)) {
             throw new Error(`Template file not found: ${options.templatePath}`);
@@ -302,7 +303,29 @@ export function resolveTemplatePath(
         return options.templatePath;
     }
 
-    const templateName = options.template || metaData?.meta.template || 'default';
+    const requestedName = options.template || metaData?.meta.template || 'default';
+    const templateName = requestedName === 'e-zombie16' ? 'pico8pixelbomb' : requestedName;
+    const embedded = metaData?.meta.templates?.find((entry) => entry.id === templateName);
+    if (embedded) {
+        if (embedded.mediaType !== 'image/png' || embedded.encoding !== 'base64') {
+            throw new Error(`Unsupported embedded template encoding: ${templateName}`);
+        }
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(embedded.data) || embedded.data.length % 4 !== 0) {
+            throw new Error(`Embedded template is not valid base64: ${templateName}`);
+        }
+        const bytes = Buffer.from(embedded.data, 'base64');
+        const actualHash = crypto.createHash('sha256').update(bytes).digest('hex');
+        if (actualHash !== embedded.sha256) {
+            throw new Error(`Embedded template hash mismatch: ${templateName}`);
+        }
+        const asset = tracker?.recordEmbeddedAsset('template', templateName, bytes);
+        const range = constraints?.templates?.[templateName];
+        if (asset && range) {
+            assertAssetSatisfies(asset, range);
+        }
+        return bytes;
+    }
+
     const templatePath = path.join(extensionPath, 'resources', 'cart_templates', `${templateName}.png`);
     if (!fs.existsSync(templatePath)) {
         throw new Error(`Template not found: ${templateName}`);

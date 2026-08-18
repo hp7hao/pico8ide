@@ -1,17 +1,19 @@
 import { create } from 'zustand';
 import { getVscodeApi } from '../vscodeApi';
-import type { MetaData, I18nData } from '../types';
+import type { MetaData, I18nData, EmbeddedCartTemplate } from '../types';
+
+type CartMeta = { title: string; author: string; template: string; templates?: EmbeddedCartTemplate[] };
 
 interface MetaState {
-    meta: { title: string; author: string; template: string };
+    meta: CartMeta;
     i18nData: I18nData | null;
 
-    setMeta: (meta: { title: string; author: string; template: string }) => void;
+    setMeta: (meta: CartMeta) => void;
     setMetaField: (field: 'title' | 'author' | 'template', value: string) => void;
     setI18nData: (data: I18nData | null) => void;
     notifyMetaChanged: () => void;
 
-    silentSetMeta: (meta: { title: string; author: string; template: string }) => void;
+    silentSetMeta: (meta: CartMeta) => void;
     silentSetI18nData: (data: I18nData | null) => void;
 }
 

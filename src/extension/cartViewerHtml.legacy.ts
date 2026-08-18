@@ -5687,7 +5687,7 @@ function getAudioEngineScript(): string {
                         html += '<div>';
                         html += '<label>' + LOCALE.exportTemplate + '</label>';
                         html += '<div class="template-picker" id="template-picker">';
-                        var templates = ['default', 'cyan', 'e-zombie', 'e-zombie16'];
+                        var templates = ['default', 'pico8pixelbomb'];
                         templates.forEach(function(name) {
                             var sel = (metaObj.meta.template === name) ? ' selected' : '';
                             var preview = TEMPLATE_PREVIEWS[name] || '';

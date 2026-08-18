@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { PNG } from 'pngjs';
 import type { CartData, MetaData } from '../../extension/cartData';
 import { cartDataToP8Mod } from '../../extension/p8modFormat';
-import { p8ToCartData } from '../../extension/p8format';
+import { p8LabelLinesToDataUrl, p8ToCartData } from '../../extension/p8format';
 import { Pico8Decoder, Pico8Encoder } from '../../extension/pngDecoder';
 import {
     exportP8Mod,
@@ -106,7 +106,7 @@ describe('p8modtool export API', () => {
         const inputPath = writeFixture(
             tmp,
             'function _init()\n _txi()\nend\nfunction _draw()\n tx("hello",0,0,7)\nend\n',
-            makeMetaData('cyan')
+            makeMetaData('pico8pixelbomb')
         );
         const outputPath = path.join(tmp, 'game.p8.png');
 
@@ -125,6 +125,58 @@ describe('p8modtool export API', () => {
         const decoded = await Pico8Decoder.decode(outputPath);
         expect(decoded.code).toContain('-- i18n runtime');
         expect(decoded.code).toContain('function tx(k,x,y,c)');
+    });
+
+    it('composites cartridge label artwork into the exported shareable cart', async () => {
+        const tmp = mkdtempSync(path.join(tmpdir(), 'p8modtool-label-'));
+        const cart = makeCartData('print("label")\n');
+        cart.label = p8LabelLinesToDataUrl(Array.from({ length: 128 }, () => '8'.repeat(128)));
+        const inputPath = path.join(tmp, 'game.p8mod');
+        writeFileSync(inputPath, cartDataToP8Mod(cart, makeMetaData(), PROJECT_ROOT), 'utf-8');
+        const outputPath = path.join(tmp, 'game.p8.png');
+
+        await exportP8Mod({
+            inputPath,
+            outputPath,
+            format: 'p8.png',
+            lang: 'zh-CN',
+            extensionPath: PROJECT_ROOT,
+        });
+
+        const png = PNG.sync.read(readFileSync(outputPath));
+        const labelPixel = (24 * png.width + 16) << 2;
+        expect(png.data[labelPixel]).toBeGreaterThan(240);
+        expect(png.data[labelPixel + 1]).toBeLessThan(8);
+        expect(png.data[labelPixel + 2]).toBeGreaterThan(70);
+    });
+
+    it('prefers the cartridge-embedded template over package assets', async () => {
+        const tmp = mkdtempSync(path.join(tmpdir(), 'p8modtool-api-'));
+        const meta = makeMetaData('pico8pixelbomb');
+        const text = cartDataToP8Mod(makeCartData('print("embedded")\n'), meta, PROJECT_ROOT);
+        const inputPath = path.join(tmp, 'game.p8mod');
+        writeFileSync(inputPath, text, 'utf-8');
+        const outputPath = path.join(tmp, 'game.p8.png');
+        const packageCopy = path.join(tmp, 'package');
+        mkdirSync(path.join(packageCopy, 'resources'), { recursive: true });
+        const manifest = JSON.parse(readFileSync(path.join(PROJECT_ROOT, 'resources', 'assets.json'), 'utf-8'));
+        manifest.assets = manifest.assets.filter((asset: { kind: string }) => asset.kind !== 'template');
+        writeFileSync(path.join(packageCopy, 'resources', 'assets.json'), JSON.stringify(manifest));
+        cpSync(path.join(PROJECT_ROOT, 'resources', 'fonts'), path.join(packageCopy, 'resources', 'fonts'), { recursive: true });
+        cpSync(path.join(PROJECT_ROOT, 'resources', 'libs'), path.join(packageCopy, 'resources', 'libs'), { recursive: true });
+        writeFileSync(path.join(packageCopy, 'package.json'), JSON.stringify({ version: '1.0.5' }));
+
+        await exportP8Mod({
+            inputPath,
+            outputPath,
+            format: 'p8.png',
+            lang: 'zh-CN',
+            extensionPath: packageCopy,
+        });
+
+        const png = PNG.sync.read(readFileSync(outputPath));
+        expect(png.width).toBe(160);
+        expect(png.height).toBe(205);
     });
 
     it('fails clearly for missing bundled libraries', async () => {
@@ -234,7 +286,7 @@ describe('p8modtool export API', () => {
         const inputPath = writeFixture(
             tmp,
             '--#include vec2\nfunction _draw() print("x",0,0,7) end\n',
-            makeMetaData('cyan')
+            makeMetaData('pico8pixelbomb')
         );
         const outputPath = path.join(tmp, 'game.p8.png');
         const provenancePath = path.join(tmp, 'game.provenance.json');
@@ -254,7 +306,7 @@ describe('p8modtool export API', () => {
         expect(provenance.outputs).toEqual([outputPath]);
         expect(provenance.assets).toEqual(expect.arrayContaining([
             expect.objectContaining({ kind: 'lib', id: 'vec2', version: '1.0.0', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
-            expect.objectContaining({ kind: 'template', id: 'cyan', version: '1.0.0', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+            expect.objectContaining({ kind: 'template', id: 'pico8pixelbomb', version: '1.0.0', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
             expect.objectContaining({ kind: 'font', id: 'BoutiqueBitmap7x7_1.7', version: '1.7.0', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
         ]));
     });
@@ -357,7 +409,7 @@ describe('p8modtool export API', () => {
                 '--lang',
                 'zh-CN',
                 '--template',
-                'cyan',
+                'pico8pixelbomb',
                 '--provenance',
                 'game.provenance.json',
                 '--frozen-provenance',
@@ -369,7 +421,7 @@ describe('p8modtool export API', () => {
             outputPath: 'game.zh-CN.p8.png',
             format: 'p8.png',
             lang: 'zh-CN',
-            template: 'cyan',
+            template: 'pico8pixelbomb',
             provenancePath: 'game.provenance.json',
             frozenProvenancePath: 'release.provenance.json',
             writeProvenance: true,

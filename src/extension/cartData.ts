@@ -39,12 +39,21 @@ export interface MusicPattern {
     stopAtEnd: boolean;
 }
 
+export interface EmbeddedCartTemplate {
+    id: string;
+    mediaType: 'image/png';
+    encoding: 'base64';
+    sha256: string;
+    data: string;
+}
+
 // Combined sidecar metadata (.meta.json)
 export interface MetaData {
     meta: {
         title: string;
         author: string;
         template: string;
+        templates?: EmbeddedCartTemplate[];
     };
     i18n: {
         locales: string[];

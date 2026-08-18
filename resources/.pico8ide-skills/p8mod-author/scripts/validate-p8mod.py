@@ -2,18 +2,21 @@
 """Validate Pico-8 IDE .p8mod structure.
 
 Usage:
-  python3 .codex/skills/p8mod-author/scripts/validate-p8mod.py path/to/game.p8mod
+  python3 .agents/skills/p8mod-author/scripts/validate-p8mod.py path/to/game.p8mod
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 
 HEADER = "pico-8 cartridge // http://www.pico-8.com"
-STANDARD_SECTIONS = ["lua", "gfx", "gff", "map", "sfx", "music"]
+STANDARD_SECTIONS = ["lua", "gfx", "label", "gff", "map", "sfx", "music"]
+REQUIRED_SECTIONS = ["lua", "gfx", "gff", "map", "sfx", "music"]
 CUSTOM_SECTIONS = ["meta", "i18n"]
 SECTION_RE = re.compile(r"^__(\w+)__$")
 
@@ -61,12 +64,40 @@ def validate_json_object(name: str, body: str, errors: list[str]) -> object | No
     return parsed
 
 
-def validate_meta(meta: object, errors: list[str]) -> None:
+def validate_meta(meta: object, errors: list[str], warnings: list[str]) -> None:
     if not isinstance(meta, dict):
         return
     for key in ("title", "author", "template"):
         if key in meta and not isinstance(meta[key], str):
             fail(errors, f"__meta__.{key} must be a string")
+    templates = meta.get("templates")
+    if not isinstance(templates, list):
+        warn(warnings, "legacy .p8mod does not embed __meta__.templates")
+        return
+    ids: set[str] = set()
+    for idx, template in enumerate(templates):
+        if not isinstance(template, dict):
+            fail(errors, f"__meta__.templates[{idx}] must be an object")
+            continue
+        for key in ("id", "mediaType", "encoding", "sha256", "data"):
+            if not isinstance(template.get(key), str) or not template[key]:
+                fail(errors, f"__meta__.templates[{idx}].{key} must be a non-empty string")
+        template_id = template.get("id", "")
+        if template.get("mediaType") != "image/png":
+            fail(errors, f'embedded template "{template_id}" mediaType must be image/png')
+        if template.get("encoding") != "base64":
+            fail(errors, f'embedded template "{template_id}" encoding must be base64')
+        try:
+            payload = base64.b64decode(template.get("data", ""), validate=True)
+            actual_hash = hashlib.sha256(payload).hexdigest()
+            if actual_hash != template.get("sha256"):
+                fail(errors, f'embedded template "{template_id}" sha256 mismatch')
+        except (ValueError, TypeError):
+            fail(errors, f'embedded template "{template_id}" data must be valid base64')
+        ids.add(template_id)
+    for template_id in ("default", "pico8pixelbomb"):
+        if template_id not in ids:
+            fail(errors, f'__meta__.templates must embed "{template_id}"')
 
 
 def validate_i18n(i18n: object, lua_body: str, errors: list[str], warnings: list[str]) -> None:
@@ -139,7 +170,7 @@ def validate(path: Path) -> int:
     sections, order, duplicates = parse_sections(lines)
     for duplicate in duplicates:
         fail(errors, f"duplicate section __{duplicate}__")
-    for section in STANDARD_SECTIONS:
+    for section in REQUIRED_SECTIONS:
         if section not in sections:
             fail(errors, f"missing required section __{section}__")
 
@@ -164,6 +195,14 @@ def validate(path: Path) -> int:
     for idx, line in enumerate(gfx, start=1):
         if not re.fullmatch(r"[0-9a-f]{128}", line):
             fail(errors, f"__gfx__ line {idx} must be 128 lowercase hex characters")
+            break
+
+    label = sections.get("label", [])
+    if label and len(label) != 128:
+        fail(errors, f"__label__ must contain 128 lines, found {len(label)}")
+    for idx, line in enumerate(label, start=1):
+        if not re.fullmatch(r"[0-9a-f]{128}", line):
+            fail(errors, f"__label__ line {idx} must be 128 lowercase hex characters")
             break
 
     gff = sections.get("gff", [])
@@ -197,7 +236,7 @@ def validate(path: Path) -> int:
 
     if "meta" in sections:
         meta = validate_json_object("meta", "\n".join(sections["meta"]), errors)
-        validate_meta(meta, errors)
+        validate_meta(meta, errors, warnings)
     if "i18n" in sections:
         i18n = validate_json_object("i18n", "\n".join(sections["i18n"]), errors)
         validate_i18n(i18n, "\n".join(sections.get("lua", [])), errors, warnings)

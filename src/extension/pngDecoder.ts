@@ -408,14 +408,16 @@ export class Pico8Encoder {
      * Character advance: 4px for ASCII, 8px for CJK.
      */
     static generateCover(
-        templatePath: string,
+        templateSource: string | Buffer,
         labelDataUrl: string,
         title: string,
         author: string,
         glyphs: { [char: string]: number[] }
     ): PNG {
-        // Load template PNG
-        const templateBuf = fs.readFileSync(templatePath);
+        // Load a package/external template path or cartridge-embedded PNG bytes.
+        const templateBuf = typeof templateSource === 'string'
+            ? fs.readFileSync(templateSource)
+            : templateSource;
         const templateSrc = PNG.sync.read(templateBuf);
 
         // Create a fresh PNG to avoid pngjs internal stream state issues

@@ -28,13 +28,6 @@
     },
     {
       "kind": "template",
-      "id": "cyan",
-      "version": "1.0.0",
-      "path": "resources/cart_templates/cyan.png",
-      "sha256": "24cfbca17d7e658ab712b2d0dd33e20e8c127e99b0e4c990c90b5922c363d0a9"
-    },
-    {
-      "kind": "template",
       "id": "default",
       "version": "1.0.0",
       "path": "resources/cart_templates/default.png",
@@ -42,16 +35,9 @@
     },
     {
       "kind": "template",
-      "id": "e-zombie",
+      "id": "pico8pixelbomb",
       "version": "1.0.0",
-      "path": "resources/cart_templates/e-zombie.png",
-      "sha256": "b51faeeb6aa557a6ca6ac4320bef6a87a468cd78dbdfdd2cd40f004f31c73ba8"
-    },
-    {
-      "kind": "template",
-      "id": "e-zombie16",
-      "version": "1.0.0",
-      "path": "resources/cart_templates/e-zombie16.png",
+      "path": "resources/cart_templates/pico8pixelbomb.png",
       "sha256": "d6881ed781c4393061ab9a3cfdd7d10b484b2568acbe2888641300cd1d2c79e6"
     }
   ]

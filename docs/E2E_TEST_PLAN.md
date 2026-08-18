@@ -281,7 +281,7 @@ Assert on real DOM + canvas, not mocks.
 - **B7. i18n.** Load `demo_chinese`-style mock with `tx()` code; Scan populates
   the table; edit a translation cell → `i18nChanged`; Preview renders glyphs on
   the 128×128 canvas (SPEC §7.9).
-- **B8. Export tab.** TemplatePicker shows 4 templates; selecting one updates the
+- **B8. Export tab.** TemplatePicker shows the cartridge-owned `default` and `pico8pixelbomb` templates; selecting one updates the
   ExportPreview (160×205 canvas) (existing `exportComponents.test.tsx` at the DOM
   level, here as a real render).
 - **B9. Read-only vs editable.** With `editable:false` mock, drawing tools are

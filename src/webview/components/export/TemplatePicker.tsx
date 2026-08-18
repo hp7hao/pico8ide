@@ -1,6 +1,6 @@
 import type { LocaleStrings } from '../../types';
 
-const TEMPLATE_NAMES = ['default', 'cyan', 'e-zombie', 'e-zombie16'] as const;
+const TEMPLATE_NAMES = ['default', 'pico8pixelbomb'] as const;
 
 interface TemplatePickerProps {
     locale: LocaleStrings;

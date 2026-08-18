@@ -6,8 +6,8 @@ import { MetaData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
 import { Pico8Encoder } from './pngDecoder';
 import { cartDataToP8 } from './p8format';
-import { cartDataToP8Mod, p8ModToCartData } from './p8modFormat';
-import { buildFinalCode, resolveTemplatePath } from './p8modExporter';
+import { cartDataToP8Mod, normalizeMetaData, p8ModToCartData } from './p8modFormat';
+import { buildFinalCode, resolveTemplateSource } from './p8modExporter';
 import { t } from './i18n';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
@@ -98,9 +98,9 @@ function exportSingleCart(
     }
 
     // Generate cover PNG
-    const templatePath = resolveTemplatePath({}, context.extensionPath, document.metaData);
+    const templateSource = resolveTemplateSource({}, context.extensionPath, document.metaData);
     const coverPng = Pico8Encoder.generateCover(
-        templatePath,
+        templateSource,
         document.cartData.label,
         coverTitle,
         coverAuthor,
@@ -142,11 +142,19 @@ function getErrorHtml(error: string): string {
         </html>`;
 }
 
-function generateTemplatePreviews(context: vscode.ExtensionContext): { [name: string]: string } {
+function generateTemplatePreviews(
+    context: vscode.ExtensionContext,
+    metaData: MetaData | null
+): { [name: string]: string } {
     const templatesDir = path.join(context.extensionPath, 'resources', 'cart_templates');
     const previews: { [name: string]: string } = {};
-    const templateNames = ['default', 'cyan', 'e-zombie', 'e-zombie16'];
+    const templateNames = ['default', 'pico8pixelbomb'];
     for (const name of templateNames) {
+        const embedded = metaData?.meta.templates?.find((template) => template.id === name);
+        if (embedded?.mediaType === 'image/png' && embedded.encoding === 'base64') {
+            previews[name] = `data:image/png;base64,${embedded.data}`;
+            continue;
+        }
         const filePath = path.join(templatesDir, `${name}.png`);
         try {
             if (fs.existsSync(filePath)) {
@@ -204,7 +212,7 @@ function setupEditableWebview(
         ]
     };
 
-    const templatePreviews = generateTemplatePreviews(context);
+    const templatePreviews = generateTemplatePreviews(context, document.metaData);
 
     // Suppress change events during webview initialization.
     // The webview sends a 'ready' message after React has mounted and stores are populated.
@@ -419,7 +427,7 @@ function saveDocumentAsP8Mod(document: Pico8Document, destPath: string): void {
     if (!document.cartData) { return; }
     const code = document.currentCode ?? document.cartData.code;
     const saveData = { ...document.cartData, code };
-    const content = cartDataToP8Mod(saveData, document.metaData);
+    const content = cartDataToP8Mod(saveData, document.metaData, path.resolve(__dirname, '..', '..'));
     fs.writeFileSync(destPath, content, 'utf-8');
 }
 
@@ -608,7 +616,7 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
             // Primary path: .p8mod files
             const parsed = p8ModToCartData(text);
             cartData = parsed.cartData;
-            metaData = parsed.metaData;
+            metaData = normalizeMetaData(parsed.metaData, this.context.extensionPath)!;
         } catch {
             // cartData stays null; error shown in resolveCustomEditor
         }
@@ -682,8 +690,8 @@ export class Pico8P8EditorProvider implements vscode.CustomEditorProvider<Pico8D
             const text = fs.readFileSync(document.uri.fsPath, 'utf-8');
             const parsed = p8ModToCartData(text);
             document.cartData = parsed.cartData;
-            document.metaData = parsed.metaData;
-            document.i18nData = parsed.metaData ? parsed.metaData.i18n : null;
+            document.metaData = normalizeMetaData(parsed.metaData, this.context.extensionPath);
+            document.i18nData = document.metaData?.i18n || null;
             document.currentCode = null;
         } catch {
             // Keep existing data
