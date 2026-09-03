@@ -59,7 +59,7 @@ Use `__meta__` for Pico-8 IDE metadata:
 }
 ```
 
-Omit `__meta__` only for legacy/minimal files when title and author are empty and the template is `default`. New Pico8 IDE cartridges retain `__meta__` because they embed `default` and `pico8pixelbomb`; `e-zombie16` is accepted only as a legacy alias for `pico8pixelbomb`.
+Omit `__meta__` only for current minimal files when title and author are empty and the template is `default`. Pico8 IDE cartridges retain `__meta__` because they embed `default` and `pico8pixelbomb`; the retired `e-zombie16` template id is rejected.
 
 Use optional `__meta__.export` only when the cart needs Pico8 IDE exporter
 asset compatibility constraints. Keep Lua include directives simple, such as

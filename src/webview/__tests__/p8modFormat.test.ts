@@ -161,12 +161,15 @@ describe('p8ModToCartData', () => {
         expect(metaData!.i18n.entries[0].translations.zh).toBe('你好');
     });
 
-    it('renames the legacy e-zombie16 template id on parse', () => {
-        const meta = makeMetaData();
-        meta.meta.template = 'e-zombie16';
-        const text = cartDataToP8Mod(makeCartData(), meta);
-        const { metaData } = p8ModToCartData(text);
-        expect(metaData?.meta.template).toBe('pico8pixelbomb');
+    it('rejects the retired e-zombie16 template id on write and parse', () => {
+        const retiredMeta = makeMetaData();
+        retiredMeta.meta.template = 'e-zombie16';
+        expect(() => cartDataToP8Mod(makeCartData(), retiredMeta))
+            .toThrow(/Retired template id: e-zombie16/);
+
+        const text = cartDataToP8Mod(makeCartData(), makeMetaData())
+            .replace('"template": "default"', '"template": "e-zombie16"');
+        expect(() => p8ModToCartData(text)).toThrow(/Retired template id: e-zombie16/);
     });
 
     it('parses file with meta only (no i18n)', () => {

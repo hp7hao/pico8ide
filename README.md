@@ -67,7 +67,7 @@ not part of the release API.
 Useful options:
 
 - `--lang <lang>` exports only one declared language.
-- `--template <name>` selects embedded `default` or `pico8pixelbomb` bytes, then falls back to the same package template for legacy carts.
+- `--template <name>` selects embedded `default` or `pico8pixelbomb` bytes, then falls back to the same package template.
 - `--template-path <path>` uses a specific 160x205 PNG cover template.
 - `--libs-dir <path>` adds a directory of Pico8 IDE library JSON files.
 - `--workspace-root <path>` adds `<path>/.pico8libs` to library lookup.
@@ -76,7 +76,7 @@ Useful options:
 - `--write-provenance` writes `<output>.provenance.json` beside a `--lang` single output.
 - `--frozen-provenance <path>` fails if resolved assets do not match a previous provenance file.
 
-New and resaved `.p8mod` cartridges embed the `default` and `pico8pixelbomb` (`e-zombie16` compatibility alias) PNG templates in `__meta__.templates`. The cartridge owns those exact export bytes; bundled copies are authoring defaults and backward-compatible fallback assets. Optional native `__label__` artwork is also preserved inline and composited into exported `.p8.png` carts.
+New and resaved `.p8mod` cartridges embed the `default` and `pico8pixelbomb` PNG templates in `__meta__.templates`. The cartridge owns those exact export bytes; bundled copies are authoring defaults. The retired `e-zombie16` template id is rejected. Optional native `__label__` artwork is also preserved inline and composited into exported `.p8.png` carts.
 
 Bundled export assets are tracked in `resources/assets.json`. Maintainer scripts keep that manifest current:
 

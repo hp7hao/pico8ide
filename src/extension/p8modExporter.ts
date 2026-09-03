@@ -303,8 +303,7 @@ export function resolveTemplateSource(
         return options.templatePath;
     }
 
-    const requestedName = options.template || metaData?.meta.template || 'default';
-    const templateName = requestedName === 'e-zombie16' ? 'pico8pixelbomb' : requestedName;
+    const templateName = options.template || metaData?.meta.template || 'default';
     const embedded = metaData?.meta.templates?.find((entry) => entry.id === templateName);
     if (embedded) {
         if (embedded.mediaType !== 'image/png' || embedded.encoding !== 'base64') {

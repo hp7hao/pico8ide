@@ -5,7 +5,14 @@ import { CartData, EmbeddedCartTemplate, MetaData } from './cartData';
 import { cartDataToP8, p8ToCartData } from './p8format';
 
 export const EMBEDDED_TEMPLATE_IDS = ['default', 'pico8pixelbomb'] as const;
-const LEGACY_TEMPLATE_ALIASES: Record<string, string> = { 'e-zombie16': 'pico8pixelbomb' };
+const RETIRED_TEMPLATE_ID = 'e-zombie16';
+
+function requireCurrentTemplateId(id: string): string {
+    if (id === RETIRED_TEMPLATE_ID) {
+        throw new Error(`Retired template id: ${id}`);
+    }
+    return id;
+}
 
 /**
  * Serialize CartData + MetaData to .p8mod text format.
@@ -55,9 +62,9 @@ export function normalizeMetaData(metaData: MetaData | null, extensionPath?: str
         return null;
     }
     const meta = metaData?.meta || { title: '', author: '', template: 'default' };
-    const template = LEGACY_TEMPLATE_ALIASES[meta.template] || meta.template || 'default';
+    const template = requireCurrentTemplateId(meta.template || 'default');
     const embeddedById = new Map((meta.templates || []).map((entry) => {
-        const id = LEGACY_TEMPLATE_ALIASES[entry.id] || entry.id;
+        const id = requireCurrentTemplateId(entry.id);
         return [id, { ...entry, id }];
     }));
     if (extensionPath) {
@@ -141,12 +148,12 @@ export function p8ModToCartData(text: string): { cartData: CartData; metaData: M
 
     const parsedMeta = metaJson ? tryParseJson(metaJson) : null;
     if (parsedMeta?.template) {
-        parsedMeta.template = LEGACY_TEMPLATE_ALIASES[parsedMeta.template] || parsedMeta.template;
+        parsedMeta.template = requireCurrentTemplateId(parsedMeta.template);
     }
     if (Array.isArray(parsedMeta?.templates)) {
         parsedMeta.templates = parsedMeta.templates.map((entry: EmbeddedCartTemplate) => ({
             ...entry,
-            id: LEGACY_TEMPLATE_ALIASES[entry.id] || entry.id,
+            id: requireCurrentTemplateId(entry.id),
         }));
     }
     const parsedI18n = i18nJson ? tryParseJson(i18nJson) : null;

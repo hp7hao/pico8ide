@@ -94,10 +94,9 @@ area.
 
 Every newly created or resaved `.p8mod` embeds the exact `default` and
 `pico8pixelbomb` PNG templates in `__meta__.templates`; these are the only
-current authoring choices. `pico8pixelbomb` is the current name for the former
-`e-zombie16` preset. Those embedded bytes are the cartridge-owned export
-authority. Package templates are authoring defaults and legacy fallback assets,
-while `e-zombie16` remains an input compatibility alias.
+current authoring choices. `pico8pixelbomb` replaced the retired `e-zombie16`
+preset id, which current inputs reject. Those embedded bytes are the
+cartridge-owned export authority. Package templates are authoring defaults.
 
 Pico8 IDE export assets are versioned inputs, not hidden implementation
 details. This applies to bundled libraries, cover templates, fonts, and any

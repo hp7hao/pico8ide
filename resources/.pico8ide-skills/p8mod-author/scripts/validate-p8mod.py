@@ -70,6 +70,8 @@ def validate_meta(meta: object, errors: list[str], warnings: list[str]) -> None:
     for key in ("title", "author", "template"):
         if key in meta and not isinstance(meta[key], str):
             fail(errors, f"__meta__.{key} must be a string")
+    if meta.get("template") == "e-zombie16":
+        fail(errors, '__meta__.template uses retired id "e-zombie16"')
     templates = meta.get("templates")
     if not isinstance(templates, list):
         warn(warnings, "legacy .p8mod does not embed __meta__.templates")
@@ -94,6 +96,8 @@ def validate_meta(meta: object, errors: list[str], warnings: list[str]) -> None:
                 fail(errors, f'embedded template "{template_id}" sha256 mismatch')
         except (ValueError, TypeError):
             fail(errors, f'embedded template "{template_id}" data must be valid base64')
+        if template_id == "e-zombie16":
+            fail(errors, 'embedded template uses retired id "e-zombie16"')
         ids.add(template_id)
     for template_id in ("default", "pico8pixelbomb"):
         if template_id not in ids:

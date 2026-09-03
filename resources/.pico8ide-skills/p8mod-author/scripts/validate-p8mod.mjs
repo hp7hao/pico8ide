@@ -62,6 +62,9 @@ function validateMeta(meta, errors, warnings) {
       errors.push(`ERROR: __meta__.${key} must be a string`);
     }
   }
+  if (meta.template === 'e-zombie16') {
+    errors.push('ERROR: __meta__.template uses retired id "e-zombie16"');
+  }
   if (!Array.isArray(meta.templates)) {
     warnings.push('WARNING: legacy .p8mod does not embed __meta__.templates');
     return;
@@ -88,6 +91,7 @@ function validateMeta(meta, errors, warnings) {
         if (actual !== template.sha256) errors.push(`ERROR: embedded template "${template.id}" sha256 mismatch`);
       }
     }
+    if (template.id === 'e-zombie16') errors.push('ERROR: embedded template uses retired id "e-zombie16"');
     ids.add(template.id);
   });
   for (const id of ['default', 'pico8pixelbomb']) {
