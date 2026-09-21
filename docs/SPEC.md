@@ -2,12 +2,11 @@
 
 > Version 0.1.0 — 2026-02-12
 
-This document is a reference snapshot for the `pico8ide` submodule. In the
-`goindie2` monorepo, the root spec index is the authority for whether this file
-is canonical: `docs/specs/spec_index.md` currently classifies
-`projects/pico8ide/docs/SPEC.md` as reference-only, with
-`projects/pico8ide/AGENTS.md`, README/package metadata, and source as the local
-working authority until a repo-local spec index is added.
+This document is a reference snapshot for the `pico8ide` submodule. Canonical
+product authority is `projects/pico8ide/docs/specs/PICO8IDE_SPEC.md`. Cart format
+and the editing kernel are owned by `projects/xwsdk/docs/specs/p8mod_spec.md`.
+Job assignment across PICO-8 products is owned by
+`docs/specs/pico8_product_landscape_spec.md`.
 
 Keep this file useful and current when editing it, but do not treat it as the
 owning SDD spec for monorepo work.

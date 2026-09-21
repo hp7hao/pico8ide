@@ -6,6 +6,11 @@ This file provides guidance to AI coding agents when working with code in this r
 
 PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle BBS. This extension is part of the larger fcdb ecosystem - see `../fcdbtool/AGENTS.md` for the full data pipeline.
 
+Durable product authority lives in `projects/pico8ide/docs/specs/`. Cart format
+and the editing kernel are owned by `projects/xwsdk/docs/specs/p8mod_spec.md`.
+The TypeScript parser/exporter in this tree is a PC-authoring adapter, not a
+second format owner.
+
 **Important**: This is a hobby project for learning purposes. PICO-8 is paid software by Lexaloffle Games. The extension shows a disclaimer on every activation.
 
 ## Commands
