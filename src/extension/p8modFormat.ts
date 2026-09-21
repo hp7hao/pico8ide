@@ -2,7 +2,8 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CartData, EmbeddedCartTemplate, MetaData } from './cartData';
-import { cartDataToP8, p8ToCartData } from './p8format';
+import { labelDataUrlToP8Lines, p8ToCartData } from './p8format';
+import { cartSectionsFromP8, cartSectionsToP8 } from './p8modKernel';
 
 export const EMBEDDED_TEMPLATE_IDS = ['default', 'pico8pixelbomb'] as const;
 const RETIRED_TEMPLATE_ID = 'e-zombie16';
@@ -14,6 +15,18 @@ function requireCurrentTemplateId(id: string): string {
     return id;
 }
 
+function injectLabelSection(p8Text: string, label: string): string {
+    if (!label) {
+        return p8Text;
+    }
+    const block = '__label__\n' + labelDataUrlToP8Lines(label).join('\n') + '\n';
+    const gffIndex = p8Text.indexOf('__gff__');
+    if (gffIndex >= 0) {
+        return p8Text.slice(0, gffIndex) + block + p8Text.slice(gffIndex);
+    }
+    return p8Text + block;
+}
+
 /**
  * Serialize CartData + MetaData to .p8mod text format.
  * Standard sections are identical to .p8, with optional __meta__ and __i18n__ JSON sections appended.
@@ -23,8 +36,7 @@ export function cartDataToP8Mod(
     metaData: MetaData | null,
     extensionPath?: string
 ): string {
-    // Get standard .p8 content (ends with trailing newline)
-    let text = cartDataToP8(cartData);
+    let text = injectLabelSection(cartSectionsToP8(cartData), cartData.label);
     const normalizedMetaData = normalizeMetaData(metaData, extensionPath);
 
     if (normalizedMetaData) {
@@ -140,8 +152,11 @@ export function p8ModToCartData(text: string): { cartData: CartData; metaData: M
         }
     }
 
-    // Parse standard .p8 sections
-    const cartData = p8ToCartData(standardText);
+    const kernelSections = cartSectionsFromP8(standardText);
+    const cartData: CartData = {
+        ...kernelSections,
+        label: p8ToCartData(standardText).label,
+    };
 
     // Parse JSON sections
     let metaData: MetaData | null = null;

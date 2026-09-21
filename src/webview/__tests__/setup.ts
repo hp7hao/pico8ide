@@ -5,7 +5,12 @@ import { useCartStore } from '../store/cartStore';
 import { useUIStore } from '../store/uiStore';
 import { useMetaStore } from '../store/metaStore';
 import { PICO8_PALETTE } from '../types';
-import { afterEach } from 'vitest';
+import { afterEach, beforeAll } from 'vitest';
+import { initP8modKernel } from '../../extension/p8modKernel';
+
+beforeAll(async () => {
+    await initP8modKernel();
+});
 
 // Provide mock init data so components can read window.__INIT_DATA__
 window.__INIT_DATA__ = createMockInitData();

@@ -8,8 +8,14 @@ PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle 
 
 Durable product authority lives in `projects/pico8ide/docs/specs/`. Cart format
 and the editing kernel are owned by `projects/xwsdk/docs/specs/p8mod_spec.md`.
-The TypeScript parser/exporter in this tree is a PC-authoring adapter, not a
-second format owner.
+Pico8IDE consumes that kernel through the checksum-pinned `p8mod-web` vendor
+lane under `vendor/xwsdk/`. TypeScript here is a PC-authoring adapter for VS
+Code, `p8modtool`, templates, and includes; it is not a second format owner.
+
+```bash
+npm run verify:xwsdk-vendor:release   # checksum-verify the tracked p8mod-web pin
+npm run vendor:xwsdk:release -- <producer-dir>
+```
 
 **Important**: This is a hobby project for learning purposes. PICO-8 is paid software by Lexaloffle Games. The extension shows a disclaimer on every activation.
 

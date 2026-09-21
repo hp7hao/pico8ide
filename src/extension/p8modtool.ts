@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import * as path from 'path';
 import { exportP8Mod, parseP8ModExportArgs, usage } from './p8modExporter';
+import { initP8modKernel } from './p8modKernel';
 
 export async function runP8ModToolCli(argv: string[]): Promise<number> {
     try {
+        await initP8modKernel();
         const options = parseP8ModExportArgs(argv);
         if (!options.extensionPath) {
             options.extensionPath = path.resolve(__dirname, '..', '..');

@@ -1,5 +1,6 @@
 node_modules/
 out/
+vendor/xwsdk/dev/
 *.vsix
 resources/monaco/
 .claude/settings.local.json

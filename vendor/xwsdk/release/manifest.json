@@ -1,0 +1,33 @@
+{
+  "schema": "pico8ide.xwsdk-vendor.v1",
+  "profile": "release",
+  "version": "0.1.1",
+  "source_revision": "sha256:cc281f6e458ceb3aa8059df1dbe02d587f3ecc32908c714b1f79ba6f1754de3c",
+  "producer_manifest_sha256": "72704bbf32fdfb4fbe9b7161d5dc84014c10ed7f0a5d99a5514429301f5bb154",
+  "artifacts": [
+    {
+      "id": "p8mod-web",
+      "path": "0.1.1/web/p8mod/p8mod_bg.wasm",
+      "media_type": "application/wasm",
+      "profile": "release",
+      "size_bytes": 406677,
+      "sha256": "5c36b4693b759bac2576d2a6744ee94c6f6fb1e88e250eec6a0839832d09e56f"
+    },
+    {
+      "id": "p8mod-web",
+      "path": "0.1.1/web/p8mod/p8mod.d.ts",
+      "media_type": "text/typescript",
+      "profile": "release",
+      "size_bytes": 10363,
+      "sha256": "21d0545c1507759510a1d1a0a6a7ad49538f1f85643180c7660cf43de2ffbcf0"
+    },
+    {
+      "id": "p8mod-web",
+      "path": "0.1.1/web/p8mod/p8mod.js",
+      "media_type": "text/javascript",
+      "profile": "release",
+      "size_bytes": 43220,
+      "sha256": "afd7b1386d8009a234447f366209ac28a005a3ea835af961d6fa76e1052e1d86"
+    }
+  ]
+}

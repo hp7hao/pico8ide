@@ -8,6 +8,7 @@ import { CartData, MetaData } from './cartData';
 import { Pico8Decoder } from './pngDecoder';
 import { cartDataToP8, p8ToCartData } from './p8format';
 import { cartDataToP8Mod, p8ModToCartData, blankP8Mod, i18nDemoP8Mod } from './p8modFormat';
+import { initP8modKernel } from './p8modKernel';
 import { Pico8PngEditorProvider, Pico8P8EditorProvider, loadMetaData } from './cartEditorProvider';
 import { generateCartViewerHtml } from './cartViewerHtml';
 import { pico8RunState } from './pico8Runner';
@@ -735,9 +736,11 @@ function showDisclaimer(context: vscode.ExtensionContext) {
 }
 
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   try {
     log('Activating PICO-8 IDE extension...');
+    await initP8modKernel();
+    log('XWSDK p8mod kernel initialized');
 
     // Show disclaimer on every activation
     showDisclaimer(context);

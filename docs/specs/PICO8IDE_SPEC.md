@@ -1,6 +1,6 @@
 # Pico8IDE Spec
 
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Status**: Active
 **Level**: product
 **Owner**: pico8ide
@@ -39,16 +39,26 @@ is owned by `docs/specs/pico8_product_landscape_spec.md`.
 
 XWSDK P8Mod owns `.p8`, `.p8.png`, and `.p8mod` parse/serialize, Draft/edit
 semantics, and cart-domain locale export. Pico8IDE must not invent a second
-cart format. The current TypeScript parser/exporter under
-`projects/pico8ide/src/extension/` is a product adapter for VS Code and
-`p8modtool`; converging it onto the kernel is implementation work, not a rival
-format authority.
+cart format. Cart-section parse/serialize for `.p8mod` authoring goes through
+the vendored XWSDK `p8mod-web` kernel. The TypeScript under
+`projects/pico8ide/src/extension/` is a VS Code / `p8modtool` adapter: it owns
+include resolution, cover templates, retired template ids, and other product
+overlay fields that the kernel does not represent.
 
 `projects/pico8ide/docs/SPEC.md` is a reference snapshot of commands and export
 mechanics. It is not canonical spec authority.
 
 ## Product Contract
 
+- Pico8IDE vendors the XWSDK `p8mod-web` release artifacts under
+  `projects/pico8ide/vendor/xwsdk/release/` and records the pin in
+  `projects/pico8ide/vendor/xwsdk/release/manifest.json` with schema
+  `pico8ide.xwsdk-vendor.v1`. The required set is `p8mod.js`, `p8mod.d.ts`, and
+  `p8mod_bg.wasm`. Refresh ingests a producer directory governed by
+  `projects/xwsdk/docs/specs/release_artifacts_spec.md`, verifies every required
+  digest, and replaces the lane atomically. Ordinary compile/test commands must
+  not build XWSDK from sibling source. The ignored `vendor/xwsdk/dev/` lane is
+  local iteration only and is never packaged or committed.
 - Pico8IDE runs only as a VS Code extension on a PC with an optional local
   official PICO-8 binary configured by the user.
 - Editable source may be `.p8`, `.p8.png`, or `.p8mod`. `.p8mod` is the
@@ -69,6 +79,8 @@ mechanics. It is not canonical spec authority.
   remain available.
 - Invalid carts fail closed at parse/export rather than emitting partial
   playable bytes.
+- Missing, modified, or unverified vendored `p8mod-web` bytes fail closed before
+  parse/export.
 - Parent pin and submodule publication stay under
   `docs/specs/submodule_workflow_spec.md`.
 
@@ -76,7 +88,8 @@ mechanics. It is not canonical spec authority.
 
 - Required evidence: Pico8IDE unit, decoder golden, and extension-host or
   webview tests named by `projects/pico8ide/AGENTS.md` for behavior changes;
-  canonical spec validators for this product root.
+  vendor-lock verification for XWSDK pin changes; canonical spec validators for
+  this product root.
 - Validation commands: `npm test` in `projects/pico8ide`, plus
   `node scripts/specs/validate-specs.mjs` after spec edits.
 
