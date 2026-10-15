@@ -6,8 +6,8 @@ This file provides guidance to AI coding agents when working with code in this r
 
 PICO-8 IDE is a VS Code extension for browsing PICO-8 games from the Lexaloffle BBS. This extension is part of the larger fcdb ecosystem - see `../fcdbtool/AGENTS.md` for the full data pipeline.
 
-Durable product authority lives in `projects/pico8ide/docs/specs/`. Cart format
-and the editing kernel are owned by `projects/xwsdk/docs/specs/p8mod_spec.md`.
+Durable product authority lives in `docs/specs/`. Cart format
+and the editing kernel are owned by the P8Mod contract.
 Pico8IDE consumes that kernel through the checksum-pinned `p8mod-web` vendor
 lane under `vendor/xwsdk/`. TypeScript here is a PC-authoring adapter for VS
 Code, `p8modtool`, templates, and includes; it is not a second format owner.
@@ -76,7 +76,7 @@ Test tiers and their design are documented in `docs/E2E_TEST_PLAN.md`:
   - `t()` function returns `LocaleStrings` based on VS Code language setting
   - Package.json uses `%key%` pattern for static strings (package.nls.json)
 
-- **libManager.ts / resources/libs/** - Opt-in shared Lua libraries for `--#include <id>` directives. Bundled `p8go` is the PICO8GO device bridge runtime helper library; keep it transport-aligned with `projects/xwsdk/p8mod/src/p8go_runtime.lua`.
+- **libManager.ts / resources/libs/** - Opt-in shared Lua libraries for `--#include <id>` directives. Bundled `p8go` is the PICO8GO device bridge runtime helper library; keep it transport-aligned with p8go_runtime.lua.
 
 ### PICO-8 Cartridge Format
 

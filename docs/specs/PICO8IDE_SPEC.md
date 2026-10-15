@@ -4,7 +4,7 @@
 **Status**: Active
 **Level**: product
 **Owner**: pico8ide
-**Parent**: docs/specs/GLOBAL_SPEC.md
+**Parent**: none
 **Last Reviewed**: 2026-09-21
 
 ## Purpose
@@ -19,7 +19,7 @@ In scope:
 
 - the VS Code extension identity, commands, custom editor, and webview cart
   surfaces;
-- FCDB browse/search as a consumer of `projects/fcdb/docs/specs/fcdb_database_contract_spec.md`;
+- FCDB browse/search as a consumer of the FCDB database contract;
 - `--#include` library resolution, cover templates, asset packs, and export
   provenance for the PC authoring path;
 - the `p8modtool` CLI as the headless PC export adapter.
@@ -27,7 +27,7 @@ In scope:
 Out of scope:
 
 - cart format, section semantics, structured editing kernel, and cart-domain
-  playable export, owned by `projects/xwsdk/docs/specs/p8mod_spec.md`;
+  playable export, owned by the P8Mod contract;
 - handheld, Electron, Android, or XiaoweiOS application shells;
 - other PICO-8 product jobs assigned by `docs/specs/pico8_product_landscape_spec.md`;
 - agent game-craft doctrine, owned by `docs/specs/pico8_game_authoring_spec.md`.
@@ -41,21 +41,21 @@ XWSDK P8Mod owns `.p8`, `.p8.png`, and `.p8mod` parse/serialize, Draft/edit
 semantics, and cart-domain locale export. Pico8IDE must not invent a second
 cart format. Cart-section parse/serialize for `.p8mod` authoring goes through
 the vendored XWSDK `p8mod-web` kernel. The TypeScript under
-`projects/pico8ide/src/extension/` is a VS Code / `p8modtool` adapter: it owns
+`src/extension/` is a VS Code / `p8modtool` adapter: it owns
 include resolution, cover templates, retired template ids, and other product
 overlay fields that the kernel does not represent.
 
-`projects/pico8ide/docs/SPEC.md` is a reference snapshot of commands and export
+`docs/SPEC.md` is a reference snapshot of commands and export
 mechanics. It is not canonical spec authority.
 
 ## Product Contract
 
 - Pico8IDE vendors the XWSDK `p8mod-web` release artifacts under
-  `projects/pico8ide/vendor/xwsdk/release/` and records the pin in
-  `projects/pico8ide/vendor/xwsdk/release/manifest.json` with schema
+  `vendor/xwsdk/release/` and records the pin in
+  `vendor/xwsdk/release/manifest.json` with schema
   `pico8ide.xwsdk-vendor.v1`. The required set is `p8mod.js`, `p8mod.d.ts`, and
   `p8mod_bg.wasm`. Refresh ingests a producer directory governed by
-  `projects/xwsdk/docs/specs/release_artifacts_spec.md`, verifies every required
+  the release-artifacts contract, verifies every required
   digest, and replaces the lane atomically. Ordinary compile/test commands must
   not build XWSDK from sibling source. The ignored `vendor/xwsdk/dev/` lane is
   local iteration only and is never packaged or committed.
@@ -87,17 +87,17 @@ mechanics. It is not canonical spec authority.
 ## Validation Contract
 
 - Required evidence: Pico8IDE unit, decoder golden, and extension-host or
-  webview tests named by `projects/pico8ide/AGENTS.md` for behavior changes;
+  webview tests named by `AGENTS.md` for behavior changes;
   vendor-lock verification for XWSDK pin changes; canonical spec validators for
   this product root.
-- Validation commands: `npm test` in `projects/pico8ide`, plus
+- Validation commands: `npm test` in this repository, plus
   `node scripts/specs/validate-specs.mjs` after spec edits.
 
 ## Agent Contract
 
 | Field | Contract |
 |---|---|
-| Governed files | `projects/pico8ide/**` except generated `out/` and ignored build artifacts |
+| Governed files | `**` except generated `out/` and ignored build artifacts |
 | Invariants | Remain a PC VS Code authoring product; consume XWSDK P8Mod for cart format; keep libraries, templates, asset packs, and `p8modtool` here; do not add handheld, Electron, or Android shells |
 | Validation | Run Pico8IDE focused tests for behavior changes and canonical spec validators for authority changes |
-| Parent specs | `docs/specs/GLOBAL_SPEC.md`, `docs/specs/pico8_product_landscape_spec.md`, `projects/xwsdk/docs/specs/p8mod_spec.md` |
+| Parent specs | the P8Mod contract |

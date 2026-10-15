@@ -3,8 +3,8 @@
 > Version 0.1.0 — 2026-02-12
 
 This document is a reference snapshot for the `pico8ide` submodule. Canonical
-product authority is `projects/pico8ide/docs/specs/PICO8IDE_SPEC.md`. Cart format
-and the editing kernel are owned by `projects/xwsdk/docs/specs/p8mod_spec.md`.
+product authority is `docs/specs/PICO8IDE_SPEC.md`. Cart format
+and the editing kernel are owned by the P8Mod contract.
 Job assignment across PICO-8 products is owned by
 `docs/specs/pico8_product_landscape_spec.md`.
 

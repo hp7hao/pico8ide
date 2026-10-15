@@ -9,9 +9,9 @@ PICO8GO needs a small, capability-gated device API for carts that want to use ha
 
 This plan covers three delivery areas:
 
-- `projects/pico8ide`: authoring support, Lua runtime API, validation, export/run packaging.
-- `projects/pico8go`: target-device bridge that implements the API against the handheld OS.
-- `projects/fcdb` and `projects/fcdbtool`: metadata and release pipeline for enhanced carts.
+- this repository: authoring support, Lua runtime API, validation, export/run packaging.
+- the pico8go device bridge: implements the API against the handheld OS.
+- the fcdb and fcdbtool repositories: metadata and release pipeline for enhanced carts.
 
 ## Constraints
 
@@ -153,13 +153,13 @@ The first tests use an operator-provided native PICO-8 binary with an isolated
 Test commands should prefer headless execution:
 
 ```bash
-"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -x projects/pico8ide/tests/p8go_probe/p8go_probe.p8
+"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -x tests/p8go_probe/p8go_probe.p8
 ```
 
 If a window is required, keep it small and windowed:
 
 ```bash
-"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -windowed 1 -width 128 -height 128 -draw_rect 0,0,128,128 -run projects/pico8ide/tests/p8go_probe/p8go_probe.p8
+"$P8GO_PICO8_BIN" -home /tmp/p8go-pico8-home -windowed 1 -width 128 -height 128 -draw_rect 0,0,128,128 -run tests/p8go_probe/p8go_probe.p8
 ```
 
 Acceptance criteria before committing to live IPC:
@@ -199,7 +199,7 @@ Remaining target-device risks:
 
 ## XWSDK Placement
 
-The reusable parts should live in `projects/xwsdk/p8mod`:
+The reusable parts should live in the P8Mod sources:
 
 - `p8go` manifest types and validation.
 - Mailbox packet encoding/decoding.
@@ -211,15 +211,15 @@ The device-specific actions should not live in `p8mod`:
 
 - Vibration dispatch belongs in `hal`/`platform` because xwsdk already has vibration abstractions.
 - Achievements persistence likely belongs in `platform` or a future game-services module.
-- pico8go launcher lifecycle and process ownership belongs in `projects/pico8go`.
+- pico8go launcher lifecycle and process ownership belongs in the pico8go device bridge.
 
 This split keeps `p8mod` as the PICO-8 protocol/cart layer and lets pico8ide, pico8go, and fcdbtool share one schema/protocol implementation.
 
 ## Probe Files
 
-- `projects/pico8ide/tests/p8go_probe/p8go_probe.p8`: short headless smoke test for `-x`, `printh()`, and clean shutdown.
-- `projects/pico8ide/tests/p8go_probe/p8go_live_probe.p8`: long-running mailbox marker writer.
-- `projects/pico8ide/tests/p8go_probe/p8go_mem_probe.c`: host-side `process_vm_readv` scanner used to prove a running PICO-8 process can be inspected without explicit stop/continue.
+- `tests/p8go_probe/p8go_probe.p8`: short headless smoke test for `-x`, `printh()`, and clean shutdown.
+- `tests/p8go_probe/p8go_live_probe.p8`: long-running mailbox marker writer.
+- `tests/p8go_probe/p8go_mem_probe.c`: host-side `process_vm_readv` scanner used to prove a running PICO-8 process can be inspected without explicit stop/continue.
 
 ## Next Feasibility Step
 
